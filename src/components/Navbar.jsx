@@ -39,6 +39,7 @@ const Navbar = () => {
     { path: '/calendar', name: 'Jadwal', roles: ['super_admin', 'admin'] },
     { path: '/reports', name: 'Laporan', roles: ['super_admin', 'admin'] },
     { path: '/settings', name: 'Pengaturan', roles: ['super_admin', 'admin'] },
+    { path: '/users', name: 'Manajemen Pengguna', roles: ['super_admin', 'admin'] }, 
     { path: '/courier', name: 'Tugas', roles: ['user'] },
   ];
 

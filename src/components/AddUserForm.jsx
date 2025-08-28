@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -17,11 +18,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 
 const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
+  const { companyId } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
 
   const handleAddUser = async (e) => {
@@ -37,29 +39,22 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
       console.error('Error adding user:', error.message);
       toast.error('Gagal menambahkan pengguna: ' + error.message);
     } else {
-      // Update role secara manual setelah user dibuat
-      if (role !== 'user') {
-        const { error: roleError } = await supabase
-          .from('profiles')
-          .update({ role: role })
-          .eq('id', user.id);
+      // Perbarui profil dengan peran 'user' dan company_id dari admin
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ role: 'user', company_id: companyId })
+        .eq('id', user.id);
 
-        if (roleError) {
-          console.error('Error updating user role:', roleError.message);
-          toast.error('Gagal memperbarui peran pengguna.');
-        } else {
-          toast.success('Pengguna berhasil ditambahkan!');
-          onUserAdded({ id: user.id, email: user.email, full_name: null, role: role });
-        }
+      if (profileError) {
+        console.error('Error updating user role and company:', profileError.message);
+        toast.error('Gagal memperbarui profil pengguna.');
       } else {
         toast.success('Pengguna berhasil ditambahkan!');
-        onUserAdded({ id: user.id, email: user.email, full_name: null, role: role });
+        onUserAdded({ id: user.id, email: user.email, full_name: null, role: 'user' });
+        setEmail('');
+        setPassword('');
+        onOpenChange(false);
       }
-
-      setEmail('');
-      setPassword('');
-      setRole('user');
-      onOpenChange(false);
     }
     setLoading(false);
   };
@@ -94,21 +89,8 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
               required
             />
           </div>
-          <div>
-            <label className="text-sm font-medium">Peran</label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih Peran" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">User</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Memproses...' : 'Tambah Pengguna'}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tambah Pengguna'}
           </Button>
         </form>
       </DialogContent>

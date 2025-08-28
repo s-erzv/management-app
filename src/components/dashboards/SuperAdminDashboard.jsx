@@ -44,6 +44,7 @@ const SuperAdminDashboard = ({ profile, data }) => {
           <CardContent><p className="text-2xl font-bold">{data.unpaidOrders}</p></CardContent>
         </Card>
       </div>
+
       <Alert>
         <RocketIcon className="h-4 w-4" />
         <AlertTitle>Akses Penuh</AlertTitle>
