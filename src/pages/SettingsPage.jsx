@@ -3,19 +3,45 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductSettings from '@/components/ProductSettings';
-import UserManagementPage from '@/pages/UserManagementPage'; // Path ini mungkin perlu disesuaikan
+import UserManagementPage from '@/pages/UserManagementPage';
+import { Loader2 } from 'lucide-react';
 
 const SettingsPage = () => {
-  const { userRole, loadingRole } = useAuth();
+  const { userProfile, loading } = useAuth();
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    if (!loading) {
+      setPageLoading(false);
+    }
+  }, [loading]);
+
+  if (loading || pageLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      </div>
+    );
+  }
+
+  if (!userProfile) {
+    return (
+      <div className="container mx-auto p-4 md:p-8">
+        <p className="text-center text-red-500">Gagal memuat profil pengguna. Silakan refresh halaman.</p>
+      </div>
+    );
+  }
+
+  const userRole = userProfile.role;
   const isSuperAdmin = userRole === 'super_admin';
   const isAdminOrSuperAdmin = isSuperAdmin || userRole === 'admin';
 
-  if (loadingRole) {
-    return <p>Memuat pengaturan...</p>;
-  }
-
   if (!isAdminOrSuperAdmin) {
-    return <p>Anda tidak memiliki akses ke halaman ini.</p>;
+    return (
+      <div className="container mx-auto p-4 md:p-8">
+        <p className="text-center text-red-500">Anda tidak memiliki akses ke halaman ini.</p>
+      </div>
+    );
   }
 
   return (

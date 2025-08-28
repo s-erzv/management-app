@@ -8,13 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
@@ -30,33 +23,46 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
     e.preventDefault();
     setLoading(true);
 
-    const { data: { user }, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error('User not authenticated');
+      }
 
-    if (error) {
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          role: 'user', 
+          companyId 
+        }),
+      });
+      
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user');
+      }
+
+      toast.success('Pengguna berhasil ditambahkan!');
+      onUserAdded({ id: data.userId, email, full_name: null, role: 'user' });
+      setEmail('');
+      setPassword('');
+      onOpenChange(false);
+
+    } catch (error) {
       console.error('Error adding user:', error.message);
       toast.error('Gagal menambahkan pengguna: ' + error.message);
-    } else {
-      // Perbarui profil dengan peran 'user' dan company_id dari admin
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ role: 'user', company_id: companyId })
-        .eq('id', user.id);
-
-      if (profileError) {
-        console.error('Error updating user role and company:', profileError.message);
-        toast.error('Gagal memperbarui profil pengguna.');
-      } else {
-        toast.success('Pengguna berhasil ditambahkan!');
-        onUserAdded({ id: user.id, email: user.email, full_name: null, role: 'user' });
-        setEmail('');
-        setPassword('');
-        onOpenChange(false);
-      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

@@ -54,7 +54,7 @@ const StockPage = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select('*, is_returnable')
       .order('name', { ascending: true });
 
     if (error) {
@@ -103,7 +103,6 @@ const StockPage = () => {
     const qtyValue = parseInt(qty);
     const newStock = type === 'masuk' ? currentStock + qtyValue : currentStock - qtyValue;
     
-    // Perbarui stok di tabel products
     const { error: updateError } = await supabase
       .from('products')
       .update({ stock: newStock })
@@ -116,7 +115,6 @@ const StockPage = () => {
       return;
     }
 
-    // Catat pergerakan stok
     const { error: insertError } = await supabase
       .from('stock_movements')
       .insert({
@@ -130,7 +128,7 @@ const StockPage = () => {
     } else {
       toast.success('Pergerakan stok berhasil dicatat!');
       setNewMovementForm({ type: 'masuk', qty: '', notes: '' });
-      fetchProducts(); // Muat ulang semua data
+      fetchProducts();
     }
     setLoading(false);
   };
@@ -230,7 +228,8 @@ const StockPage = () => {
               <TableRow key={m.id}>
                 <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
                 <TableCell>{m.products?.name}</TableCell>
-                <TableCell>{m.type}</TableCell>
+                {/* Tampilkan item_type dari pergerakan stok */}
+                <TableCell>{m.item_type || m.type}</TableCell>
                 <TableCell>{m.qty}</TableCell>
                 <TableCell>{m.notes}</TableCell>
               </TableRow>

@@ -1,3 +1,4 @@
+// src/pages/CourierPage.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,8 +45,9 @@ const CourierPage = () => {
     orderId: null,
     productId: null,
     returnedQty: 0,
+    borrowedQty: 0,
     deliveredQty: 0,
-    notes: 'Pengembalian galon dari pelanggan',
+    notes: '',
   });
 
   useEffect(() => {
@@ -60,7 +62,7 @@ const CourierPage = () => {
         .select(`
           *,
           customers (name, address),
-          order_items (product_id, qty, products(is_returnable))
+          order_items (product_id, qty, item_type, products(is_returnable))
         `)
         .eq('courier_id', session.user.id)
         .order('planned_date', { ascending: true });
@@ -116,15 +118,13 @@ const CourierPage = () => {
     }
     setLoading(true);
     
-    if (newStatus === 'completed') {
-      const totalGalon = order.order_items.reduce((sum, item) => sum + item.qty, 0);
-      const mainProductId = order.order_items[0]?.product_id;
-      
-      const movementSuccess = await recordStockMovement('keluar', totalGalon, order.id, mainProductId, `Galon keluar untuk pesanan #${order.id.slice(0, 8)}`);
-      
-      if (!movementSuccess) {
-        setLoading(false);
-        return;
+    // Perbarui logika pergerakan stok untuk status 'sent'
+    if (newStatus === 'sent') {
+      const soldItems = order.order_items.filter(item => item.item_type === 'beli');
+      if (soldItems.length > 0) {
+        for (const item of soldItems) {
+            await recordStockMovement('keluar', item.qty, order.id, item.product_id, `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`);
+        }
       }
     }
 
@@ -144,13 +144,16 @@ const CourierPage = () => {
   };
   
   const handleOpenReturnModal = (order) => {
-    const deliveredQty = order.order_items.reduce((sum, item) => sum + item.qty, 0);
-    const mainProductId = order.order_items[0]?.product_id;
+    const deliveredItems = order.order_items.filter(item => item.item_type === 'beli' || item.item_type === 'pinjam');
+    const totalDeliveredQty = deliveredItems.reduce((sum, item) => sum + item.qty, 0);
+    const mainProductId = deliveredItems[0]?.product_id;
     setReturnForm({
       orderId: order.id,
       productId: mainProductId,
-      deliveredQty: deliveredQty,
-      returnedQty: deliveredQty,
+      deliveredQty: totalDeliveredQty,
+      returnedQty: 0,
+      borrowedQty: 0,
+      notes: '',
     });
     setIsReturnModalOpen(true);
   };
@@ -159,16 +162,28 @@ const CourierPage = () => {
     e.preventDefault();
     setLoading(true);
     
-    const { orderId, productId, deliveredQty, returnedQty } = returnForm;
+    const { orderId, productId, returnedQty, borrowedQty, deliveredQty } = returnForm;
     
+    // Mencatat pengembalian stok galon
     if (returnedQty > 0) {
-      await recordStockMovement('pengembalian', returnedQty, orderId, productId, `Pengembalian galon dari pelanggan`);
+      await recordStockMovement('pengembalian', returnedQty, orderId, productId, `Pengembalian galon kosong dari pelanggan.`);
+    }
+
+    // Mencatat galon yang dipinjam kembali dari pelanggan
+    if (borrowedQty > 0) {
+      // Logic untuk mencatat galon yang dipinjam kembali
+      await recordStockMovement('pinjam_kembali', borrowedQty, orderId, productId, `Galon dipinjam kembali dari pelanggan.`);
     }
 
     if (deliveredQty - returnedQty > 0) {
       const missingQty = deliveredQty - returnedQty;
-      // TODO: Logika untuk mencatat kekurangan galon di sini jika diperlukan
-      toast.info(`Terdapat kekurangan ${missingQty} galon.`);
+      // Perbarui stok produk
+      await supabase
+        .from('products')
+        .update({ stock: supabase.raw('stock - ?', missingQty) })
+        .eq('id', productId);
+      
+      toast.info(`Terdapat kekurangan ${missingQty} galon yang tidak kembali.`);
     }
     
     toast.success('Catatan pengembalian berhasil disimpan!');
@@ -250,12 +265,15 @@ const CourierPage = () => {
                 min="0"
                 max={returnForm.deliveredQty}
               />
-              <Label htmlFor="missingQty">Galon Hilang</Label>
-              <Input
-                id="missingQty"
+              <Label htmlFor="borrowedQty">Jumlah Galon Dipinjam</Label>
+               <Input
+                id="borrowedQty"
                 type="number"
-                disabled
-                value={returnForm.deliveredQty - returnForm.returnedQty}
+                placeholder="Jumlah Galon Dipinjam"
+                value={returnForm.borrowedQty}
+                onChange={(e) => setReturnForm({ ...returnForm, borrowedQty: parseInt(e.target.value) || 0 })}
+                required
+                min="0"
               />
             </div>
             <DialogFooter>

@@ -10,10 +10,9 @@ import AdminDashboard from '@/components/dashboards/AdminDashboard';
 import UserDashboard from '@/components/dashboards/UserDashboard';
 
 const DashboardPage = () => {
-  const { session, loading } = useAuth();
-  const [userProfile, setUserProfile] = useState(null);
+  const { session, loading, userProfile } = useAuth();
   const [dashboardData, setDashboardData] = useState({
-    products: [], // Tambahkan state untuk products
+    products: [],
     totalOrdersToday: 0,
     paidOrders: 0,
     unpaidOrders: 0,
@@ -22,60 +21,65 @@ const DashboardPage = () => {
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProfileAndData = async () => {
+    const fetchDashboardData = async () => {
+      if (!session || !userProfile || loading) return;
+      
       setDataLoading(true);
-      if (session) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('full_name, role')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          setUserProfile({ full_name: 'Pengguna', role: 'user' });
-        } else {
-          setUserProfile(profile);
-          await fetchDashboardData(profile.role, session.user.id);
-        }
+      try {
+        await fetchData(userProfile.role, session.user.id);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setDataLoading(false);
       }
-      setDataLoading(false);
     };
 
-    if (!loading) {
-      fetchProfileAndData();
-    }
-  }, [session, loading]);
+    fetchDashboardData();
+  }, [session, userProfile, loading]);
 
-  const fetchDashboardData = async (role, userId) => {
-    // Ambil data produk
-    const { data: productsData } = await supabase.from('products').select('*');
+  const fetchData = async (role, userId) => {
+    try {
+      // Ambil data produk
+      const { data: productsData } = await supabase.from('products').select('*');
 
-    if (role === 'super_admin' || role === 'admin') {
-      const { data: ordersToday } = await supabase
-        .from('orders')
-        .select('id, payment_status')
-        .gte('created_at', new Date().toISOString().split('T')[0] + 'T00:00:00Z');
+      if (role === 'super_admin' || role === 'admin') {
+        const today = new Date().toISOString().split('T')[0];
+        const { data: ordersToday } = await supabase
+          .from('orders')
+          .select('id, payment_status')
+          .gte('created_at', `${today}T00:00:00Z`)
+          .lte('created_at', `${today}T23:59:59Z`);
 
+        setDashboardData({
+          products: productsData || [],
+          totalOrdersToday: ordersToday?.length || 0,
+          paidOrders: ordersToday?.filter(o => o.payment_status === 'paid').length || 0,
+          unpaidOrders: ordersToday?.filter(o => o.payment_status === 'unpaid').length || 0,
+        });
+      }
+
+      if (role === 'user') {
+        const today = new Date().toISOString().split('T')[0];
+        const { data: tasks } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('courier_id', userId)
+          .eq('planned_date', today)
+          .neq('status', 'completed');
+          
+        setDashboardData({
+          products: productsData || [],
+          tasksToday: tasks?.length || 0
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchData:', error);
       setDashboardData({
-        products: productsData,
-        totalOrdersToday: ordersToday?.length || 0,
-        paidOrders: ordersToday?.filter(o => o.payment_status === 'paid').length || 0,
-        unpaidOrders: ordersToday?.filter(o => o.payment_status === 'unpaid').length || 0,
-      });
-    }
-
-    if (role === 'user') {
-      const { data: tasks } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('courier_id', userId)
-        .eq('planned_date', new Date().toISOString().split('T')[0])
-        .neq('status', 'completed');
-        
-      setDashboardData({
-        products: productsData,
-        tasksToday: tasks?.length || 0
+        products: [],
+        totalOrdersToday: 0,
+        paidOrders: 0,
+        unpaidOrders: 0,
+        tasksToday: 0,
       });
     }
   };
@@ -85,6 +89,18 @@ const DashboardPage = () => {
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
       </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <Alert variant="destructive">
+        <RocketIcon className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          Sesi tidak ditemukan. Silakan login kembali.
+        </AlertDescription>
+      </Alert>
     );
   }
 

@@ -48,10 +48,7 @@ const ReportsPage = () => {
   }, []);
   
   useEffect(() => {
-    if (products.length > 0) {
-      if (!selectedProductId) {
-        setSelectedProductId(products[0].id);
-      }
+    if (selectedProductId) {
       fetchReports();
     }
   }, [selectedProductId, dateRange, products]);
@@ -64,6 +61,9 @@ const ReportsPage = () => {
       toast.error('Gagal memuat daftar produk.');
     } else {
       setProducts(data);
+      if (data.length > 0) {
+        setSelectedProductId(data[0].id);
+      }
     }
     setLoading(false);
   };
@@ -72,7 +72,6 @@ const ReportsPage = () => {
     setLoading(true);
     const { startDate, endDate } = dateRange;
     
-    // Fetch orders and payments
     const { data: ordersAndPayments, error: ordersError } = await supabase
       .from('orders')
       .select(`
@@ -86,16 +85,25 @@ const ReportsPage = () => {
       .gte('created_at', startDate || '1900-01-01')
       .lte('created_at', endDate || new Date().toISOString().split('T')[0]);
       
-    // Fetch stock movements for the selected product
-    const { data: movements, error: movementsError } = await supabase
-      .from('stock_movements')
-      .select('type, qty')
-      .eq('product_id', selectedProductId)
-      .gte('movement_date', startDate || '1900-01-01')
-      .lte('movement_date', endDate || new Date().toISOString().split('T')[0]);
+    let movements = [];
+    if (selectedProductId) {
+        const { data: movementsData, error: movementsError } = await supabase
+        .from('stock_movements')
+        .select('type, qty')
+        .eq('product_id', selectedProductId)
+        .gte('movement_date', startDate || '1900-01-01')
+        .lte('movement_date', endDate || new Date().toISOString().split('T')[0]);
+
+        if (movementsError) {
+            console.error('Error fetching movements:', movementsError);
+            toast.error('Gagal memuat data pergerakan stok.');
+        } else {
+            movements = movementsData;
+        }
+    }
       
-    if (ordersError || movementsError) {
-      console.error('Error fetching reports data:', ordersError || movementsError);
+    if (ordersError) {
+      console.error('Error fetching orders data:', ordersError);
       toast.error('Gagal memuat data laporan.');
     } else {
       const totalSales = ordersAndPayments.reduce((sum, order) => {

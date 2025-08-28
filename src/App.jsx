@@ -35,7 +35,7 @@ const App = () => {
 };
 
 const AppContent = ({ session }) => {
-  const { userRole, loading, userProfile } = useAuth();
+  const { userRole, userProfile } = useAuth();
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
 
@@ -43,20 +43,16 @@ const AppContent = ({ session }) => {
   const isAdminOrSuperAdmin = isSuperAdmin || userRole === 'admin';
   const isCourier = userRole === 'user';
   
-  if (loading || !userProfile) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-      </div>
-    );
-  }
+  // Hapus pengecekan loading di sini.
+  // Pengecekan hanya berdasarkan userProfile untuk menampilkan Navbar atau tidak.
+  // Logika pengalihan ke /login sudah dihandle oleh <Route> di bawah.
 
   return (
     <>
-      {!isLoginPage && <Navbar />} 
+      {!isLoginPage && userProfile && <Navbar />}
       <main>
         <Routes>
-          <Route path="/login" element={<AuthPage />} />
+          <Route path="/login" element={!userProfile ? <AuthPage /> : <Navigate to="/dashboard" />} />
           <Route
             path="/dashboard"
             element={session ? <DashboardPage /> : <Navigate to="/login" />}

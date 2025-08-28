@@ -32,9 +32,10 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
 
   const fetchData = async () => {
     setLoading(true);
+    // Ubah kueri untuk mengambil kolom 'item_type' dari order_items
     const { data: itemsData, error: itemsError } = await supabase
       .from('order_items')
-      .select(`*, products (name, price)`)
+      .select(`*, products (name, price, is_returnable)`)
       .eq('order_id', orderId);
 
     const { data: productsData, error: productsError } = await supabase
@@ -159,7 +160,10 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.products?.name ?? 'N/A'}</TableCell>
+              {/* Tampilkan item_type jika ada */}
+              <TableCell className="font-medium">
+                {item.products?.name ?? 'N/A'} {item.item_type ? `(${item.item_type})` : ''}
+              </TableCell>
               <TableCell>{item.qty}</TableCell>
               <TableCell>Rp{item.price}</TableCell>
               {isEditable && (

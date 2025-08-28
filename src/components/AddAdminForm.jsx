@@ -1,4 +1,4 @@
-// Isi file ini sudah benar dari respons sebelumnya.
+// src/components/AddAdminForm.jsx
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
@@ -24,45 +24,35 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
     setLoading(true);
 
     try {
-      // Langkah 1: Buat entri perusahaan baru
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .insert([{ name: companyName }])
-        .select();
-
-      if (companyError) {
-        throw companyError;
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      
+      if (!accessToken) {
+        throw new Error('User not authenticated');
       }
 
-      const newCompanyId = companyData[0].id;
-      
-      // Langkah 2: Buat akun pengguna baru di auth.users dengan peran 'admin'
-      const { data: { user }, error: userError } = await supabase.auth.signUp({
-        email,
-        password,
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          role: 'admin', 
+          companyName 
+        }),
       });
 
-      if (userError) {
-        // Jika pembuatan user gagal, hapus perusahaan yang sudah dibuat
-        await supabase.from('companies').delete().eq('id', newCompanyId);
-        throw userError;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create admin');
       }
-
-      // Langkah 3: Perbarui profil pengguna dengan peran 'admin' dan company_id baru
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(
-          { id: user.id, role: 'admin', company_id: newCompanyId },
-          { onConflict: 'id' } // kalau sudah ada, update; kalau belum, insert
-        );
-        
-        if (profileError) {
-            await supabase.from('companies').delete().eq('id', newCompanyId);
-            throw profileError;
-        }
-
+      
       toast.success('Admin dan perusahaan berhasil ditambahkan!');
-      onUserAdded({ id: user.id, email: user.email, full_name: null, role: 'admin' });
+      onUserAdded({ id: data.userId, email, full_name: null, role: 'admin' });
       resetForm();
 
     } catch (error) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Card,
   CardContent,
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/select';
 
 const CalendarPage = () => {
+  const { userRole, companyId } = useAuth();
   const [orders, setOrders] = useState([]);
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,12 +35,10 @@ const CalendarPage = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedCourierId, setSelectedCourierId] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     setLoading(true);
+
+    // Fetch orders
     const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
       .select(`
@@ -48,10 +48,22 @@ const CalendarPage = () => {
       `)
       .order('planned_date', { ascending: true });
 
-    const { data: couriersData, error: couriersError } = await supabase
+    // Fetch couriers based on user role and company ID
+    let couriersQuery = supabase
       .from('profiles')
-      .select('id, full_name')
-      .eq('role', 'user');
+      .select('id, full_name');
+    
+    // Asumsi: Super admin dapat melihat semua kurir (user)
+    if (userRole === 'super_admin') {
+      couriersQuery = couriersQuery.eq('role', 'user');
+    } else {
+      // Admin/User hanya dapat melihat kurir di perusahaan mereka
+      couriersQuery = couriersQuery
+        .eq('role', 'user')
+        .eq('company_id', companyId);
+    }
+    
+    const { data: couriersData, error: couriersError } = await couriersQuery;
 
     if (ordersError || couriersError) {
       console.error('Error fetching data:', ordersError || couriersError);
@@ -59,10 +71,16 @@ const CalendarPage = () => {
     } else {
       setOrders(ordersData);
       setCouriers(couriersData);
+      console.log('Fetched orders:', ordersData);
+      console.log('Fetched couriers:', couriersData);
     }
     setLoading(false);
   };
-  
+
+  useEffect(() => {
+    fetchData();
+  }, [userRole, companyId]); // Tambahkan companyId sebagai dependency
+
   const handleOpenAssignModal = (order) => {
     setSelectedOrder(order);
     setSelectedCourierId(order.courier_id || '');

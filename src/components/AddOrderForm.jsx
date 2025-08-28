@@ -1,3 +1,4 @@
+// src/components/AddOrderForm.jsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,16 +24,16 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 
 const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
-  const { session } = useAuth();
+  const { session, companyId } = useAuth(); // Dapatkan companyId dari useAuth
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const [orderItems, setOrderItems] = useState([]);
-  const [newItem, setNewItem] = useState({ product_id: '', qty: '' });
+  const [newItem, setNewItem] = useState({ product_id: '', qty: 0 });
   
-  const [galonForm, setGalonForm] = useState({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
   const [isGalonProduct, setIsGalonProduct] = useState(false);
+  const [galonDetail, setGalonDetail] = useState({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
   
   const [orderForm, setOrderForm] = useState({
     customer_id: '',
@@ -61,98 +62,87 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
   
   const handleNewItemChange = (e) => {
     const { name, value } = e.target;
-    setNewItem({ ...newItem, [name]: value });
-    
-    if (name === 'product_id') {
-      const selectedProduct = products.find(p => p.id === value);
-      if (selectedProduct && selectedProduct.name.toLowerCase().includes('galon')) {
-        setIsGalonProduct(true);
-      } else {
-        setIsGalonProduct(false);
-        setGalonForm({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
-      }
-    }
+    setNewItem({ ...newItem, [name]: parseInt(value) || 0 });
   };
   
   const handleGalonFormChange = (e) => {
     const { name, value } = e.target;
-    setGalonForm({ ...galonForm, [name]: value });
+    setGalonDetail({ ...galonDetail, [name]: parseFloat(value) || 0 });
+  };
+
+  const handleProductSelectChange = (val) => {
+    const selectedProduct = products.find(p => p.id === val);
+    setNewItem({ ...newItem, product_id: val });
+    
+    if (selectedProduct && selectedProduct.is_returnable) {
+      setIsGalonProduct(true);
+      setGalonDetail({ returned_qty: 0, borrowed_qty: 0, purchase_price: selectedProduct.price });
+    } else {
+      setIsGalonProduct(false);
+      setGalonDetail({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
+    }
   };
 
   const handleItemAdd = () => {
-    if (!newItem.product_id || !newItem.qty) {
+    if (!newItem.product_id || newItem.qty <= 0) {
       toast.error('Pilih produk dan masukkan jumlah.');
       return;
     }
-    const selectedProduct = products.find(p => p.id === newItem.product_id);
     
-    // Logic untuk galon
-    if (isGalonProduct) {
-      const totalGalon = parseInt(newItem.qty);
-      const totalReturnedAndBorrowed = parseInt(galonForm.returned_qty) + parseInt(galonForm.borrowed_qty);
+    const selectedProduct = products.find(p => p.id === newItem.product_id);
+    let itemsToAdd = [];
 
-      if (totalReturnedAndBorrowed > totalGalon) {
-        toast.error('Jumlah galon yang dikembalikan dan dipinjam tidak boleh melebihi total pesanan.');
+    if (isGalonProduct) {
+      const totalGalon = newItem.qty;
+      const { returned_qty, borrowed_qty, purchase_price } = galonDetail;
+      const purchased_qty = totalGalon - returned_qty - borrowed_qty;
+
+      if (returned_qty + borrowed_qty > totalGalon) {
+        toast.error('Jumlah galon kembali dan pinjam tidak boleh melebihi jumlah total.');
         return;
       }
       
-      const purchasedQty = totalGalon - totalReturnedAndBorrowed;
-      
-      const itemsToInsert = [];
-
-      if (galonForm.returned_qty > 0) {
-        itemsToInsert.push({
-          product_id: newItem.product_id,
+      if (returned_qty > 0) {
+        itemsToAdd.push({
+          product_id: selectedProduct.id,
           product_name: `${selectedProduct.name} (Kembali)`,
-          qty: parseInt(galonForm.returned_qty),
+          qty: returned_qty,
           price: 0,
-          returned_qty: parseInt(galonForm.returned_qty),
-          borrowed_qty: null,
-          purchase_price: null,
+          item_type: 'kembali'
         });
       }
-
-      if (galonForm.borrowed_qty > 0) {
-        itemsToInsert.push({
-          product_id: newItem.product_id,
+      if (borrowed_qty > 0) {
+        itemsToAdd.push({
+          product_id: selectedProduct.id,
           product_name: `${selectedProduct.name} (Pinjam)`,
-          qty: parseInt(galonForm.borrowed_qty),
+          qty: borrowed_qty,
           price: 0,
-          returned_qty: null,
-          borrowed_qty: parseInt(galonForm.borrowed_qty),
-          purchase_price: null,
+          item_type: 'pinjam'
         });
       }
-
-      if (purchasedQty > 0) {
-         itemsToInsert.push({
-            product_id: newItem.product_id,
-            product_name: `${selectedProduct.name} (Beli)`,
-            qty: purchasedQty,
-            price: galonForm.purchase_price,
-            returned_qty: null,
-            borrowed_qty: null,
-            purchase_price: galonForm.purchase_price,
-         });
+      if (purchased_qty > 0) {
+        itemsToAdd.push({
+          product_id: selectedProduct.id,
+          product_name: `${selectedProduct.name} (Beli)`,
+          qty: purchased_qty,
+          price: purchase_price,
+          item_type: 'beli'
+        });
       }
-      
-      setOrderItems([...orderItems, ...itemsToInsert]);
     } else {
-      const itemToAdd = {
-        product_id: newItem.product_id,
+      itemsToAdd.push({
+        product_id: selectedProduct.id,
         product_name: selectedProduct.name,
-        qty: parseInt(newItem.qty),
+        qty: newItem.qty,
         price: selectedProduct.price,
-        returned_qty: null,
-        borrowed_qty: null,
-        purchase_price: null,
-      };
-      setOrderItems([...orderItems, itemToAdd]);
+        item_type: 'beli'
+      });
     }
-    
-    setNewItem({ product_id: '', qty: '' });
+
+    setOrderItems([...orderItems, ...itemsToAdd]);
+    setNewItem({ product_id: '', qty: 0 });
     setIsGalonProduct(false);
-    setGalonForm({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
+    setGalonDetail({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
   };
   
   const handleItemRemove = (index) => {
@@ -162,6 +152,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
   
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    console.log('companyId dari useAuth:', companyId); 
     if (orderItems.length === 0) {
       toast.error('Pesanan harus memiliki setidaknya satu item.');
       return;
@@ -169,71 +160,53 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
     
     setLoading(true);
     
-    const newOrder = {
-      ...orderForm,
-      created_by: session.user.id,
-      status: 'draft',
-      payment_status: 'unpaid',
-      courier_id: null,
+     const payload = {
+        orderForm: { ...orderForm, created_by: session.user.id, company_id: companyId },
+        orderItems,
     };
-    
-    const { data: insertedOrder, error: orderError } = await supabase
-      .from('orders')
-      .insert([newOrder])
-      .select('id');
-      
-    if (orderError) {
-      console.error('Error creating order:', orderError);
-      toast.error('Gagal membuat pesanan.');
-      setLoading(false);
-      return;
+
+    try {
+        const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(payload),
+        });
+
+        // Tambahkan pengecekan ini
+        console.log('Response status:', response.status); // Cek status HTTP
+        const text = await response.text();
+        console.log('Response body:', text); // Lihat apa isinya
+
+        if (!response.ok) {
+            throw new Error('Server returned an error: ' + text);
+        }
+
+        const data = JSON.parse(text); // Menggunakan JSON.parse sebagai alternatif
+
+        // ... lanjutkan kode Anda seperti sebelumnya
+        toast.success('Pesanan berhasil dibuat!');
+        onOrderAdded();
+        onOpenChange(false);
+
+    } catch (error) {
+        console.error('Error creating order:', error.message);
+        toast.error('Gagal membuat pesanan: ' + error.message);
+    } finally {
+        setLoading(false);
     }
-    
-    const orderId = insertedOrder[0].id;
-    const itemsToInsert = orderItems.map(item => ({
-      order_id: orderId,
-      product_id: item.product_id,
-      qty: item.qty,
-      price: item.price,
-      returned_qty: item.returned_qty,
-      borrowed_qty: item.borrowed_qty,
-      purchase_price: item.purchase_price,
-    }));
-    
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(itemsToInsert);
-      
-    if (itemsError) {
-      console.error('Error adding order items:', itemsError);
-      toast.error('Gagal menambahkan item pesanan.');
-      await supabase.from('orders').delete().eq('id', orderId);
-    } else {
-      toast.success('Pesanan berhasil dibuat!');
-      onOrderAdded();
-      onOpenChange(false);
-    }
-    setLoading(false);
-  };
+    };
   
   const resetForm = () => {
     setOrderForm({ customer_id: '', planned_date: '', notes: '' });
     setOrderItems([]);
-    setNewItem({ product_id: '', qty: '' });
+    setNewItem({ product_id: '', qty: 0 });
     setIsGalonProduct(false);
-    setGalonForm({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
+    setGalonDetail({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
   };
   
-  const handleProductSelectChange = (val) => {
-    setNewItem({ ...newItem, product_id: val });
-    const selectedProduct = products.find(p => p.id === val);
-    if (selectedProduct && selectedProduct.name.toLowerCase().includes('galon')) {
-      setIsGalonProduct(true);
-    } else {
-      setIsGalonProduct(false);
-      setGalonForm({ returned_qty: 0, borrowed_qty: 0, purchase_price: 0 });
-    }
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -245,40 +218,44 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Detail Pesanan</Label>
-            <Select
-              value={orderForm.customer_id}
-              onValueChange={(val) => setOrderForm({ ...orderForm, customer_id: val })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pilih Pelanggan" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="date"
-              name="planned_date"
-              value={orderForm.planned_date}
-              onChange={handleOrderFormChange}
-              required
-            />
-            <Input
-              name="notes"
-              placeholder="Catatan Pesanan (opsional)"
-              value={orderForm.notes}
-              onChange={handleOrderFormChange}
-            />
+          <div>
+            <label>Detail Pesanan</label>
+            <div className="space-y-2">
+              <Select
+                name="customer_id"
+                value={orderForm.customer_id}
+                onValueChange={(val) => setOrderForm({ ...orderForm, customer_id: val })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pilih Pelanggan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                name="planned_date"
+                value={orderForm.planned_date}
+                onChange={handleOrderFormChange}
+                required
+              />
+              <Input
+                type="text"
+                name="notes"
+                placeholder="Catatan (opsional)"
+                value={orderForm.notes}
+                onChange={handleOrderFormChange}
+              />
+            </div>
           </div>
           
           <div className="space-y-2">
-            <Label>Item Pesanan</Label>
+            <label>Item Pesanan</label>
             <div className="flex gap-2">
               <Select
                 value={newItem.product_id}
@@ -301,7 +278,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
                 name="qty"
                 value={newItem.qty}
                 onChange={handleNewItemChange}
-                min="1"
+                min="0"
               />
               <Button type="button" onClick={handleItemAdd} disabled={loading} size="icon">
                 <Plus className="h-4 w-4" />
@@ -315,7 +292,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
                   type="number"
                   placeholder="Jumlah Galon Kembali"
                   name="returned_qty"
-                  value={galonForm.returned_qty}
+                  value={galonDetail.returned_qty}
                   onChange={handleGalonFormChange}
                   min="0"
                 />
@@ -323,7 +300,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
                   type="number"
                   placeholder="Jumlah Galon Dipinjam"
                   name="borrowed_qty"
-                  value={galonForm.borrowed_qty}
+                  value={galonDetail.borrowed_qty}
                   onChange={handleGalonFormChange}
                   min="0"
                 />
@@ -331,7 +308,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
                   type="number"
                   placeholder="Harga Galon Dibeli"
                   name="purchase_price"
-                  value={galonForm.purchase_price}
+                  value={galonDetail.purchase_price}
                   onChange={handleGalonFormChange}
                   min="0"
                 />
