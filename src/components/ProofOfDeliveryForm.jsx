@@ -67,16 +67,16 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
 
     // 🚀 update langsung ke tabel orders
     const { error: updateError } = await supabase
-      .from('orders')
-      .update({
+    .from('orders')
+    .update({
         proof_of_delivery_url: proofUrl,
         returned_qty: parseInt(formState.returnedQty, 10) || 0,
         borrowed_qty: parseInt(formState.borrowedQty, 10) || 0,
+        purchased_empty_qty: parseInt(formState.purchasedEmptyQty, 10) || 0,
         transport_cost: parseFloat(formState.transportCost) || 0,
-      })
-      .eq('id', order.id);
+    })
+    .eq('id', order.id);
 
-    if (updateError) throw updateError;
 
     // teruskan juga ke parent (biar fetchData di CourierPage jalan)
     onCompleteDelivery({
@@ -148,6 +148,16 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
                   required
                   min="0"
                 />
+                <Label htmlFor="purchasedEmptyQty">Jumlah Galon Kosong Dibeli</Label>
+                <Input
+                id="purchasedEmptyQty"
+                type="number"
+                placeholder="Jumlah Galon Kosong Dibeli"
+                value={formState.purchasedEmptyQty || 0}
+                onChange={handleFormChange}
+                min="0"
+                />
+
               </>
             )}
 

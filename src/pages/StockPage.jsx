@@ -26,14 +26,21 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const StockPage = () => {
-  const { session } = useAuth();
+  const { companyId } = useAuth();
   const [products, setProducts] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProductId, setSelectedProductId] = useState(null);
   const [movements, setMovements] = useState([]);
   const [currentStock, setCurrentStock] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // state modal detail
+  const [openDetail, setOpenDetail] = useState(false);
+  const [detailTitle, setDetailTitle] = useState('');
+  const [detailData, setDetailData] = useState([]);
+
   const [newMovementForm, setNewMovementForm] = useState({
     type: 'masuk',
     qty: '',
@@ -42,19 +49,20 @@ const StockPage = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
-    if (selectedProduct) {
-      fetchMovements(selectedProduct);
+    if (selectedProductId) {
+      fetchMovements(selectedProductId);
     }
-  }, [selectedProduct]);
+  }, [selectedProductId]);
 
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('products')
       .select('*, is_returnable')
+      .eq('company_id', companyId)
       .order('name', { ascending: true });
 
     if (error) {
@@ -63,29 +71,32 @@ const StockPage = () => {
     } else {
       setProducts(data);
       if (data.length > 0) {
-        setSelectedProduct(data[0]);
+        setSelectedProductId(data[0].id);
       }
     }
     setLoading(false);
   };
-
-  const fetchMovements = async (product) => {
+  
+  const fetchMovements = async (productId) => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data: productData } = await supabase.from('products').select('stock').eq('id', productId).single();
+    setCurrentStock(productData.stock);
+
+    const { data: movementsData, error } = await supabase
       .from('stock_movements')
       .select(`
         *,
-        products (name)
+        products (name),
+        orders (id, returned_qty, borrowed_qty, purchased_empty_qty, customers(name, phone))
       `)
-      .eq('product_id', product.id)
+      .eq('product_id', productId)
       .order('movement_date', { ascending: false });
 
     if (error) {
       console.error('Error fetching movements:', error);
       toast.error('Gagal memuat data pergerakan stok.');
     } else {
-      setMovements(data);
-      setCurrentStock(product.stock);
+      setMovements(movementsData);
     }
     setLoading(false);
   };
@@ -99,14 +110,20 @@ const StockPage = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { type, qty } = newMovementForm;
+    const { type, qty, notes } = newMovementForm;
     const qtyValue = parseInt(qty);
-    const newStock = type === 'masuk' ? currentStock + qtyValue : currentStock - qtyValue;
+    const newStock = type === 'masuk' ? (currentStock + qtyValue) : (currentStock - qtyValue);
+    
+    if (newStock < 0) {
+      toast.error('Stok tidak bisa kurang dari 0.');
+      setLoading(false);
+      return;
+    }
     
     const { error: updateError } = await supabase
       .from('products')
       .update({ stock: newStock })
-      .eq('id', selectedProduct.id);
+      .eq('id', selectedProductId);
 
     if (updateError) {
       console.error('Error updating stock:', updateError);
@@ -114,12 +131,15 @@ const StockPage = () => {
       setLoading(false);
       return;
     }
-
+    
     const { error: insertError } = await supabase
       .from('stock_movements')
       .insert({
-        product_id: selectedProduct.id,
-        ...newMovementForm
+        product_id: selectedProductId,
+        qty: qtyValue,
+        type,
+        notes,
+        company_id: companyId,
       });
     
     if (insertError) {
@@ -133,6 +153,36 @@ const StockPage = () => {
     setLoading(false);
   };
 
+  // fungsi ambil detail berdasarkan kategori
+  const fetchDetail = async (category) => {
+    let query = supabase.from('orders').select(`
+      id,
+      returned_qty,
+      borrowed_qty,
+      purchased_empty_qty,
+      customers (name, phone)
+    `).eq('company_id', companyId);
+
+    if (category === 'dibeli') {
+      query = query.gt('purchased_empty_qty', 0);
+      setDetailTitle('Detail Galon Dibeli');
+    }
+    if (category === 'dikembalikan') {
+      query = query.gt('returned_qty', 0);
+      setDetailTitle('Detail Galon Dikembalikan');
+    }
+    if (category === 'dipinjam') {
+      query = query.gt('borrowed_qty', 0);
+      setDetailTitle('Detail Galon Dipinjam');
+    }
+
+    const { data, error } = await query;
+    if (!error) {
+      setDetailData(data);
+      setOpenDetail(true);
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -140,6 +190,8 @@ const StockPage = () => {
       </div>
     );
   }
+
+  const selectedProduct = products.find(p => p.id === selectedProductId);
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -150,9 +202,9 @@ const StockPage = () => {
           <CardHeader>
             <CardTitle>Stok Tersedia</CardTitle>
             <Select
-              value={selectedProduct?.id}
+              value={selectedProductId}
               onValueChange={(val) => {
-                setSelectedProduct(products.find(p => p.id === val));
+                setSelectedProductId(val);
               }}
             >
               <SelectTrigger>
@@ -168,9 +220,12 @@ const StockPage = () => {
             </Select>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold">{currentStock}</p>
+            <p className="text-4xl font-bold">
+              {currentStock}
+            </p>
           </CardContent>
         </Card>
+        
         <Card>
           <CardHeader>
             <CardTitle>Catat Pergerakan Manual</CardTitle>
@@ -210,8 +265,82 @@ const StockPage = () => {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Section untuk returnable */}
+      {selectedProduct && selectedProduct.is_returnable && (
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Ringkasan Galon Returnable</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div className="p-4 rounded-lg border bg-gray-50">
+                <h3 className="text-lg font-semibold">Dibeli (Galon Kosong)</h3>
+                <button
+                  className="text-3xl font-bold text-purple-600 hover:underline"
+                  onClick={() => fetchDetail('dibeli')}
+                >
+                  {movements
+                    .filter(m => m.notes?.includes('dibeli galon kosong'))
+                    .reduce((sum, m) => sum + m.qty, 0)}
+                </button>
+              </div>
 
-      <h2 className="text-xl font-bold mb-4">Log Pergerakan</h2>
+              <div className="p-4 rounded-lg border bg-gray-50">
+                <h3 className="text-lg font-semibold">Dikembalikan</h3>
+                <button
+                  className="text-3xl font-bold text-green-600 hover:underline"
+                  onClick={() => fetchDetail('dikembalikan')}
+                >
+                  {movements
+                    .filter(m => m.type === 'pengembalian')
+                    .reduce((sum, m) => sum + m.qty, 0)}
+                </button>
+                <p className="text-sm text-gray-500">Stok kosong bertambah</p>
+              </div>
+
+              <div className="p-4 rounded-lg border bg-gray-50">
+                <h3 className="text-lg font-semibold">Dipinjam</h3>
+                <button
+                  className="text-3xl font-bold text-yellow-600 hover:underline"
+                  onClick={() => fetchDetail('dipinjam')}
+                >
+                  {movements
+                    .filter(m => m.type === 'pinjam_kembali')
+                    .reduce((sum, m) => sum + m.qty, 0)}
+                </button>
+                <p className="text-sm text-gray-500">Masih di customer</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal detail */}
+      <Dialog open={openDetail} onOpenChange={setOpenDetail}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {detailData.length > 0 ? (
+              detailData.map(d => (
+                <div key={d.id} className="p-2 border rounded-md">
+                  <p className="font-medium">{d.customers?.name}</p>
+                  <p className="text-sm text-gray-500">{d.customers?.phone}</p>
+                  {d.returned_qty > 0 && <p>Returned: {d.returned_qty}</p>}
+                  {d.borrowed_qty > 0 && <p>Borrowed: {d.borrowed_qty}</p>}
+                  {d.purchased_empty_qty > 0 && <p>Purchased Empty: {d.purchased_empty_qty}</p>}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500">Tidak ada data.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <h2 className="text-xl font-bold mt-8 mb-4">Log Pergerakan</h2>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -228,8 +357,7 @@ const StockPage = () => {
               <TableRow key={m.id}>
                 <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
                 <TableCell>{m.products?.name}</TableCell>
-                {/* Tampilkan item_type dari pergerakan stok */}
-                <TableCell>{m.item_type || m.type}</TableCell>
+                <TableCell>{m.type || m.item_type}</TableCell>
                 <TableCell>{m.qty}</TableCell>
                 <TableCell>{m.notes}</TableCell>
               </TableRow>
