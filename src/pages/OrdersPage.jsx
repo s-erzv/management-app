@@ -31,8 +31,10 @@ import {
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import AddOrderForm from '@/components/AddOrderForm'; 
+import { useNavigate } from 'react-router-dom'; 
 
 const OrdersPage = () => {
+  const navigate = useNavigate();
   const { session, userRole } = useAuth();
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -174,39 +176,78 @@ const OrdersPage = () => {
   };
 
   const handleSendInvoice = async (order) => {
-    setIsSendingInvoice(true);
-    toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
+      setIsSendingInvoice(true);
+      toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
 
-    try {
-      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-invoice-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ order_id: order.id }),
-      });
+      try {
+        const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-invoice-pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ order_id: order.id }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Gagal membuat invoice PDF.');
+        if (!response.ok) {
+          throw new Error('Gagal membuat invoice PDF.');
+        }
+
+        const { pdfUrl } = await response.json();
+        
+        const invoiceNumber = order.invoice_number;
+        const totalAmount = calculateTotal(order.order_items);
+        
+        const { data: company, error } = await supabase
+          .from('companies')
+          .select('name')
+          .eq('id', order.company_id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching company:', error.message);
+          throw new Error('Gagal mengambil nama perusahaan.');
+        }
+
+        const companyName = company ? company.name : 'Nama Perusahaan';
+
+        const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.
+  Yth. Bapak/Ibu ${order.customers.name},
+
+  Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
+  Invoice No. ${invoiceNumber} senilai Rp${totalAmount}.
+  Tautan invoice: ${pdfUrl}.
+
+  Metode Pembayaran:
+
+  Tunai (Cash) – dibayarkan saat serah terima/di lokasi.
+
+  Transfer Bank (BSI)
+  • Bank: Bank Syariah Indonesia (BSI)
+  • No. Rekening: 7177559948
+  • A.n.: M Hammam Jafar
+  • Berita/Referensi: Invoice ${invoiceNumber} – ${order.customers.name}
+
+  Setelah pembayaran, mohon kirimkan bukti transfer ke nomor ini dan mengonfirmasi pembayaran.
+  Jazaakumullaahu khairan atas perhatian dan kerja samanya.
+  Wassalamualaikum warahmatullahi wabarakatuh.
+
+  Hormat kami,
+  ${companyName}`;
+
+        const whatsappUrl = `https://wa.me/${order.customers.phone}?text=${encodeURIComponent(whatsappMessage)}`;
+        
+        window.open(whatsappUrl, '_blank');
+        
+        toast.success('Invoice berhasil dikirim!', { id: 'invoice-toast' });
+
+      } catch (error) {
+        console.error('Error sending invoice:', error.message);
+        toast.error(error.message, { id: 'invoice-toast' });
+      } finally {
+        setIsSendingInvoice(false);
       }
-
-      const { pdfUrl } = await response.json();
-      
-      const whatsappMessage = `Halo ${order.customers.name}, ini adalah invoice untuk pesanan Anda: ${pdfUrl}`;
-      const whatsappUrl = `https://wa.me/${order.customers.phone}?text=${encodeURIComponent(whatsappMessage)}`;
-      
-      window.open(whatsappUrl, '_blank');
-      
-      toast.success('Invoice berhasil dikirim!', { id: 'invoice-toast' });
-
-    } catch (error) {
-      console.error('Error sending invoice:', error.message);
-      toast.error(error.message, { id: 'invoice-toast' });
-    } finally {
-      setIsSendingInvoice(false);
-    }
-  };
+    };
 
   if (loading) {
     return (
@@ -316,6 +357,7 @@ const OrdersPage = () => {
                 </TableCell>
                 <TableCell>{order.couriers?.full_name ?? 'Belum Ditugaskan'}</TableCell>
                 <TableCell className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)}>Detail</Button>
                   <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)}>Edit</Button>
                   <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)}>Hapus</Button>
                   <Button 

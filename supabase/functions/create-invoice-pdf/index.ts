@@ -144,7 +144,7 @@ serve(async (req) => {
     await supabase.from('invoices').update({ public_link: publicUrlData.publicUrl }).eq('id', invoiceData.id);
 
     // 6. Kembalikan URL publik
-    return new Response(JSON.stringify({ pdfUrl: publicUrlData.publicUrl }), {
+    return new Response(JSON.stringify({ pdfUrl: publicUrlData.publicUrl, invoiceNumber: invoiceData.invoice_number, amount: totalAmount, companyName: invoiceData.companies.name }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

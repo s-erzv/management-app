@@ -15,108 +15,164 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
-const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onUploadSuccess }) => {
+const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }) => {
   const [file, setFile] = useState(null);
-  const [transportCost, setTransportCost] = useState('');
-  const [deliveredAt, setDeliveredAt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formState, setFormState] = useState({
+    paymentAmount: '',
+    returnedQty: 0,
+    borrowedQty: 0,
+    transportCost: '',
+  });
 
   useEffect(() => {
     if (order) {
-      setTransportCost(order.transport_cost ?? '');
-      setDeliveredAt(order.delivered_at ? new Date(order.delivered_at).toISOString().slice(0, 16) : '');
+      setFormState({
+        paymentAmount: order.remaining_due > 0 ? order.remaining_due.toString() : '0',
+        returnedQty: 0,
+        borrowedQty: 0,
+        transportCost: order.transport_cost ?? '',
+      });
+      setFile(null);
     }
   }, [order]);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleFormChange = (e) => {
+    const { id, value } = e.target;
+    setFormState(prev => ({ ...prev, [id]: value }));
   };
 
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!file) {
-      toast.error('Pilih file gambar untuk diunggah.');
-      return;
-    }
-    setLoading(true);
+  const handleUploadAndComplete = async (e) => {
+  e.preventDefault();
+  if (!file) {
+    toast.error('Pilih file gambar untuk diunggah.');
+    return;
+  }
+  setLoading(true);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const ext = file.name.split('.').pop();
+    const filePath = `${user.id}/${order.id}-${Date.now()}.${ext}`;
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${order.id}-${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    // Unggah file ke Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('proofs')
-      .upload(filePath, file);
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
+    if (uploadError) throw uploadError;
 
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      toast.error('Gagal mengunggah foto.');
-      setLoading(false);
-      return;
-    }
+    const { data } = supabase.storage.from('proofs').getPublicUrl(filePath);
+    const proofUrl = data.publicUrl;
 
-    const { data: publicUrlData } = supabase.storage
-      .from('proofs')
-      .getPublicUrl(filePath);
-
-    // Perbarui URL, biaya transportasi, dan waktu di tabel 'orders'
+    // 🚀 update langsung ke tabel orders
     const { error: updateError } = await supabase
       .from('orders')
-      .update({ 
-        proof_of_delivery_url: publicUrlData.publicUrl, 
-        status: 'completed',
-        transport_cost: parseFloat(transportCost),
-        delivered_at: deliveredAt,
+      .update({
+        proof_of_delivery_url: proofUrl,
+        returned_qty: parseInt(formState.returnedQty, 10) || 0,
+        borrowed_qty: parseInt(formState.borrowedQty, 10) || 0,
+        transport_cost: parseFloat(formState.transportCost) || 0,
       })
       .eq('id', order.id);
 
-    if (updateError) {
-      console.error('Error updating order:', updateError);
-      toast.error('Gagal memperbarui data pesanan.');
-    } else {
-      toast.success('Foto berhasil diunggah dan pesanan diselesaikan!');
-      onUploadSuccess();
-      onOpenChange(false);
-    }
+    if (updateError) throw updateError;
 
+    // teruskan juga ke parent (biar fetchData di CourierPage jalan)
+    onCompleteDelivery({
+      ...formState,
+      proofFileUrl: proofUrl,
+    });
+
+    toast.success('Bukti pengiriman berhasil disimpan!');
+  } catch (error) {
+    console.error('Error during upload:', error);
+    toast.error('Gagal menyelesaikan pesanan: ' + error.message);
+  } finally {
     setLoading(false);
-  };
+  }
+};
+
+
+  const hasReturnableItems = order?.order_items.some(item => item.products?.is_returnable);
+  const isPaid = order?.payment_status === 'paid';
+  const deliveredQty = order?.order_items.reduce((sum, item) => sum + (item.qty || 0), 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Unggah Bukti Pengiriman</DialogTitle>
+          <DialogTitle>Selesaikan Pesanan</DialogTitle>
           <DialogDescription>
-            Foto bukti pengiriman untuk pesanan #{order?.id.slice(0, 8)}.
+            Lengkapi detail pembayaran, pengembalian galon, dan bukti pengiriman untuk pesanan #{order?.id.slice(0, 8)}.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleUpload} className="space-y-4">
-          <Input type="file" onChange={handleFileChange} accept="image/*" required />
-          <div>
-            <Label htmlFor="transport-cost">Biaya Transportasi</Label>
+        <form onSubmit={handleUploadAndComplete}>
+          <div className="grid gap-4 py-4">
+            {!isPaid && order?.remaining_due > 0 && (
+              <>
+                <Label htmlFor="paymentAmount">Jumlah Pembayaran Tunai</Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  placeholder="Jumlah Pembayaran"
+                  value={formState.paymentAmount}
+                  onChange={handleFormChange}
+                  required
+                  min="0"
+                />
+              </>
+            )}
+            
+            {hasReturnableItems && (
+              <>
+                <p className="text-sm text-muted-foreground">Pesanan ini dikirim {deliveredQty} galon yang dapat dikembalikan.</p>
+                <Label htmlFor="returnedQty">Jumlah Galon Kembali</Label>
+                <Input
+                  id="returnedQty"
+                  type="number"
+                  placeholder="Jumlah Galon Kembali"
+                  value={formState.returnedQty}
+                  onChange={handleFormChange}
+                  required
+                  min="0"
+                  max={deliveredQty}
+                />
+                <Label htmlFor="borrowedQty">Jumlah Galon Dipinjam</Label>
+                 <Input
+                  id="borrowedQty"
+                  type="number"
+                  placeholder="Jumlah Galon Dipinjam"
+                  value={formState.borrowedQty}
+                  onChange={handleFormChange}
+                  required
+                  min="0"
+                />
+              </>
+            )}
+
+            <Label htmlFor="transportCost">Biaya Transportasi</Label>
             <Input
-              id="transport-cost"
+              id="transportCost"
               type="number"
-              value={transportCost}
-              onChange={(e) => setTransportCost(e.target.value)}
-              required
+              placeholder="Biaya Transportasi"
+              value={formState.transportCost}
+              onChange={handleFormChange}
             />
-          </div>
-          <div>
-            <Label htmlFor="delivered-at">Waktu Pengiriman</Label>
+
+            <Label htmlFor="proofFile">Unggah Bukti Pengiriman</Label>
             <Input
-              id="delivered-at"
-              type="datetime-local"
-              value={deliveredAt}
-              onChange={(e) => setDeliveredAt(e.target.value)}
+              id="proofFile"
+              type="file"
+              onChange={(e) => setFile(e.target.files[0])}
+              accept="image/*"
               required
             />
           </div>
+          
           <DialogFooter>
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Unggah & Selesaikan'}
+            <Button type="submit" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pesanan'}
             </Button>
           </DialogFooter>
         </form>
