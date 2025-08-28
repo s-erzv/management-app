@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// src/components/ProofOfDeliveryForm.jsx
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,10 +13,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onUploadSuccess }) => {
   const [file, setFile] = useState(null);
+  const [transportCost, setTransportCost] = useState('');
+  const [deliveredAt, setDeliveredAt] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (order) {
+      setTransportCost(order.transport_cost ?? '');
+      setDeliveredAt(order.delivered_at ? new Date(order.delivered_at).toISOString().slice(0, 16) : '');
+    }
+  }, [order]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -49,10 +60,15 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onUploadSuccess }) =
       .from('proofs')
       .getPublicUrl(filePath);
 
-    // Perbarui URL di tabel 'orders'
+    // Perbarui URL, biaya transportasi, dan waktu di tabel 'orders'
     const { error: updateError } = await supabase
       .from('orders')
-      .update({ proof_of_delivery_url: publicUrlData.publicUrl, status: 'completed' })
+      .update({ 
+        proof_of_delivery_url: publicUrlData.publicUrl, 
+        status: 'completed',
+        transport_cost: parseFloat(transportCost),
+        delivered_at: deliveredAt,
+      })
       .eq('id', order.id);
 
     if (updateError) {
@@ -78,6 +94,26 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onUploadSuccess }) =
         </DialogHeader>
         <form onSubmit={handleUpload} className="space-y-4">
           <Input type="file" onChange={handleFileChange} accept="image/*" required />
+          <div>
+            <Label htmlFor="transport-cost">Biaya Transportasi</Label>
+            <Input
+              id="transport-cost"
+              type="number"
+              value={transportCost}
+              onChange={(e) => setTransportCost(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="delivered-at">Waktu Pengiriman</Label>
+            <Input
+              id="delivered-at"
+              type="datetime-local"
+              value={deliveredAt}
+              onChange={(e) => setDeliveredAt(e.target.value)}
+              required
+            />
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Unggah & Selesaikan'}

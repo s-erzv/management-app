@@ -355,3 +355,14 @@ entrypoint = "./functions/create-order/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/create-order/*.html" ]
+
+[functions.create-invoice-pdf]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-invoice-pdf/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/create-invoice-pdf/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/create-invoice-pdf/*.html" ]

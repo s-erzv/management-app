@@ -37,6 +37,11 @@ const CalendarPage = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    
+    // DEBUGGING: Log nilai-nilai sebelum kueri dijalankan
+    console.log('Fetching data...');
+    console.log('Current user role:', userRole);
+    console.log('Current user company ID:', companyId);
 
     // Fetch orders
     const { data: ordersData, error: ordersError } = await supabase
@@ -46,7 +51,9 @@ const CalendarPage = () => {
         customers (name),
         couriers:profiles (full_name)
       `)
-      .order('planned_date', { ascending: true });
+      .order('planned_date', { ascending: true })
+      // Tambahkan filter berdasarkan companyId
+      .eq('company_id', companyId); 
 
     // Fetch couriers based on user role and company ID
     let couriersQuery = supabase
@@ -78,8 +85,10 @@ const CalendarPage = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [userRole, companyId]); // Tambahkan companyId sebagai dependency
+    if (companyId) {
+      fetchData();
+    }
+  }, [userRole, companyId]);
 
   const handleOpenAssignModal = (order) => {
     setSelectedOrder(order);

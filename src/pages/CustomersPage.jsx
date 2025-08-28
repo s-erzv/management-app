@@ -22,20 +22,21 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const CustomersPage = () => {
-  const { session } = useAuth(); // Asumsikan session sudah membawa role
+  const { session, companyId } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentCustomer, setCurrentCustomer] = useState(null); // Untuk data yang akan diedit
+  const [currentCustomer, setCurrentCustomer] = useState(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [companyId]);
 
   const fetchCustomers = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('customers').select('*');
+    // Tambahkan filter berdasarkan companyId
+    const { data, error } = await supabase.from('customers').select('*').eq('company_id', companyId);
     if (error) {
       console.error('Error fetching customers:', error);
       toast.error('Gagal mengambil data pelanggan.');
@@ -53,9 +54,15 @@ const CustomersPage = () => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
+    // Pastikan companyId tersedia sebelum submit
+    if (!companyId) {
+      toast.error('Tidak dapat menambahkan pelanggan tanpa ID perusahaan.');
+      setLoading(false);
+      return;
+    }
 
     if (currentCustomer) {
-      // Logika untuk memperbarui pelanggan
       const { data, error } = await supabase
         .from('customers')
         .update(formData)
@@ -70,10 +77,11 @@ const CustomersPage = () => {
         resetForm();
       }
     } else {
-      // Logika untuk menambah pelanggan baru
+      // Perbarui logika untuk menambahkan company_id
+      const newCustomerData = { ...formData, company_id: companyId };
       const { data, error } = await supabase
         .from('customers')
-        .insert([formData])
+        .insert([newCustomerData])
         .select();
       if (error) {
         console.error('Error adding customer:', error);
