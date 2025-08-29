@@ -23,124 +23,150 @@ import { Label } from '@/components/ui/label';
 const ProductSettings = () => {
   const { userProfile, loading: authLoading } = useAuth();
   const [products, setProducts] = useState([]);
+  const [customerStatuses, setCustomerStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [newProduct, setNewProduct] = useState({
+  
+  const [newProductForm, setNewProductForm] = useState({
     name: '',
-    price: '',
     stock: '',
     is_returnable: false,
   });
 
+  const [productPrices, setProductPrices] = useState([]);
+
   useEffect(() => {
     if (!authLoading && userProfile?.company_id) {
-      fetchProducts();
+      fetchData();
     }
   }, [authLoading, userProfile]);
 
-  const fetchProducts = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    
+    const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('*')
+      .select('*, product_prices(*)')
       .eq('company_id', userProfile.company_id)
       .order('name', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching products:', error);
-      toast.error('Gagal memuat daftar produk.');
+    const { data: statusData, error: statusError } = await supabase
+      .from('customer_statuses')
+      .select('status_name')
+      .eq('company_id', userProfile.company_id)
+      .order('status_name', { ascending: true });
+
+    if (productsError || statusError) {
+      console.error('Error fetching data:', productsError || statusError);
+      toast.error('Gagal memuat data produk dan status.');
     } else {
-      setProducts(data);
+      setProducts(productsData);
+      setCustomerStatuses(statusData);
     }
     setLoading(false);
   };
 
-  const handleFormChange = (e) => {
+  const handleNewProductFormChange = (e) => {
     const { name, value } = e.target;
-    setNewProduct({ ...newProduct, [name]: value });
+    setNewProductForm({ ...newProductForm, [name]: value });
+  };
+  
+  const handlePriceChange = (statusName, value) => {
+    setProductPrices(prev => prev.map(p => 
+      p.customer_status === statusName ? { ...p, price: value } : p
+    ));
   };
 
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setCurrentProduct({ ...currentProduct, [name]: value });
+  const handleEdit = (product) => {
+    setCurrentProduct(product);
+    const pricesForProduct = customerStatuses.map(status => {
+      const existingPrice = product.product_prices.find(p => p.customer_status === status.status_name);
+      return {
+        customer_status: status.status_name,
+        name: status.status_name,
+        price: existingPrice ? existingPrice.price : '',
+      };
+    });
+    setProductPrices(pricesForProduct);
+    setIsModalOpen(true);
   };
-
+  
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    const isEditing = !!currentProduct;
     setLoading(true);
 
-    const productData = {
-      name: isEditing ? currentProduct.name : newProduct.name,
-      price: parseFloat(isEditing ? currentProduct.price : newProduct.price),
-      stock: parseInt(isEditing ? currentProduct.stock : newProduct.stock),
-      is_returnable: isEditing ? currentProduct.is_returnable : newProduct.is_returnable,
-      company_id: userProfile.company_id,
-    };
+    const isEditing = !!currentProduct;
+    let productId = currentProduct?.id;
 
-    if (isEditing) {
-      const { error } = await supabase
-        .from('products')
-        .update(productData)
-        .eq('id', currentProduct.id);
-
-      if (error) {
-        console.error('Error updating product:', error);
-        toast.error('Gagal memperbarui produk.');
+    try {
+      if (!isEditing) {
+        const { data, error } = await supabase
+          .from('products')
+          .insert({ 
+            name: newProductForm.name,
+            stock: parseInt(newProductForm.stock),
+            is_returnable: newProductForm.is_returnable,
+            company_id: userProfile.company_id,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        productId = data.id;
       } else {
-        toast.success('Produk berhasil diperbarui.');
-        fetchProducts();
-        setIsModalOpen(false);
+        const { error } = await supabase
+          .from('products')
+          .update({
+            name: currentProduct.name,
+            stock: parseInt(currentProduct.stock),
+            is_returnable: currentProduct.is_returnable
+          })
+          .eq('id', productId);
+        if (error) throw error;
       }
-    } else {
-      const { error } = await supabase
-        .from('products')
-        .insert(productData);
+      
+      const priceUpdates = productPrices.map(p => ({
+        product_id: productId,
+        customer_status: p.customer_status,
+        price: parseFloat(p.price) || 0,
+        company_id: userProfile.company_id,
+      }));
+      
+      const { error: priceError } = await supabase
+        .from('product_prices')
+        .upsert(priceUpdates, { onConflict: ['product_id', 'customer_status'] });
+        
+      if (priceError) throw priceError;
+      
+      toast.success(`Produk berhasil di${isEditing ? 'perbarui' : 'tambahkan'}.`);
+      fetchData();
+      resetForm();
 
-      if (error) {
-        console.error('Error adding product:', error);
-        toast.error('Gagal menambahkan produk.');
-      } else {
-        toast.success('Produk berhasil ditambahkan.');
-        fetchProducts();
-        setIsModalOpen(false);
-        setNewProduct({ name: '', price: '', stock: '', is_returnable: false });
-      }
+    } catch (error) {
+      console.error('Error in form submission:', error);
+      toast.error(`Gagal ${isEditing ? 'memperbarui' : 'menambahkan'} produk: ` + error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleDelete = async (productId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus produk ini? Semua data terkait di pesanan akan terhapus.')) {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus produk ini? Semua data terkait akan terhapus.')) {
       return;
     }
-    
     setLoading(true);
-
     try {
-      // Langkah 1: Hapus semua item pesanan yang merujuk pada produk ini
-      const { error: deleteItemsError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('product_id', productId);
-
-      if (deleteItemsError) {
-        throw new Error(deleteItemsError.message);
-      }
-
-      // Langkah 2: Hapus produk itu sendiri
-      const { error: deleteProductError } = await supabase
+      const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', productId);
 
-      if (deleteProductError) {
-        throw new Error(deleteProductError.message);
+      if (error) {
+        throw new Error(error.message);
       }
       
       toast.success('Produk berhasil dihapus!');
-      fetchProducts(); // Refresh daftar produk
+      fetchData();
     } catch (error) {
       console.error('Error deleting product:', error);
       toast.error('Gagal menghapus produk: ' + error.message);
@@ -148,11 +174,19 @@ const ProductSettings = () => {
       setLoading(false);
     }
   };
-
-  const handleEdit = (product) => {
-    setCurrentProduct(product);
-    setIsModalOpen(true);
+  
+  const resetForm = () => {
+    setCurrentProduct(null);
+    setNewProductForm({ name: '', stock: '', is_returnable: false });
+    setProductPrices([]);
+    setIsModalOpen(false);
   };
+  
+  const allPricesSet = productPrices.every(p => p.price && p.price > 0);
+  const isFormValid = newProductForm.name && newProductForm.stock && allPricesSet;
+  const isEditFormValid = currentProduct?.name && currentProduct?.stock && allPricesSet;
+  const canSubmit = currentProduct ? isEditFormValid : isFormValid;
+
 
   return (
     <Card>
@@ -161,7 +195,13 @@ const ProductSettings = () => {
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => {
-              setCurrentProduct(null);
+              resetForm();
+              const initialPrices = customerStatuses.map(status => ({
+                customer_status: status.status_name,
+                name: status.status_name,
+                price: ''
+              }));
+              setProductPrices(initialPrices);
               setIsModalOpen(true);
             }}>
               <PlusCircle className="h-4 w-4 mr-2" /> Tambah Produk
@@ -180,20 +220,11 @@ const ProductSettings = () => {
                 <Input
                   id="name"
                   name="name"
-                  value={currentProduct ? currentProduct.name : newProduct.name}
-                  onChange={currentProduct ? handleEditChange : handleFormChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="price">Harga</Label>
-                <Input
-                  id="price"
-                  name="price"
-                  type="number"
-                  step="0.01"
-                  value={currentProduct ? currentProduct.price : newProduct.price}
-                  onChange={currentProduct ? handleEditChange : handleFormChange}
+                  value={currentProduct ? currentProduct.name : newProductForm.name}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    currentProduct ? setCurrentProduct({ ...currentProduct, [name]: value }) : setNewProductForm({ ...newProductForm, [name]: value });
+                  }}
                   required
                 />
               </div>
@@ -203,23 +234,46 @@ const ProductSettings = () => {
                   id="stock"
                   name="stock"
                   type="number"
-                  value={currentProduct ? currentProduct.stock : newProduct.stock}
-                  onChange={currentProduct ? handleEditChange : handleFormChange}
+                  value={currentProduct ? currentProduct.stock : newProductForm.stock}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    currentProduct ? setCurrentProduct({ ...currentProduct, [name]: value }) : setNewProductForm({ ...newProductForm, [name]: value });
+                  }}
                   required
                 />
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="is_returnable"
-                  checked={currentProduct ? currentProduct.is_returnable : newProduct.is_returnable}
+                  checked={currentProduct ? currentProduct.is_returnable : newProductForm.is_returnable}
                   onCheckedChange={(checked) => {
-                    const target = currentProduct ? setCurrentProduct : setNewProduct;
+                    const target = currentProduct ? setCurrentProduct : setNewProductForm;
                     target(prev => ({ ...prev, is_returnable: checked }));
                   }}
                 />
                 <Label htmlFor="is_returnable">Produk ini dapat dikembalikan (misal: galon)</Label>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              
+              <div className="space-y-2">
+                <Label>Harga per Status Pelanggan</Label>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                {productPrices.map(p => (
+                  <div key={p.customer_status} className="flex items-center gap-2">
+                    <Label className="w-1/3">{p.name}</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Harga"
+                      value={p.price}
+                      onChange={(e) => handlePriceChange(p.customer_status, e.target.value)}
+                      required
+                    />
+                  </div>
+                ))}
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full" disabled={loading || !canSubmit}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (currentProduct ? 'Perbarui Produk' : 'Tambah Produk')}
               </Button>
             </form>
@@ -239,7 +293,6 @@ const ProductSettings = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nama Produk</TableHead>
-                  <TableHead>Harga</TableHead>
                   <TableHead>Stok</TableHead>
                   <TableHead>Dapat Dikembalikan</TableHead>
                   <TableHead>Aksi</TableHead>
@@ -249,7 +302,6 @@ const ProductSettings = () => {
                 {products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{`Rp ${product.price.toLocaleString('id-ID')}`}</TableCell>
                     <TableCell>{product.stock}</TableCell>
                     <TableCell>{product.is_returnable ? 'Ya' : 'Tidak'}</TableCell>
                     <TableCell>

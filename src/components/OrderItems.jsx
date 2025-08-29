@@ -35,7 +35,7 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
     // Ubah kueri untuk mengambil kolom 'item_type' dari order_items
     const { data: itemsData, error: itemsError } = await supabase
       .from('order_items')
-      .select(`*, products (name, price, is_returnable)`)
+      .select(`*, products (name, is_returnable)`)
       .eq('order_id', orderId);
 
     const { data: productsData, error: productsError } = await supabase

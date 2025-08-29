@@ -13,16 +13,24 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId, paymentAmount, returnedQty, borrowedQty, transportCost, proofFileUrl, newPaymentStatus } = await req.json()
+    const { 
+        orderId, 
+        paymentAmount, 
+        paymentMethod,
+        returnedQty, 
+        borrowedQty, 
+        transportCost, 
+        proofFileUrl, 
+        purchasedEmptyQty
+    } = await req.json()
     
-    // Pastikan Supabase client dibuat dengan service_role_key untuk bypass RLS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     console.log('Edge Function called for order:', orderId);
-    console.log('Payload:', { paymentAmount, returnedQty, borrowedQty, transportCost, proofFileUrl, newPaymentStatus });
+    console.log('Payload:', { paymentAmount, paymentMethod, returnedQty, borrowedQty, transportCost, proofFileUrl, purchasedEmptyQty });
 
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'Order ID is required' }), {
@@ -39,6 +47,11 @@ serve(async (req) => {
 
     if (orderError) throw orderError;
     const company_id = order.company_id;
+    
+    // Hitung total galon yang dikirim pada pesanan ini
+    const deliveredQty = order.order_items.reduce((sum, item) => {
+        return item.products?.is_returnable ? sum + item.qty : sum;
+    }, 0);
 
     // 1. Tambah pembayaran jika ada
     if (paymentAmount > 0) {
@@ -48,7 +61,7 @@ serve(async (req) => {
         .insert({
           order_id: orderId,
           amount: paymentAmount,
-          method: 'cash',
+          method: paymentMethod,
           paid_at: new Date().toISOString(),
           company_id: company_id,
         });
@@ -60,11 +73,17 @@ serve(async (req) => {
     const returnableItem = order.order_items.find(item => item.products?.is_returnable);
     if (returnableItem) {
       const productId = returnableItem.product_id;
-      if (returnedQty > 0) {
+      
+      // Hitung sisa galon setelah pesanan ini
+      let actualReturnedQty = Math.min(returnedQty, deliveredQty);
+      let leftoverGalons = returnedQty > deliveredQty ? returnedQty - deliveredQty : 0;
+      
+      // Catat pengembalian untuk pesanan ini
+      if (actualReturnedQty > 0) {
         console.log('Inserting return stock movement...');
         const { error: returnMovementError } = await supabase.from('stock_movements').insert({
           type: 'pengembalian',
-          qty: returnedQty,
+          qty: actualReturnedQty,
           order_id: orderId,
           product_id: productId,
           notes: 'Pengembalian galon kosong dari pelanggan.',
@@ -73,6 +92,23 @@ serve(async (req) => {
         if (returnMovementError) throw returnMovementError;
         console.log('Return stock movement inserted successfully.');
       }
+      
+      // Jika ada kelebihan galon, catat sebagai pelunasan utang sebelumnya
+      if (leftoverGalons > 0) {
+        console.log('Inserting leftover galons as previous debt payment...');
+        const { error: debtPaymentError } = await supabase.from('stock_movements').insert({
+          type: 'pelunasan_utang',
+          qty: leftoverGalons,
+          order_id: orderId,
+          product_id: productId,
+          notes: `Galon kosong (${leftoverGalons}) dikembalikan untuk melunasi utang galon dari pesanan sebelumnya.`,
+          company_id: company_id,
+        });
+        if (debtPaymentError) throw debtPaymentError;
+        console.log('Leftover galons inserted successfully.');
+      }
+      
+      // Catat galon dipinjam dan dibeli
       if (borrowedQty > 0) {
         console.log('Inserting borrowed stock movement...');
         const { error: borrowedMovementError } = await supabase.from('stock_movements').insert({
@@ -86,6 +122,37 @@ serve(async (req) => {
         if (borrowedMovementError) throw borrowedMovementError;
         console.log('Borrowed stock movement inserted successfully.');
       }
+      if (purchasedEmptyQty > 0) {
+        console.log('Inserting purchased empty stock movement...');
+        const { error: purchasedEmptyMovementError } = await supabase.from('stock_movements').insert({
+          type: 'galon_dibeli',
+          qty: purchasedEmptyQty,
+          order_id: orderId,
+          product_id: productId,
+          notes: 'Galon kosong dibeli oleh perusahaan.',
+          company_id: company_id,
+        });
+        if (purchasedEmptyMovementError) throw purchasedEmptyMovementError;
+        console.log('Purchased empty stock movement inserted successfully.');
+      }
+    }
+
+    // Hitung total pembayaran setelah pembayaran baru ditambahkan
+    const { data: currentPaymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('order_id', orderId);
+
+    if (paymentsError) throw paymentsError;
+
+    const totalPaid = currentPaymentsData.reduce((sum, p) => sum + p.amount, 0);
+    const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
+
+    let newPaymentStatus = 'unpaid';
+    if (totalPaid >= orderItemsTotal) {
+        newPaymentStatus = 'paid';
+    } else if (totalPaid > 0) {
+        newPaymentStatus = 'partial';
     }
 
     // 3. Update status pesanan
@@ -97,7 +164,10 @@ serve(async (req) => {
         payment_status: newPaymentStatus,
         proof_of_delivery_url: proofFileUrl,
         transport_cost: transportCost,
-        delivered_at: new Date().toISOString()
+        delivered_at: new Date().toISOString(),
+        returned_qty: returnedQty,
+        borrowed_qty: borrowedQty,
+        purchased_empty_qty: purchasedEmptyQty
       })
       .eq('id', orderId);
 

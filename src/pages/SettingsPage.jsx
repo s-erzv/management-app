@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductSettings from '@/components/ProductSettings';
 import UserManagementPage from '@/pages/UserManagementPage';
+import CustomerStatusSettings from '@/components/CustomerStatusSettings'; 
 import { Loader2 } from 'lucide-react';
 
 const SettingsPage = () => {
@@ -52,6 +53,9 @@ const SettingsPage = () => {
           {isAdminOrSuperAdmin && (
             <TabsTrigger value="products">Manajemen Produk</TabsTrigger>
           )}
+          {isAdminOrSuperAdmin && (
+            <TabsTrigger value="customer-statuses">Status Pelanggan</TabsTrigger> // Tambahkan tab baru di sini
+          )}
           {isSuperAdmin && (
             <TabsTrigger value="users">Manajemen Pengguna</TabsTrigger>
           )}
@@ -59,6 +63,11 @@ const SettingsPage = () => {
         {isAdminOrSuperAdmin && (
           <TabsContent value="products" className="pt-4">
             <ProductSettings />
+          </TabsContent>
+        )}
+        {isAdminOrSuperAdmin && (
+          <TabsContent value="customer-statuses" className="pt-4"> 
+            <CustomerStatusSettings />
           </TabsContent>
         )}
         {isSuperAdmin && (

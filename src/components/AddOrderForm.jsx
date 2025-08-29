@@ -31,7 +31,8 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
   const [loading, setLoading] = useState(true);
   
   const [orderItems, setOrderItems] = useState([]);
-  const [newItem, setNewItem] = useState({ product_id: '', qty: 0 });
+  const [newItem, setNewItem] = useState({ product_id: '', qty: 0, price: 0 });
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
   
   const [orderForm, setOrderForm] = useState({
     customer_id: '',
@@ -42,14 +43,26 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
   useEffect(() => {
     fetchInitialData();
   }, [companyId]);
+  
+  useEffect(() => {
+    if (selectedCustomerId && newItem.product_id) {
+        handleProductSelectChange(newItem.product_id);
+    }
+  }, [selectedCustomerId]);
 
   const fetchInitialData = async () => {
     setLoading(true);
     
-    const { data: customersData } = await supabase.from('customers').select('id, name');
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, customer_status')
+      .eq('company_id', companyId);
     setCustomers(customersData);
 
-    const { data: productsData } = await supabase.from('products').select('*');
+    const { data: productsData, error: productsError } = await supabase
+      .from('products')
+      .select('*, is_returnable')
+      .eq('company_id', companyId);
     setProducts(productsData);
 
     if (companyId) {
@@ -63,6 +76,11 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
       }
     }
     
+    if (customersError || productsError) {
+      console.error('Error fetching initial data:', customersError || productsError);
+      toast.error('Gagal memuat data awal.');
+    }
+
     setLoading(false);
   };
   
@@ -71,13 +89,49 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
     setOrderForm({ ...orderForm, [name]: value });
   };
   
+  const handleCustomerChange = (val) => {
+    setSelectedCustomerId(val);
+    setOrderForm({ ...orderForm, customer_id: val });
+  };
+
   const handleNewItemChange = (e) => {
     const { name, value } = e.target;
     setNewItem({ ...newItem, [name]: parseInt(value) || 0 });
   };
   
-  const handleProductSelectChange = (val) => {
-    setNewItem({ ...newItem, product_id: val });
+  const handleProductSelectChange = async (val) => {
+    if (!selectedCustomerId) {
+      toast.error('Pilih pelanggan terlebih dahulu.');
+      setNewItem({ product_id: '', qty: 0, price: 0 });
+      return;
+    }
+    
+    const selectedProduct = products.find(p => p.id === val);
+    const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+    
+    if (!selectedCustomer) {
+      toast.error('Data pelanggan tidak ditemukan.');
+      return;
+    }
+
+    const { data: priceData, error } = await supabase
+        .from('product_prices')
+        .select('price')
+        .eq('product_id', selectedProduct.id)
+        .eq('customer_status', selectedCustomer.customer_status)
+        .single();
+    
+    if (error) {
+      console.error('Error fetching price:', error);
+      toast.error('Gagal memuat harga produk.');
+      return;
+    }
+
+    setNewItem({
+      ...newItem,
+      product_id: val,
+      price: priceData?.price || 0,
+    });
   };
 
   const handleItemAdd = () => {
@@ -91,12 +145,12 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
       product_id: selectedProduct.id,
       product_name: selectedProduct.name,
       qty: newItem.qty,
-      price: selectedProduct.price,
+      price: newItem.price,
       item_type: 'beli'
     };
 
     setOrderItems([...orderItems, itemToAdd]);
-    setNewItem({ product_id: '', qty: 0 });
+    setNewItem({ product_id: '', qty: 0, price: 0 });
   };
   
   const handleItemRemove = (index) => {
@@ -157,8 +211,9 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
   
   const resetForm = () => {
     setOrderForm({ customer_id: '', planned_date: '', notes: '' });
+    setSelectedCustomerId('');
     setOrderItems([]);
-    setNewItem({ product_id: '', qty: 0 });
+    setNewItem({ product_id: '', qty: 0, price: 0 });
   };
   
 
@@ -182,12 +237,13 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
           </div>
 
           <div>
-            <label>Detail Pesanan</label>
+            <Label>Detail Pesanan</Label>
             <div className="space-y-2">
               <Select
                 name="customer_id"
-                value={orderForm.customer_id}
-                onValueChange={(val) => setOrderForm({ ...orderForm, customer_id: val })}
+                value={selectedCustomerId}
+                onValueChange={handleCustomerChange}
+                required
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Pilih Pelanggan" />
@@ -223,6 +279,7 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
               <Select
                 value={newItem.product_id}
                 onValueChange={handleProductSelectChange}
+                disabled={!selectedCustomerId}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Pilih Produk" />
@@ -242,16 +299,21 @@ const AddOrderForm = ({ isOpen, onOpenChange, onOrderAdded }) => {
                 value={newItem.qty}
                 onChange={handleNewItemChange}
                 min="0"
+                disabled={!newItem.product_id}
               />
-              <Button type="button" onClick={handleItemAdd} disabled={loading} size="icon">
+              <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             
+            <p className="text-sm text-muted-foreground mt-1">
+              Harga per item: Rp{newItem.price.toLocaleString('id-ID')}
+            </p>
+            
             <div className="flex flex-wrap gap-2 mt-2">
               {orderItems.map((item, index) => (
                 <Badge key={index} variant="secondary">
-                  {item.product_name} x{item.qty}
+                  {item.product_name} x{item.qty} (Rp{item.price.toLocaleString('id-ID')})
                   <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => handleItemRemove(index)} />
                 </Badge>
               ))}

@@ -1,3 +1,4 @@
+// src/pages/CourierPage.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -128,13 +129,19 @@ const CourierPage = () => {
 
   const handleCompleteDelivery = async (formData) => {
     setLoading(true);
-
-    const { paymentAmount, returnedQty, borrowedQty, transportCost, proofFileUrl } = formData;
+    const { 
+      paymentAmount, 
+      paymentMethod, // Ditambahkan
+      returnedQty, 
+      borrowedQty, 
+      transportCost, 
+      proofFileUrl 
+    } = formData;
     const { id: orderId, total, total_paid } = currentOrder;
 
     try {
       let newPaymentStatus = currentOrder.payment_status;
-      const totalPaidAfterNew = total_paid + parseFloat(paymentAmount);
+      const totalPaidAfterNew = total_paid + paymentAmount; // Gunakan paymentAmount dari form
       if (totalPaidAfterNew >= total) {
         newPaymentStatus = 'paid';
       } else if (totalPaidAfterNew > 0) {
@@ -149,9 +156,11 @@ const CourierPage = () => {
         },
         body: JSON.stringify({
           orderId,
-          paymentAmount: parseFloat(paymentAmount),
+          paymentAmount,
+          paymentMethod, // Ditambahkan
           returnedQty: parseInt(returnedQty) || 0,
           borrowedQty: parseInt(borrowedQty) || 0,
+          purchasedEmptyQty: parseInt(formData.purchasedEmptyQty) || 0, // Ditambahkan
           transportCost: parseFloat(transportCost) || 0,
           proofFileUrl,
           newPaymentStatus

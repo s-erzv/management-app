@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-hot-toast';
 import OrderItems from '@/components/OrderItems';
+import ProofOfDeliveryForm from '@/components/ProofOfDeliveryForm';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -21,67 +22,87 @@ import { Label } from '@/components/ui/label';
 
 const OrderDetailsPage = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { session } = useAuth();
+  const navigate = useNavigate()
+  const { session, userRole } = useAuth();
   const [order, setOrder] = useState(null);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userRole, setUserRole] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [proofUrl, setProofUrl] = useState(null);
+  const [isProofFormOpen, setIsProofFormOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, [id, session]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    // Fetch user role
-    const { data: profileData } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-    setUserRole(profileData?.role);
+   const fetchData = async () => {
+  setLoading(true);
+  setError(null);
 
-    // Fetch order details
-    const { data, error: orderError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers (name, phone, address),
-        couriers:profiles (full_name),
-        order_items (*)
-      `)
-      .eq('id', id)
-      .single();
+  // ambil order + relasi
+  const { data, error } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      customers (name, phone, address),
+      couriers:profiles (full_name),
+      order_items:order_items(*)
+    `)
+    .eq("id", id)
+    .single();
 
-
-    if (orderError) {
-      console.error('Error fetching order details:', orderError);
-      toast.error('Gagal mengambil detail pesanan.');
-      setError(orderError);
-      setOrder(null);
-    } else if (!data) {
-      toast.error('Pesanan tidak ditemukan.');
-      setError({ message: 'Pesanan tidak ditemukan.' });
-      setOrder(null);
-    } else {
-      setOrder(data);
-      // Fetch payments for this order
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('order_id', data.id)
-        .order('created_at', { ascending: false });
-
-      if (paymentsError) {
-        console.error('Error fetching payments:', paymentsError);
-      } else {
-        setPayments(paymentsData);
-      }
-    }
+  if (error) {
+    console.error("Error fetching order details:", error);
+    toast.error("Gagal mengambil detail pesanan.");
+    setError(error);
+    setOrder(null);
     setLoading(false);
-  };
+    return;
+  }
+
+  if (!data) {
+    toast.error("Pesanan tidak ditemukan.");
+    setError({ message: "Pesanan tidak ditemukan." });
+    setOrder(null);
+    setLoading(false);
+    return;
+  }
+
+  setOrder(data);
+
+  // ✅ FIX: ambil signed url pakai path relatif
+  if (data.proof_of_delivery_url) {
+    const cleanPath = data.proof_of_delivery_url.replace(/^proofs\//, "");
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from("proofs")
+      .createSignedUrl(cleanPath, 3600);
+
+    if (signedUrlError) {
+      console.error("Error creating signed URL:", signedUrlError);
+    } else {
+      setProofUrl(signedUrlData.signedUrl);
+    }
+  }
+
+  // ambil payments
+  const { data: paymentsData, error: paymentsError } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("order_id", data.id)
+    .order("created_at", { ascending: false });
+
+  if (paymentsError) {
+    console.error("Error fetching payments:", paymentsError);
+  } else {
+    setPayments(paymentsData);
+  }
+
+  setLoading(false);
+};
+
+
   
   const handleItemsUpdated = (items) => {
     if (order) {
@@ -106,10 +127,8 @@ const OrderDetailsPage = () => {
     
     setLoading(true);
     
-    // Ambil company_id dari objek order yang sudah di-fetch
     const orderCompanyId = order.company_id;
 
-    // Insert new payment record
     const { data: newPayment, error: insertError } = await supabase
       .from('payments')
       .insert({
@@ -117,7 +136,7 @@ const OrderDetailsPage = () => {
         amount: parseFloat(paymentAmount),
         method: paymentMethod,
         paid_at: new Date().toISOString(),
-        company_id: orderCompanyId, // Baris ini ditambahkan
+        company_id: orderCompanyId,
       })
       .select();
 
@@ -128,7 +147,6 @@ const OrderDetailsPage = () => {
       return;
     }
     
-    // Update order payment status
     const totalPaidAfterNew = calculateTotalPaid() + parseFloat(paymentAmount);
     const orderTotal = calculateTotal(order.order_items);
     let newStatus = 'unpaid';
@@ -155,6 +173,41 @@ const OrderDetailsPage = () => {
     setLoading(false);
   };
 
+  const handleCompleteDelivery = async (deliveryData) => {
+    if (!order?.id) {
+        toast.error('ID pesanan tidak ditemukan.');
+        return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch('/api/complete-delivery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          ...deliveryData,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success(result.message);
+        setIsProofFormOpen(false);
+        fetchData();
+      } else {
+        throw new Error(result.error || 'Terjadi kesalahan saat menyelesaikan pesanan.');
+      }
+    } catch (error) {
+      console.error('Error completing delivery:', error);
+      toast.error('Gagal menyelesaikan pesanan: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateOrderStatus = async (newStatus) => {
     const { error } = await supabase
@@ -185,7 +238,7 @@ const OrderDetailsPage = () => {
       toast.error('Gagal menghapus pembayaran.');
     } else {
       toast.success('Pembayaran berhasil dihapus.');
-      fetchData(); // Refresh data untuk mendapatkan status pembayaran terbaru
+      fetchData();
     }
     setLoading(false);
   };
@@ -275,8 +328,13 @@ const OrderDetailsPage = () => {
             <CardTitle>Item Pesanan</CardTitle>
           </CardHeader>
           <CardContent>
-            <OrderItems orderId={order.id} isEditable={isEditable} onItemsUpdated={handleItemsUpdated} />
-          </CardContent>
+            <OrderItems 
+              orderId={order.id} 
+              orderItems={order.order_items} 
+              isEditable={isEditable} 
+              onItemsUpdated={handleItemsUpdated} 
+            />
+         </CardContent>
         </Card>
 
         {isEditable && (
@@ -356,9 +414,9 @@ const OrderDetailsPage = () => {
                   <CardTitle>Bukti Pengiriman</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {order.proof_of_delivery_url ? (
+                  {proofUrl ? (
                     <img
-                      src={order.proof_of_delivery_url}
+                      src={proofUrl}
                       alt="Bukti Pengiriman"
                       className="w-full max-w-sm rounded-md border"
                     />
@@ -398,16 +456,20 @@ const OrderDetailsPage = () => {
               <CardTitle>Aksi Kurir</CardTitle>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => updateOrderStatus('sent')} disabled={order.status === 'sent'}>
-                Tandai sebagai Dikirim
-              </Button>
-              <Button onClick={() => updateOrderStatus('completed')} className="ml-2">
+              <Button onClick={() => setIsProofFormOpen(true)} className="w-full">
                 Selesaikan Pesanan
               </Button>
             </CardContent>
           </Card>
         )}
       </div>
+
+      <ProofOfDeliveryForm
+        isOpen={isProofFormOpen}
+        onOpenChange={setIsProofFormOpen}
+        order={order}
+        onCompleteDelivery={handleCompleteDelivery}
+      />
     </div>
   );
 };
