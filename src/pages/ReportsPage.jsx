@@ -1,148 +1,101 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+import { toast } from "react-hot-toast";
+
+// Recharts
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const ReportsPage = () => {
-  const { session } = useAuth();
-  const [reportsData, setReportsData] = useState({
-    sales: 0,
-    ordersCount: 0,
-    stock: 0,
-    topCouriers: [],
-  });
-  const [products, setProducts] = useState([]);
-  const [selectedProductId, setSelectedProductId] = useState(null);
+  const { companyId } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({
-    startDate: '',
-    endDate: '',
-  });
+  const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
-  
-  useEffect(() => {
-    if (selectedProductId) {
-      fetchReports();
+    if (companyId) {
+      fetchChartData();
     }
-  }, [selectedProductId, dateRange, products]);
-  
-  const fetchProducts = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('products').select('*');
-    if (error) {
-      console.error('Error fetching products:', error);
-      toast.error('Gagal memuat daftar produk.');
-    } else {
-      setProducts(data);
-      if (data.length > 0) {
-        setSelectedProductId(data[0].id);
-      }
-    }
+  }, [companyId]);
+
+  const fetchChartData = async () => {
+  setLoading(true);
+
+  // 1. Ambil semua produk dari company
+  const { data: products, error: productError } = await supabase
+    .from("products")
+    .select("id, name, stock")
+    .eq("company_id", companyId);
+
+  if (productError) {
+    console.error("Error fetching products:", productError);
+    toast.error("Gagal memuat produk.");
     setLoading(false);
-  };
+    return;
+  }
 
-  const fetchReports = async () => {
-    setLoading(true);
-    const { startDate, endDate } = dateRange;
-    
-    const { data: ordersAndPayments, error: ordersError } = await supabase
-      .from('orders')
-      .select(`
-        id,
-        status,
-        payment_status,
-        courier_id,
-        order_items (qty, price),
-        payments (amount)
-      `)
-      .gte('created_at', startDate || '1900-01-01')
-      .lte('created_at', endDate || new Date().toISOString().split('T')[0]);
-      
-    let movements = [];
-    if (selectedProductId) {
-        const { data: movementsData, error: movementsError } = await supabase
-        .from('stock_movements')
-        .select('type, qty')
-        .eq('product_id', selectedProductId)
-        .gte('movement_date', startDate || '1900-01-01')
-        .lte('movement_date', endDate || new Date().toISOString().split('T')[0]);
+  // 2. Ambil id dari orders dengan status "draft" atau "sent"
+  const { data: filteredOrders, error: orderError } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("company_id", companyId)
+    .in("status", ["draft", "sent"]);
 
-        if (movementsError) {
-            console.error('Error fetching movements:', movementsError);
-            toast.error('Gagal memuat data pergerakan stok.');
-        } else {
-            movements = movementsData;
-        }
-    }
-      
-    if (ordersError) {
-      console.error('Error fetching orders data:', ordersError);
-      toast.error('Gagal memuat data laporan.');
-    } else {
-      const totalSales = ordersAndPayments.reduce((sum, order) => {
-        return sum + order.payments.reduce((paySum, payment) => paySum + parseFloat(payment.amount), 0);
-      }, 0);
-      
-      const ordersCompleted = ordersAndPayments.filter(o => o.status === 'completed').length;
-      
-      const totalIn = movements.filter(m => m.type === 'masuk').reduce((sum, m) => sum + m.qty, 0);
-      const totalOut = movements.filter(m => m.type === 'keluar').reduce((sum, m) => sum + m.qty, 0);
-      const totalReturn = movements.filter(m => m.type === 'pengembalian').reduce((sum, m) => sum + m.qty, 0);
-      const currentProductStock = products.find(p => p.id === selectedProductId)?.stock || 0;
-
-      const courierPerformance = ordersAndPayments.reduce((acc, order) => {
-        if (order.courier_id) {
-          acc[order.courier_id] = (acc[order.courier_id] || 0) + 1;
-        }
-        return acc;
-      }, {});
-      
-      const topCouriers = Object.entries(courierPerformance)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([id, count]) => ({ id, count }));
-
-      setReportsData({
-        sales: totalSales,
-        ordersCount: ordersCompleted,
-        stock: currentProductStock,
-        topCouriers: topCouriers,
-      });
-    }
+  if (orderError) {
+    console.error("Error fetching filtered orders:", orderError);
+    toast.error("Gagal memuat data order.");
     setLoading(false);
-  };
+    return;
+  }
 
-  const handleDateChange = (e) => {
-    const { name, value } = e.target;
-    setDateRange({ ...dateRange, [name]: value });
-  };
+  const filteredOrderIds = filteredOrders.map((order) => order.id);
+
+  // 3. Ambil order_items yang berelasi dengan id yang sudah difilter
+  const { data: demandData, error: demandError } = await supabase
+    .from("order_items")
+    .select(`
+      product_id,
+      qty
+    `)
+    .in("order_id", filteredOrderIds);
+
+
+  if (demandError) {
+    console.error("Error fetching demand:", demandError);
+    toast.error("Gagal memuat permintaan.");
+    setLoading(false);
+    return;
+  }
+
+  console.log("Demand Data (filtered):", demandData);
+
+  // 4. Hitung total permintaan per produk
+  const demandByProduct = demandData.reduce((acc, item) => {
+    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
+    return acc;
+  }, {});
+
+  // 5. Gabungkan stok & demand ke chartData
+  const data = products.map((p) => ({
+    name: p.name,
+    stock: Number(p.stock) || 0,
+    demand: demandByProduct[p.id] || 0,
+  }));
+
+  setChartData(data);
+  setLoading(false);
+};
+
 
   if (loading) {
     return (
@@ -154,90 +107,41 @@ const ReportsPage = () => {
 
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <h1 className="text-2xl font-bold mb-6">Laporan & Analisis</h1>
-      
-      <div className="flex gap-4 mb-6">
-        <Input
-          type="date"
-          name="startDate"
-          placeholder="Dari Tanggal"
-          value={dateRange.startDate}
-          onChange={handleDateChange}
-        />
-        <Input
-          type="date"
-          name="endDate"
-          placeholder="Sampai Tanggal"
-          value={dateRange.endDate}
-          onChange={handleDateChange}
-        />
-      </div>
+      <h1 className="text-2xl font-bold mb-6">Grafik Kebutuhan</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Penjualan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">Rp{reportsData.sales}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Pesanan Selesai</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{reportsData.ordersCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex justify-between items-center">
-              <span>Stok Produk</span>
-              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Pilih Produk" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map(product => (
-                    <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{reportsData.stock}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <h2 className="text-xl font-bold mt-8 mb-4">Performa Kurir</h2>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Kurir ID</TableHead>
-              <TableHead>Pesanan Selesai</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {reportsData.topCouriers.map((courier, index) => (
-              <TableRow key={index}>
-                <TableCell>{courier.id.slice(0, 8)}</TableCell>
-                <TableCell>{courier.count}</TableCell>
-              </TableRow>
-            ))}
-            {reportsData.topCouriers.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground">
-                  Tidak ada data kurir.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Stok vs Permintaan per Produk</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                angle={-30}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="stock"
+                stroke="#0000ff"
+                name="Stok"
+              />
+              <Line
+                type="monotone"
+                dataKey="demand"
+                stroke="#ff0000"
+                name="Permintaan"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 };

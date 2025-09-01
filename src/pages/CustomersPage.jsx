@@ -45,15 +45,19 @@ const CustomersPage = () => {
   });
 
   useEffect(() => {
-    fetchCustomers();
-    fetchCustomerStatuses();
+    if (companyId) {
+      fetchCustomers();
+      fetchCustomerStatuses();
+    }
   }, [companyId]);
 
   const fetchCustomers = async () => {
     setLoading(true);
+    if (!companyId) return;
+
     const { data, error } = await supabase
       .from('customers')
-      .select('*, customer_statuses(status_name)') // Kolom diperbaiki
+      .select('*, customer_statuses(status_name)')
       .eq('company_id', companyId)
       .order('name', { ascending: true });
     
@@ -67,6 +71,8 @@ const CustomersPage = () => {
   };
   
   const fetchCustomerStatuses = async () => {
+    if (!companyId) return;
+
     const { data, error } = await supabase
       .from('customer_statuses')
       .select('status_name')

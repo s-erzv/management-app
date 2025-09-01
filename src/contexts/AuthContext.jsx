@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -21,7 +22,7 @@ export const AuthProvider = ({ children }) => {
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
-            .select('role, company_id, full_name')
+            .select('id, role, company_id, full_name')
             .eq('id', newSession.user.id)
             .single();
 

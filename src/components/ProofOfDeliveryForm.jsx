@@ -59,22 +59,29 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
       toast.error('Pilih file gambar untuk diunggah.');
       return;
     }
+    if (!order?.id) {
+        toast.error('ID pesanan tidak ditemukan.');
+        return;
+    }
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const ext = file.name.split('.').pop();
-      const filePath = `${orderId}/${fileName}`;
-      const { data, error } = await supabase.storage
+      // Perbaiki: Buat nama file yang unik untuk menghindari tabrakan
+      const fileName = `${order.id}-${user.id}-${Date.now()}.${ext}`;
+      const filePath = `${order.id}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
         .from("proofs")
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          upsert: true,
+        });
 
-        if (!error) {
-        await supabase.from("orders")
-            .update({ proof_of_delivery_url: filePath })  
-            .eq("id", orderId);
-        }
+      if (uploadError) {
+        throw new Error('Gagal mengunggah file: ' + uploadError.message);
+      }
 
-
+      // Perbaiki: Panggil onCompleteDelivery dengan data yang lengkap
       onCompleteDelivery({
         paymentAmount: parseFloat(formState.paymentAmount) || 0,
         paymentMethod,
@@ -82,14 +89,12 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
         borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
         purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
         transportCost: parseFloat(formState.transportCost) || 0,
-        proofFileUrl: filePath,
+        proofFileUrl: filePath, // Kirimkan path yang benar
       });
-
-      toast.success('Bukti pengiriman berhasil disimpan!');
+      
     } catch (error) {
       console.error('Error during upload:', error);
       toast.error('Gagal menyelesaikan pesanan: ' + error.message);
-    } finally {
       setLoading(false);
     }
   };
