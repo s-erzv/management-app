@@ -24,7 +24,6 @@ const navItems = [
   { path: '/reports', name: 'Laporan', icon: <BarChart className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/settings', name: 'Pengaturan', icon: <Settings className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/users', name: 'Manajemen Pengguna', icon: <Users className="h-5 w-5" />, roles: ['super_admin', 'admin'] }, 
-  { path: '/courier', name: 'Tugas', icon: <Home className="h-5 w-5" />, roles: ['user'] },
 ];
 
 const Sidebar = () => {

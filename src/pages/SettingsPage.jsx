@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductSettings from '@/components/ProductSettings';
 import UserManagementPage from '@/pages/UserManagementPage';
 import CustomerStatusSettings from '@/components/CustomerStatusSettings'; 
+import PaymentMethodsPage from '@/pages/PaymentMethodsPage'; // Tambahkan import PaymentMethodsPage
 import { Loader2 } from 'lucide-react';
 
 const SettingsPage = () => {
@@ -54,7 +55,10 @@ const SettingsPage = () => {
             <TabsTrigger value="products">Manajemen Produk</TabsTrigger>
           )}
           {isAdminOrSuperAdmin && (
-            <TabsTrigger value="customer-statuses">Status Pelanggan</TabsTrigger> // Tambahkan tab baru di sini
+            <TabsTrigger value="customer-statuses">Status Pelanggan</TabsTrigger>
+          )}
+          {isAdminOrSuperAdmin && ( // Tambahkan tab ini untuk admin & super admin
+            <TabsTrigger value="payment-methods">Metode Pembayaran</TabsTrigger>
           )}
           {isSuperAdmin && (
             <TabsTrigger value="users">Manajemen Pengguna</TabsTrigger>
@@ -68,6 +72,11 @@ const SettingsPage = () => {
         {isAdminOrSuperAdmin && (
           <TabsContent value="customer-statuses" className="pt-4"> 
             <CustomerStatusSettings />
+          </TabsContent>
+        )}
+        {isAdminOrSuperAdmin && ( 
+          <TabsContent value="payment-methods" className="pt-4">
+            <PaymentMethodsPage />
           </TabsContent>
         )}
         {isSuperAdmin && (

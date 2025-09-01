@@ -1,4 +1,3 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -12,13 +11,14 @@ import SettingsPage from './pages/SettingsPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailsPage from './pages/OrderDetailsPage';
 import CalendarPage from './pages/CalendarPage';
-import CourierPage from './pages/CourierPage';
 import StockPage from './pages/StockPage';
 import ReportsPage from './pages/ReportsPage';
 import UserManagementPage from './pages/UserManagementPage';
 import CentralOrderPage from './pages/CentralOrderPage';
 import CentralOrderFormPage from './pages/CentralOrderFormPage';
 import AddOrderForm from './components/AddOrderForm'; 
+import CompleteDeliveryPage from './pages/CompleteDeliveryPage'; 
+import PaymentMethodsPage from './pages/PaymentMethodsPage'; 
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -55,10 +55,6 @@ const App = () => {
             <Route
               path="/dashboard"
               element={session ? <DashboardPage /> : <Navigate to="/login" />}
-            />
-            <Route
-              path="/courier"
-              element={session && isCourier ? <CourierPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/calendar"
@@ -107,6 +103,10 @@ const App = () => {
             <Route
               path="/users"
               element={session && isAdminOrSuperAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/complete-delivery/:orderId"
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <CompleteDeliveryPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>

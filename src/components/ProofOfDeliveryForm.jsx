@@ -21,13 +21,16 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }) => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [receivedByName, setReceivedByName] = useState('');
+  const [cashAmount, setCashAmount] = useState(''); // State baru untuk nominal tunai
+  const [transferAmount, setTransferAmount] = useState(''); // State baru untuk nominal transfer
   const [formState, setFormState] = useState({
-    paymentAmount: '',
     returnedQty: 0,
     borrowedQty: 0,
     purchasedEmptyQty: 0,
@@ -37,7 +40,6 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
   useEffect(() => {
     if (order) {
       setFormState({
-        paymentAmount: order.remaining_due > 0 ? order.remaining_due.toString() : '0',
         returnedQty: 0,
         borrowedQty: 0,
         purchasedEmptyQty: 0,
@@ -45,13 +47,38 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
       });
       setFile(null);
       setPaymentMethod('cash');
+      setReceivedByName('');
+      setCashAmount(order.remaining_due > 0 ? order.remaining_due.toString() : '0'); // Atur nominal cash di awal
+      setTransferAmount('0');
     }
   }, [order]);
+  
+  // Efek untuk mereset nominal saat metode pembayaran berubah
+  useEffect(() => {
+    if (paymentMethod === 'cash') {
+      setCashAmount(order?.remaining_due > 0 ? order.remaining_due.toString() : '0');
+      setTransferAmount('0');
+    } else if (paymentMethod === 'transfer') {
+      setCashAmount('0');
+      setTransferAmount(order?.remaining_due > 0 ? order.remaining_due.toString() : '0');
+    } else if (paymentMethod === 'both') {
+      setCashAmount(order?.remaining_due > 0 ? order.remaining_due.toString() : '0');
+      setTransferAmount('0');
+    } else {
+      setCashAmount('0');
+      setTransferAmount('0');
+    }
+  }, [paymentMethod, order]);
 
   const handleFormChange = (e) => {
     const { id, value } = e.target;
     setFormState(prev => ({ ...prev, [id]: value }));
   };
+  
+  const handleAmountChange = (e, setter) => {
+    setter(e.target.value);
+  };
+  
 
   const handleUploadAndComplete = async (e) => {
     e.preventDefault();
@@ -60,14 +87,13 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
       return;
     }
     if (!order?.id) {
-        toast.error('ID pesanan tidak ditemukan.');
-        return;
+      toast.error('ID pesanan tidak ditemukan.');
+      return;
     }
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const ext = file.name.split('.').pop();
-      // Perbaiki: Buat nama file yang unik untuk menghindari tabrakan
       const fileName = `${order.id}-${user.id}-${Date.now()}.${ext}`;
       const filePath = `${order.id}/${fileName}`;
       
@@ -80,16 +106,18 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
       if (uploadError) {
         throw new Error('Gagal mengunggah file: ' + uploadError.message);
       }
+      
+      const finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
 
-      // Perbaiki: Panggil onCompleteDelivery dengan data yang lengkap
       onCompleteDelivery({
-        paymentAmount: parseFloat(formState.paymentAmount) || 0,
+        paymentAmount: finalPaymentAmount,
         paymentMethod,
+        receivedByName,
         returnedQty: parseInt(formState.returnedQty, 10) || 0,
         borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
         purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
         transportCost: parseFloat(formState.transportCost) || 0,
-        proofFileUrl: filePath, // Kirimkan path yang benar
+        proofFileUrl: filePath,
       });
       
     } catch (error) {
@@ -102,11 +130,15 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
   const hasReturnableItems = order?.order_items.some(item => item.products?.is_returnable);
   const isPaid = order?.payment_status === 'paid';
   const deliveredQty = order?.order_items.reduce((sum, item) => sum + (item.qty || 0), 0);
-  const showPaymentAmountField = !isPaid && (paymentMethod === 'cash' || paymentMethod === 'both');
+  
+  const showPaymentFields = !isPaid && order?.remaining_due > 0;
+  const showCashFields = showPaymentFields && (paymentMethod === 'cash' || paymentMethod === 'both');
+  const showTransferFields = showPaymentFields && (paymentMethod === 'transfer' || paymentMethod === 'both');
+  const showPendingOption = order?.payment_status === 'unpaid' && order?.remaining_due > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Selesaikan Pesanan</DialogTitle>
           <DialogDescription>
@@ -115,8 +147,11 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
         </DialogHeader>
         <form onSubmit={handleUploadAndComplete}>
           <div className="grid gap-4 py-4">
-            {!isPaid && (
+            {/* Payment Section */}
+            {showPaymentFields && (
               <>
+                <Separator />
+                <p className="text-sm font-semibold">Informasi Pembayaran</p>
                 <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                   <SelectTrigger className="w-full">
@@ -126,18 +161,43 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
                     <SelectItem value="cash">Tunai (Cash)</SelectItem>
                     <SelectItem value="transfer">Transfer BSI</SelectItem>
                     <SelectItem value="both">Tunai & Transfer</SelectItem>
+                    {showPendingOption && <SelectItem value="pending">Pending</SelectItem>}
                   </SelectContent>
                 </Select>
 
-                {showPaymentAmountField && (
+                {/* Conditional fields for cash and transfer */}
+                {showCashFields && (
                   <>
-                    <Label htmlFor="paymentAmount">Jumlah Pembayaran Tunai</Label>
+                    <Label htmlFor="receivedByName">Nama Penerima</Label>
                     <Input
-                      id="paymentAmount"
+                      id="receivedByName"
+                      placeholder="Masukkan nama penerima"
+                      value={receivedByName}
+                      onChange={(e) => setReceivedByName(e.target.value)}
+                      required
+                    />
+                    <Label htmlFor="cashAmount">Jumlah Pembayaran Tunai</Label>
+                    <Input
+                      id="cashAmount"
                       type="number"
                       placeholder="Jumlah Pembayaran Tunai"
-                      value={formState.paymentAmount}
-                      onChange={handleFormChange}
+                      value={cashAmount}
+                      onChange={(e) => handleAmountChange(e, setCashAmount)}
+                      required
+                      min="0"
+                    />
+                  </>
+                )}
+                
+                {showTransferFields && (
+                  <>
+                    <Label htmlFor="transferAmount">Jumlah Pembayaran Transfer</Label>
+                    <Input
+                      id="transferAmount"
+                      type="number"
+                      placeholder="Jumlah Pembayaran Transfer"
+                      value={transferAmount}
+                      onChange={(e) => handleAmountChange(e, setTransferAmount)}
                       required
                       min="0"
                     />
@@ -146,6 +206,8 @@ const ProofOfDeliveryForm = ({ isOpen, onOpenChange, order, onCompleteDelivery }
               </>
             )}
             
+            <Separator />
+            <p className="text-sm font-semibold">Detail Pengiriman & Barang</p>
             {hasReturnableItems && (
               <>
                 <p className="text-sm text-muted-foreground">Pesanan ini dikirim {deliveredQty} galon yang dapat dikembalikan.</p>
