@@ -17,8 +17,8 @@ import UserManagementPage from './pages/UserManagementPage';
 import CentralOrderPage from './pages/CentralOrderPage';
 import CentralOrderFormPage from './pages/CentralOrderFormPage';
 import AddOrderForm from './components/AddOrderForm'; 
-import CompleteDeliveryPage from './pages/CompleteDeliveryPage'; 
-import PaymentMethodsPage from './pages/PaymentMethodsPage'; 
+import CompleteDeliveryPage from './pages/CompleteDeliveryPage';
+import GalonDebtPage from './pages/GalonDebtPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -107,6 +107,10 @@ const App = () => {
             <Route
               path="/complete-delivery/:orderId"
               element={session && (isAdminOrSuperAdmin || isCourier) ? <CompleteDeliveryPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/galon-debt"
+              element={session && isAdminOrSuperAdmin ? <GalonDebtPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>

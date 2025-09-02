@@ -151,58 +151,82 @@ const CompleteDeliveryPage = () => {
   }
   
   const handleCompleteDelivery = async (e) => {
-    e.preventDefault();
-    if (!order?.id || !file) {
-      toast.error('ID pesanan atau bukti pengiriman tidak ada.');
-      return;
-    }
-    setSubmitting(true);
+  e.preventDefault();
+  if (!order?.id || !file) {
+    toast.error('ID pesanan atau bukti pengiriman tidak ada.');
+    return;
+  }
+  setSubmitting(true);
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const ext = file.name.split('.').pop();
-      const fileName = `${order.id}-${user.id}-${Date.now()}.${ext}`;
-      const filePath = `${order.id}/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from("proofs")
-        .upload(filePath, file, { upsert: true });
-      if (uploadError) throw new Error('Gagal mengunggah bukti: ' + uploadError.message);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-      const finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
+    // 🔑 Ambil company_id dari profile user
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
 
-      const payload = {
-        orderId,
-        paymentAmount: finalPaymentAmount,
-        paymentMethod: paymentMethod === 'hybrid' ? `Hybrid (${transferMethod})` : paymentMethod,
-        returnedQty: parseInt(formState.returnedQty, 10) || 0,
-        borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
-        purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
-        transportCost: parseFloat(formState.transportCost) || 0,
-        proofFileUrl: filePath,
-        receivedByName,
-      };
+    if (profileError) throw new Error("Gagal ambil profile: " + profileError.message);
 
-      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    const ext = file.name.split('.').pop();
+    const fileName = `${order.id}-${user.id}-${Date.now()}.${ext}`;
+
+    // 🔑 Path harus diawali company_id sesuai policy
+    const filePath = `${profile.company_id}/${order.id}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("proofs")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) throw new Error('Gagal mengunggah bukti: ' + uploadError.message);
+
+    const finalPaymentAmount =
+      (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
+
+    const payload = {
+      orderId,
+      paymentAmount: finalPaymentAmount,
+      paymentMethod:
+        paymentMethod === "hybrid"
+          ? `Hybrid (${transferMethod})`
+          : paymentMethod,
+      returnedQty: parseInt(formState.returnedQty, 10) || 0,
+      borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
+      purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
+      transportCost: parseFloat(formState.transportCost) || 0,
+      proofFileUrl: filePath, // 🔑 sekarang path pakai company_id
+      receivedByName,
+    };
+
+    const response = await fetch(
+      "https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
       }
-      
-      toast.success('Pesanan berhasil diselesaikan!');
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Error completing delivery:', error);
-      toast.error('Gagal menyelesaikan pesanan: ' + error.message);
-    } finally {
-      setSubmitting(false);
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
     }
-  };
+
+    toast.success("Pesanan berhasil diselesaikan!");
+    navigate("/dashboard");
+  } catch (error) {
+    console.error("Error completing delivery:", error);
+    toast.error("Gagal menyelesaikan pesanan: " + error.message);
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   if (loading || !order) {
     return (
