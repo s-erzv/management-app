@@ -150,7 +150,9 @@ const CompleteDeliveryPage = () => {
     setTransferMethod(''); // Reset transfer method saat metode utama berubah
   }
   
-  const handleCompleteDelivery = async (e) => {
+  // Ganti bagian upload file di handleCompleteDelivery dengan ini:
+
+const handleCompleteDelivery = async (e) => {
   e.preventDefault();
   if (!order?.id || !file) {
     toast.error('ID pesanan atau bukti pengiriman tidak ada.');
@@ -161,26 +163,35 @@ const CompleteDeliveryPage = () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 🔑 Ambil company_id dari profile user
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("company_id")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) throw new Error("Gagal ambil profile: " + profileError.message);
-
+    // Simplify file naming dan path
     const ext = file.name.split('.').pop();
-    const fileName = `${order.id}-${user.id}-${Date.now()}.${ext}`;
+    const timestamp = Date.now();
+    const fileName = `proof-${timestamp}.${ext}`;
+    
+    // Coba path sederhana dulu
+    const filePath = `${order.id}/${fileName}`;
 
-    // 🔑 Path harus diawali company_id sesuai policy
-    const filePath = `${profile.company_id}/${order.id}/${fileName}`;
+    console.log('Uploading file:', {
+      fileName,
+      filePath,
+      fileSize: file.size,
+      fileType: file.type
+    });
 
-    const { error: uploadError } = await supabase.storage
+    // Upload dengan options yang lebih eksplisit
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from("proofs")
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, file, { 
+        cacheControl: '3600',
+        upsert: false // Jangan overwrite, buat file baru
+      });
 
-    if (uploadError) throw new Error('Gagal mengunggah bukti: ' + uploadError.message);
+    if (uploadError) {
+      console.error('Upload error details:', uploadError);
+      throw new Error('Gagal mengunggah bukti: ' + uploadError.message);
+    }
+
+    console.log('Upload successful:', uploadData);
 
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
@@ -196,9 +207,11 @@ const CompleteDeliveryPage = () => {
       borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
       purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
       transportCost: parseFloat(formState.transportCost) || 0,
-      proofFileUrl: filePath, // 🔑 sekarang path pakai company_id
+      proofFileUrl: filePath, // Gunakan path yang sama
       receivedByName,
     };
+
+    console.log('Sending payload to function:', payload);
 
     const response = await fetch(
       "https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery",
@@ -214,11 +227,13 @@ const CompleteDeliveryPage = () => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Function error:', errorText);
       throw new Error(errorText);
     }
 
     toast.success("Pesanan berhasil diselesaikan!");
     navigate("/dashboard");
+    
   } catch (error) {
     console.error("Error completing delivery:", error);
     toast.error("Gagal menyelesaikan pesanan: " + error.message);

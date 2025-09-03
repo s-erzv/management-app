@@ -20,7 +20,8 @@ import {
 import { toast } from 'react-hot-toast';
 import AddUserForm from '@/components/AddUserForm';
 import AddAdminForm from '@/components/AddAdminForm';
-import { Loader2 } from 'lucide-react';
+import EditUserForm from '@/components/EditUserForm'; // Import komponen edit
+import { Loader2, Pencil } from 'lucide-react';
 
 const UserManagementPage = () => {
   const { session, userRole, companyId } = useAuth();
@@ -34,7 +35,9 @@ const UserManagementPage = () => {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
 
   // modal tambah user/admin
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // State baru untuk modal edit
+  const [userToEdit, setUserToEdit] = useState(null); // State untuk data user yang akan diedit
 
   useEffect(() => {
     if (!session) return;
@@ -115,7 +118,18 @@ const UserManagementPage = () => {
     }
   };
 
-  // NEW: delete company (khusus super_admin)
+  const handleEditUser = (user) => {
+    setUserToEdit(user);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUserUpdated = (updatedUser) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+    );
+    setIsEditModalOpen(false);
+  };
+  
   const handleDeleteCompany = async (id, name) => {
     const ok = window.confirm(
       `Hapus perusahaan “${name}”? Semua data terkait mungkin ikut terhapus sesuai aturan FK.`
@@ -133,13 +147,11 @@ const UserManagementPage = () => {
     } else {
       toast.success('Perusahaan berhasil dihapus.');
       setCompanies((prev) => prev.filter((c) => c.id !== id));
-      // opsional: refresh users juga kalau ingin sinkron
       fetchUsers();
     }
   };
 
   const handleUserAdded = () => {
-    // Refresh data setelah user/admin + company baru ditambahkan
     fetchUsers();
     if (userRole === 'super_admin') fetchCompanies();
   };
@@ -151,23 +163,33 @@ const UserManagementPage = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Manajemen Pengguna</h2>
         {userRole === 'super_admin' ? (
-          <Button onClick={() => setIsModalOpen(true)}>+ Tambah Admin</Button>
+          <Button onClick={() => setIsAddModalOpen(true)}>+ Tambah Admin</Button>
         ) : userRole === 'admin' ? (
-          <Button onClick={() => setIsModalOpen(true)}>+ Tambah Pengguna</Button>
+          <Button onClick={() => setIsAddModalOpen(true)}>+ Tambah Pengguna</Button>
         ) : null}
       </div>
 
       {userRole === 'super_admin' ? (
         <AddAdminForm
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
+          open={isAddModalOpen}
+          onOpenChange={setIsAddModalOpen}
           onUserAdded={handleUserAdded}
         />
       ) : (
         <AddUserForm
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
+          open={isAddModalOpen}
+          onOpenChange={setIsAddModalOpen}
           onUserAdded={handleUserAdded}
+        />
+      )}
+      
+      {/* Modal Edit Pengguna */}
+      {userToEdit && (
+        <EditUserForm
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          userToEdit={userToEdit}
+          onUserUpdated={handleUserUpdated}
         />
       )}
 
@@ -183,6 +205,7 @@ const UserManagementPage = () => {
               <TableRow>
                 <TableHead>Nama Lengkap</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Rekening</TableHead>
                 <TableHead>Peran</TableHead>
                 <TableHead>Aksi</TableHead>
               </TableRow>
@@ -192,6 +215,7 @@ const UserManagementPage = () => {
                 <TableRow key={user.id}>
                   <TableCell>{user.full_name ?? '-'}</TableCell>
                   <TableCell>{user.email ?? '-'}</TableCell>
+                  <TableCell>{user.rekening ?? '-'}</TableCell>
                   <TableCell>
                     <Select
                       value={user.role}
@@ -209,19 +233,28 @@ const UserManagementPage = () => {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteUser(user.id)}
-                      disabled={user.id === session.user.id}
-                    >
-                      Hapus
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditUser(user)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleDeleteUser(user.id)}
+                          disabled={user.id === session.user.id}
+                        >
+                          Hapus
+                        </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
+                  <TableCell colSpan={5} className="text-muted-foreground">
                     Tidak ada data.
                   </TableCell>
                 </TableRow>

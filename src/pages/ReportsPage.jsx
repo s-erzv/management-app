@@ -4,8 +4,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import ProductStockTable from '@/components/reports/ProductStockTable';
+import DemandReportTable from '@/components/reports/DemandReportTable';
+import StockReconciliationHistoryTable from '@/components/reports/StockReconciliationHistoryTable';
 
-// Recharts
 import {
   LineChart,
   Line,
@@ -20,82 +22,90 @@ import {
 const ReportsPage = () => {
   const { companyId } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [chartData, setChartData] = useState([]);
+  const [reportData, setReportData] = useState({
+    products: [],
+    chartData: [],
+    demand: [],
+    reconciliations: [],
+  });
 
   useEffect(() => {
     if (companyId) {
-      fetchChartData();
+      fetchAllReportsData();
     }
   }, [companyId]);
 
-  const fetchChartData = async () => {
-  setLoading(true);
+  const fetchAllReportsData = async () => {
+    setLoading(true);
 
-  // 1. Ambil semua produk dari company
-  const { data: products, error: productError } = await supabase
-    .from("products")
-    .select("id, name, stock")
-    .eq("company_id", companyId);
+    try {
+      const { data: productsData, error: productError } = await supabase
+        .from("products")
+        .select("id, name, stock, is_returnable")
+        .eq("company_id", companyId)
+        .order("name", { ascending: true });
+      if (productError) throw productError;
 
-  if (productError) {
-    console.error("Error fetching products:", productError);
-    toast.error("Gagal memuat produk.");
-    setLoading(false);
-    return;
-  }
+      const { data: reconciliationsData, error: reconciliationsError } = await supabase
+        .from('stock_reconciliations')
+        .select(`*, user:user_id(full_name)`)
+        .eq('company_id', companyId)
+        .order('reconciliation_date', { ascending: false });
+      if (reconciliationsError) throw reconciliationsError;
 
-  // 2. Ambil id dari orders dengan status "draft" atau "sent"
-  const { data: filteredOrders, error: orderError } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("company_id", companyId)
-    .in("status", ["draft", "sent"]);
+      const { data: filteredOrders, error: orderError } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("company_id", companyId)
+        .in("status", ["draft", "sent"]);
+      if (orderError) throw orderError;
+      
+      const filteredOrderIds = filteredOrders.map((order) => order.id);
+      
+      const { data: demandItems, error: demandItemsError } = await supabase
+        .from("order_items")
+        .select(`product_id, qty`)
+        .in("order_id", filteredOrderIds);
+      if (demandItemsError) throw demandItemsError;
 
-  if (orderError) {
-    console.error("Error fetching filtered orders:", orderError);
-    toast.error("Gagal memuat data order.");
-    setLoading(false);
-    return;
-  }
+      const demandByProduct = demandItems.reduce((acc, item) => {
+        acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
+        return acc;
+      }, {});
 
-  const filteredOrderIds = filteredOrders.map((order) => order.id);
+      const chartData = productsData.map((p) => ({
+        name: p.name,
+        stock: Number(p.stock) || 0,
+        demand: demandByProduct[p.id] || 0,
+      }));
 
-  // 3. Ambil order_items yang berelasi dengan id yang sudah difilter
-  const { data: demandData, error: demandError } = await supabase
-    .from("order_items")
-    .select(`
-      product_id,
-      qty
-    `)
-    .in("order_id", filteredOrderIds);
+      const demandTableData = productsData.map((p) => {
+        return {
+          name: p.name,
+          demand: demandByProduct[p.id] || 0,
+        };
+      });
 
+      setReportData({
+        products: productsData,
+        chartData: chartData,
+        demand: demandTableData,
+        reconciliations: reconciliationsData,
+      });
 
-  if (demandError) {
-    console.error("Error fetching demand:", demandError);
-    toast.error("Gagal memuat permintaan.");
-    setLoading(false);
-    return;
-  }
-
-  console.log("Demand Data (filtered):", demandData);
-
-  // 4. Hitung total permintaan per produk
-  const demandByProduct = demandData.reduce((acc, item) => {
-    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
-    return acc;
-  }, {});
-
-  // 5. Gabungkan stok & demand ke chartData
-  const data = products.map((p) => ({
-    name: p.name,
-    stock: Number(p.stock) || 0,
-    demand: demandByProduct[p.id] || 0,
-  }));
-
-  setChartData(data);
-  setLoading(false);
-};
-
+    } catch (error) {
+      console.error('Error fetching all reports data:', error);
+      toast.error('Gagal memuat data laporan.');
+      setReportData({
+        products: [],
+        chartData: [],
+        demand: [],
+        reconciliations: [],
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -106,26 +116,29 @@ const ReportsPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <h1 className="text-2xl font-bold mb-6">Grafik Kebutuhan</h1>
+  <div className="container mx-auto p-4 md:p-8 space-y-8">
+    <h1 className="text-2xl font-bold mb-6">Laporan & Analisis</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stok vs Permintaan per Produk</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={chartData}>
+    <Card>
+      <CardHeader>
+        <CardTitle>Stok vs Permintaan per Produk</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-6">
+        {/* Tambahkan pengecekan ini sebelum merender grafik */}
+        {reportData.chartData && reportData.chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={500}>
+            <LineChart data={reportData.chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="name"
                 angle={-30}
                 textAnchor="end"
                 interval={0}
+                height={100}
               />
               <YAxis />
+              <Legend verticalAlign="top" align="right" height={36}/>
               <Tooltip />
-              <Legend />
               <Line
                 type="monotone"
                 dataKey="stock"
@@ -140,10 +153,20 @@ const ReportsPage = () => {
               />
             </LineChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        ) : (
+          <div className="flex justify-center items-center h-40">
+            <p className="text-muted-foreground">Tidak ada data untuk grafik.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    
+    <ProductStockTable products={reportData.products} />
+    <StockReconciliationHistoryTable reconciliations={reportData.reconciliations} products={reportData.products} />
+    <DemandReportTable demandData={reportData.demand} />
+      
+  </div>
+);
 };
 
 export default ReportsPage;

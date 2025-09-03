@@ -14,7 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    const { email, password, role, companyName, companyId } = await req.json()
+    // Tambahkan 'rekening' ke dalam destructuring
+    const { email, password, role, companyName, companyId, full_name, rekening } = await req.json()
     
     // Inisialisasi Supabase dengan service_role key
     const supabase = createClient(
@@ -59,6 +60,8 @@ serve(async (req) => {
       email,
       password,
       email_confirm: true,
+      // Menambahkan 'full_name' dan 'rekening' ke user metadata
+      user_metadata: { full_name, rekening }
     })
 
     if (userError) throw userError;
@@ -67,7 +70,8 @@ serve(async (req) => {
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert(
-        { id: user.id, role, company_id: profile_company_id, full_name: null },
+        // Menambahkan 'full_name' dan 'rekening' ke upsert payload
+        { id: user.id, role, company_id: profile_company_id, full_name, rekening },
         { onConflict: 'id' }
       )
     

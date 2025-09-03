@@ -9,18 +9,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Home, Truck } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Home, Truck, Files, ReceiptText, Wallet, PiggyBank } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-
 
 const navItems = [
   { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/orders', name: 'Pesanan', icon: <ListOrdered className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/customers', name: 'Pelanggan', icon: <Users className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/stock', name: 'Stok Galon', icon: <Package className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/galon-debt', name: 'Utang Galon', icon: <Package className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
+  { path: '/stock', name: 'Stok & Utang Galon', icon: <Package className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
+  { path: '/stock-reconciliation', name: 'Rekonsiliasi Stok', icon: <Files className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/central-orders', name: 'Pesan dari Pusat', icon: <Truck className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
+  { path: '/expenses', name: 'Uang Terpakai', icon: <ReceiptText className="h-5 w-5" />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/financial-management', name: 'Manajemen Keuangan', icon: <PiggyBank className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
+  { path: '/financials', name: 'Laporan Keuangan', icon: <Wallet className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/calendar', name: 'Jadwal', icon: <Calendar className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/reports', name: 'Laporan', icon: <BarChart className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
   { path: '/settings', name: 'Pengaturan', icon: <Settings className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
@@ -51,7 +53,7 @@ const Sidebar = () => {
   return (
     <div className="flex h-screen">
       <aside className="group fixed bg-gray-100 inset-y-0 left-0 z-50 flex w-16 hover:w-64 flex-col border-r bg-background transition-all duration-300 ease-in-out">
-        <nav className="flex flex-col items-start gap-2 px-3 py-4 h-full">
+        <nav className="flex flex-col gap-2 px-3 py-4 h-full overflow-y-auto scrollbar-hide"> {/* Tambahkan overflow-y-auto di sini */}
           {/* Logo/Brand */}
           <Link 
             to="/dashboard" 

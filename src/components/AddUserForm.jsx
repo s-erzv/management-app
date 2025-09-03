@@ -1,3 +1,4 @@
+// src/components/AddUserForm.jsx
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,8 +16,10 @@ import { Loader2 } from 'lucide-react';
 
 const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
   const { companyId } = useAuth();
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rekening, setRekening] = useState(''); // Tambahkan state untuk rekening
   const [loading, setLoading] = useState(false);
 
   const handleAddUser = async (e) => {
@@ -41,7 +44,9 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
           email, 
           password, 
           role: 'user', 
-          companyId 
+          companyId,
+          full_name: fullName,
+          rekening: rekening, // Tambahkan rekening ke body
         }),
       });
       
@@ -52,9 +57,11 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
       }
 
       toast.success('Pengguna berhasil ditambahkan!');
-      onUserAdded({ id: data.userId, email, full_name: null, role: 'user' });
+      onUserAdded({ id: data.userId, email, full_name: fullName, rekening: rekening, role: 'user' });
       setEmail('');
       setPassword('');
+      setFullName('');
+      setRekening(''); // Reset state rekening
       onOpenChange(false);
 
     } catch (error) {
@@ -76,6 +83,16 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
         </DialogHeader>
         <form onSubmit={handleAddUser} className="space-y-4">
           <div>
+            <label className="text-sm font-medium">Nama Lengkap</label>
+            <Input
+              type="text"
+              placeholder="Nama Lengkap"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
             <label className="text-sm font-medium">Email</label>
             <Input
               type="email"
@@ -93,6 +110,15 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Nomor Rekening</label>
+            <Input
+              type="text"
+              placeholder="Nomor Rekening"
+              value={rekening}
+              onChange={(e) => setRekening(e.target.value)}
             />
           </div>
           <Button type="submit" disabled={loading} className="w-full">

@@ -17,6 +17,8 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Tambahkan state untuk nama lengkap admin
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAddAdmin = async (e) => {
@@ -41,7 +43,8 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
           email, 
           password, 
           role: 'admin', 
-          companyName 
+          companyName,
+          full_name: fullName, // Tambahkan fullName ke body
         }),
       });
 
@@ -52,7 +55,8 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
       }
       
       toast.success('Admin dan perusahaan berhasil ditambahkan!');
-      onUserAdded({ id: data.userId, email, full_name: null, role: 'admin' });
+      // Perbarui onUserAdded untuk menyertakan fullName
+      onUserAdded({ id: data.userId, email, full_name: fullName, role: 'admin' });
       resetForm();
 
     } catch (error) {
@@ -67,6 +71,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
     setCompanyName('');
     setEmail('');
     setPassword('');
+    setFullName(''); // Reset state nama lengkap
     onOpenChange(false);
   };
 
@@ -87,6 +92,16 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
               placeholder="Nama Perusahaan"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Nama Lengkap Admin</label>
+            <Input
+              type="text"
+              placeholder="Nama Lengkap"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
               required
             />
           </div>

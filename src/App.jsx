@@ -11,14 +11,17 @@ import SettingsPage from './pages/SettingsPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailsPage from './pages/OrderDetailsPage';
 import CalendarPage from './pages/CalendarPage';
-import StockPage from './pages/StockPage';
+import StockAndGalonPage from './pages/StockAndGalonPage';
 import ReportsPage from './pages/ReportsPage';
 import UserManagementPage from './pages/UserManagementPage';
 import CentralOrderPage from './pages/CentralOrderPage';
 import CentralOrderFormPage from './pages/CentralOrderFormPage';
 import AddOrderForm from './components/AddOrderForm'; 
 import CompleteDeliveryPage from './pages/CompleteDeliveryPage';
-import GalonDebtPage from './pages/GalonDebtPage';
+import UpdateStockPage from './pages/UpdateStockPage';
+import ExpenseReportsPage from './pages/ExpenseReportsPage';
+import FinancialReportPage from './pages/FinancialReportPage'; 
+import FinancialManagementPage from './pages/FinancialManagementPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -82,7 +85,11 @@ const App = () => {
             />
             <Route
               path="/stock"
-              element={session && isAdminOrSuperAdmin ? <StockPage /> : <Navigate to="/dashboard" />}
+              element={session && isAdminOrSuperAdmin ? <StockAndGalonPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/stock-reconciliation"
+              element={session && isAdminOrSuperAdmin ? <UpdateStockPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/reports"
@@ -109,8 +116,16 @@ const App = () => {
               element={session && (isAdminOrSuperAdmin || isCourier) ? <CompleteDeliveryPage /> : <Navigate to="/dashboard" />}
             />
             <Route
-              path="/galon-debt"
-              element={session && isAdminOrSuperAdmin ? <GalonDebtPage /> : <Navigate to="/dashboard" />}
+              path="/expenses"
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <ExpenseReportsPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/financials"
+              element={session && isAdminOrSuperAdmin ? <FinancialReportPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/financial-management"
+              element={session && isAdminOrSuperAdmin ? <FinancialManagementPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
