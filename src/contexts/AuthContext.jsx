@@ -1,5 +1,4 @@
-// src/contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
@@ -10,66 +9,116 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    let profileLoadPromise = null;
 
-    const handleAuthChange = async (newSession) => {
+    const loadUserProfile = async (userId) => {
+      // Prevent multiple simultaneous profile loads
+      if (profileLoadPromise) {
+        return profileLoadPromise;
+      }
+
+      profileLoadPromise = supabase
+        .from('profiles')
+        .select('id, role, company_id, full_name')
+        .eq('id', userId)
+        .single();
+
+      try {
+        const { data: profile, error } = await profileLoadPromise;
+        
+        if (!isMounted) return null;
+
+        if (error) {
+          console.error('Error fetching user profile:', error);
+          toast.error('Gagal memuat profil pengguna.');
+          return null;
+        }
+        
+        return profile;
+      } catch (error) {
+        console.error('Error in loadUserProfile:', error);
+        if (isMounted) {
+          toast.error('Terjadi kesalahan saat memuat profil.');
+        }
+        return null;
+      } finally {
+        profileLoadPromise = null;
+      }
+    };
+
+    const handleAuthChange = async (newSession, skipProfileLoad = false) => {
       if (!isMounted) return;
+
+      // Check if session actually changed
+      const sessionChanged = JSON.stringify(session) !== JSON.stringify(newSession);
+      
+      if (!sessionChanged && isInitialized && !skipProfileLoad) {
+        return; // No change, skip update
+      }
 
       if (newSession) {
         setSession(newSession);
-        try {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('id, role, company_id, full_name')
-            .eq('id', newSession.user.id)
-            .single();
-
+        
+        if (!skipProfileLoad) {
+          const profile = await loadUserProfile(newSession.user.id);
           if (isMounted) {
-            if (error) {
-              console.error('Error fetching user profile:', error);
-              setUserProfile(null);
-              toast.error('Gagal memuat profil pengguna.');
-            } else {
-              setUserProfile(profile);
-            }
-          }
-        } catch (error) {
-          console.error('Error in handleAuthChange:', error);
-          if (isMounted) {
-            setUserProfile(null);
-            toast.error('Terjadi kesalahan saat otentikasi. Silakan login ulang.');
+            setUserProfile(profile);
           }
         }
       } else {
         setSession(null);
         setUserProfile(null);
       }
-      if (isMounted) {
-        setLoading(false);
-      }
     };
 
-    const initialLoad = async () => {
+    const initializeAuth = async () => {
+      if (!isMounted) return;
+      
       setLoading(true);
-      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
       
-      if (error) {
-        console.error('Error getting initial session:', error);
-        toast.error('Gagal mendapatkan sesi awal.');
-        setLoading(false);
-        return;
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting initial session:', error);
+          toast.error('Gagal mendapatkan sesi awal.');
+          return;
+        }
+        
+        await handleAuthChange(currentSession);
+        
+        if (isMounted) {
+          setIsInitialized(true);
+        }
+      } catch (error) {
+        console.error('Error in initializeAuth:', error);
+        toast.error('Gagal menginisialisasi otentikasi.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-      
-      await handleAuthChange(currentSession);
     };
 
-    initialLoad();
+    initializeAuth();
 
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        handleAuthChange(newSession);
+      async (event, newSession) => {
+        if (!isMounted || !isInitialized) return;
+        
+        console.log('Auth state changed:', event, !!newSession);
+        
+        // Only handle auth changes after initialization
+        await handleAuthChange(newSession);
+        
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     );
 
@@ -77,15 +126,18 @@ export const AuthProvider = ({ children }) => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array
 
-  const value = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
     session,
     userProfile,
     loading,
     userRole: userProfile?.role,
     companyId: userProfile?.company_id,
-  };
+    isAuthenticated: !!session,
+    userId: session?.user?.id,
+  }), [session, userProfile, loading]);
 
   if (loading) {
     return (
@@ -96,7 +148,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

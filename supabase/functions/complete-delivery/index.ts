@@ -21,6 +21,7 @@ serve(async (req) => {
         borrowedQty, 
         transportCost, 
         proofFileUrl, 
+        transferProofUrl, // Menerima URL bukti transfer
         purchasedEmptyQty
     } = await req.json()
     
@@ -30,7 +31,7 @@ serve(async (req) => {
     )
 
     console.log('Edge Function called for order:', orderId);
-    console.log('Payload:', { paymentAmount, paymentMethod, returnedQty, borrowedQty, transportCost, proofFileUrl, purchasedEmptyQty });
+    console.log('Payload:', { paymentAmount, paymentMethod, returnedQty, borrowedQty, transportCost, proofFileUrl, purchasedEmptyQty, transferProofUrl }); // Log transferProofUrl
 
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'Order ID is required' }), {
@@ -64,6 +65,7 @@ serve(async (req) => {
           method: paymentMethod,
           paid_at: new Date().toISOString(),
           company_id: company_id,
+          proof_url: transferProofUrl, // Simpan URL bukti transfer di sini
         });
       if (paymentInsertError) throw paymentInsertError;
       console.log('Payment inserted successfully.');
@@ -136,6 +138,23 @@ serve(async (req) => {
         console.log('Purchased empty stock movement inserted successfully.');
       }
     }
+    
+    // 3. Catat biaya transportasi sebagai pemasukan
+    if (transportCost > 0) {
+        console.log('Recording transport cost as income...');
+        const { error: financialTransactionError } = await supabase
+            .from('financial_transactions')
+            .insert({
+                company_id: company_id,
+                type: 'income',
+                amount: transportCost,
+                description: `Pemasukan dari biaya transportasi pesanan #${orderId.slice(0, 8)}`,
+                source_table: 'orders',
+                source_id: orderId,
+            });
+        if (financialTransactionError) throw financialTransactionError;
+        console.log('Transport cost recorded as income successfully.');
+    }
 
     // Hitung total pembayaran setelah pembayaran baru ditambahkan
     const { data: currentPaymentsData, error: paymentsError } = await supabase
@@ -155,7 +174,7 @@ serve(async (req) => {
         newPaymentStatus = 'partial';
     }
 
-    // 3. Update status pesanan
+    // 4. Update status pesanan
     console.log('Updating order status to completed...');
     const { error: updateError } = await supabase
       .from('orders')

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
@@ -25,7 +25,7 @@ import FinancialManagementPage from './pages/FinancialManagementPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
-
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -37,22 +37,12 @@ const App = () => {
   const isSuperAdmin = userProfile?.role === 'super_admin';
   const isAdminOrSuperAdmin = isSuperAdmin || userProfile?.role === 'admin';
   const isCourier = userProfile?.role === 'user';
-  const isLoginPage = window.location.pathname === '/login';
 
-  // Tampilkan AuthPage saja jika belum login
-  if (!userProfile && !isLoginPage) {
-    return (
-      <BrowserRouter>
-        <AuthPage />
-      </BrowserRouter>
-    );
-  }
-  
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen"> 
+      <div className="flex min-h-screen">
         {userProfile && <Sidebar />}
-        <main className="flex-1 p-4 md:p-8"> 
+        <main className="flex-1 p-4 md:p-8">
           <Routes>
             <Route path="/login" element={!userProfile ? <AuthPage /> : <Navigate to="/dashboard" />} />
             <Route

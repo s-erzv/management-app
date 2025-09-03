@@ -36,6 +36,7 @@ const CompleteDeliveryPage = () => {
   const [cashAmount, setCashAmount] = useState('0');
   const [transferAmount, setTransferAmount] = useState('0');
   const [file, setFile] = useState(null);
+  const [transferProofFile, setTransferProofFile] = useState(null); // State baru untuk bukti transfer
   const [formState, setFormState] = useState({
     returnedQty: '0',
     borrowedQty: '0',
@@ -150,48 +151,53 @@ const CompleteDeliveryPage = () => {
     setTransferMethod(''); // Reset transfer method saat metode utama berubah
   }
   
-  // Ganti bagian upload file di handleCompleteDelivery dengan ini:
-
 const handleCompleteDelivery = async (e) => {
   e.preventDefault();
   if (!order?.id || !file) {
     toast.error('ID pesanan atau bukti pengiriman tidak ada.');
     return;
   }
+
+  // Validasi tambahan untuk bukti transfer
+  const selectedPaymentMethod = paymentMethods.find(m => m.method_name === paymentMethod);
+  const isTransfer = selectedPaymentMethod?.type === 'transfer' || paymentMethod === 'hybrid';
+  if (isTransfer && !transferProofFile) {
+    toast.error('Mohon unggah bukti transfer.');
+    return;
+  }
+
   setSubmitting(true);
+  let transferProofUrl = null;
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Simplify file naming dan path
-    const ext = file.name.split('.').pop();
-    const timestamp = Date.now();
-    const fileName = `proof-${timestamp}.${ext}`;
-    
-    // Coba path sederhana dulu
-    const filePath = `${order.id}/${fileName}`;
-
-    console.log('Uploading file:', {
-      fileName,
-      filePath,
-      fileSize: file.size,
-      fileType: file.type
-    });
-
-    // Upload dengan options yang lebih eksplisit
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // 1. Unggah bukti pengiriman (proof of delivery)
+    const deliveryFileExt = file.name.split('.').pop();
+    const deliveryFilePath = `${order.id}/delivery_proofs/${Date.now()}.${deliveryFileExt}`;
+    const { error: deliveryUploadError } = await supabase.storage
       .from("proofs")
-      .upload(filePath, file, { 
-        cacheControl: '3600',
-        upsert: false // Jangan overwrite, buat file baru
-      });
-
-    if (uploadError) {
-      console.error('Upload error details:', uploadError);
-      throw new Error('Gagal mengunggah bukti: ' + uploadError.message);
+      .upload(deliveryFilePath, file, { upsert: false });
+    
+    if (deliveryUploadError) {
+      console.error('Upload error details (delivery):', deliveryUploadError);
+      throw new Error('Gagal mengunggah bukti pengiriman: ' + deliveryUploadError.message);
     }
+    
+    // 2. Unggah bukti transfer jika ada
+    if (isTransfer && transferProofFile) {
+      const transferFileExt = transferProofFile.name.split('.').pop();
+      const transferFilePath = `${order.id}/transfer_proofs/${Date.now()}.${transferFileExt}`;
+      const { data: transferUploadData, error: transferUploadError } = await supabase.storage
+        .from("proofs")
+        .upload(transferFilePath, transferProofFile, { upsert: false });
 
-    console.log('Upload successful:', uploadData);
+      if (transferUploadError) {
+        console.error('Upload error details (transfer):', transferUploadError);
+        throw new Error('Gagal mengunggah bukti transfer: ' + transferUploadError.message);
+      }
+      transferProofUrl = transferUploadData.path;
+    }
 
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
@@ -207,11 +213,10 @@ const handleCompleteDelivery = async (e) => {
       borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
       purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
       transportCost: parseFloat(formState.transportCost) || 0,
-      proofFileUrl: filePath, // Gunakan path yang sama
+      proofFileUrl: deliveryFilePath,
+      transferProofUrl, // Kirim URL bukti transfer ke Edge Function
       receivedByName,
     };
-
-    console.log('Sending payload to function:', payload);
 
     const response = await fetch(
       "https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery",
@@ -241,7 +246,6 @@ const handleCompleteDelivery = async (e) => {
     setSubmitting(false);
   }
 };
-
 
   if (loading || !order) {
     return (
@@ -397,8 +401,18 @@ const handleCompleteDelivery = async (e) => {
                         placeholder="Jumlah Pembayaran Transfer"
                         value={transferAmount}
                         onChange={(e) => handleAmountChange(e, setTransferAmount)}
-                        readOnly={paymentMethod === 'hybrid'} // Hanya baca jika hybrid
+                        readOnly={paymentMethod === 'hybrid'}
                         className={paymentMethod === 'hybrid' ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="transferProof">Unggah Bukti Transfer</Label>
+                      <Input
+                        id="transferProof"
+                        type="file"
+                        onChange={(e) => setTransferProofFile(e.target.files[0])}
+                        accept="image/*"
                         required
                       />
                     </div>
@@ -472,7 +486,7 @@ const handleCompleteDelivery = async (e) => {
         </Card>
         
         <div className="mt-4">
-          <Button type="submit" className="w-full" disabled={submitting || (paymentMethod === 'hybrid' && !transferMethod)}>
+          <Button type="submit" className="w-full" disabled={submitting || (showTransferFields && !transferProofFile)}>
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
