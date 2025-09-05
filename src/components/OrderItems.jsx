@@ -39,9 +39,10 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
       .eq('order_id', orderId);
 
     const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true);
+    .from('products')
+    .select('id, name, is_returnable')
+    .eq('is_active', true);
+
 
     if (itemsError || productsError) {
       console.error('Error fetching data:', itemsError || productsError);
@@ -55,13 +56,12 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
   };
 
   const handleProductChange = (val) => {
-    const selectedProduct = products.find(p => p.id === val);
-    setNewItem({
-      ...newItem,
+    setNewItem((prev) => ({
+      ...prev,
       product_id: val,
-      price: selectedProduct ? selectedProduct.price : '',
-    });
+    }));
   };
+
 
   const handleQtyChange = (e) => {
     const qty = e.target.value;
@@ -75,11 +75,12 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
       .from('order_items')
       .insert({
         order_id: orderId,
-        product: newItem.product_id,
-        qty: newItem.qty,
-        price: newItem.price,
+        product_id: newItem.product_id,   
+        qty: Number(newItem.qty),
+        price: Number(newItem.price),
       })
       .select();
+
 
     if (error) {
       console.error('Error adding item:', error);
@@ -142,6 +143,16 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
             required
             min="1"
           />
+          <Input
+            type="number"
+            placeholder="Harga"
+            className="w-1/4"
+            value={newItem.price}
+            onChange={(e) => setNewItem({ ...newItem, price: e.target.value })}
+            required
+            min="0"
+          />
+
           <Button type="submit" disabled={loading} className="w-1/4">
             Tambah
           </Button>

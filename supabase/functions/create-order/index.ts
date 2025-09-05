@@ -27,14 +27,14 @@ serve(async (req) => {
     // Dapatkan status pelanggan dari database untuk validasi
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
-      .select('customer_status, company_id') // Kolom diperbaiki
+      .select('customer_status, company_id')
       .eq('id', orderForm.customer_id)
       .single();
     
     if (customerError || !customerData) {
       throw new Error('Customer not found or invalid.');
     }
-    const customerStatusName = customerData.customer_status; // Nama variabel diperbaiki
+    const customerStatusName = customerData.customer_status;
 
     // Hitung total pesanan dan validasi harga
     let subtotal = 0;
@@ -48,7 +48,7 @@ serve(async (req) => {
             .from('product_prices')
             .select('price')
             .eq('product_id', item.product_id)
-            .eq('customer_status', customerStatusName) // Kolom diperbaiki
+            .eq('customer_status', customerStatusName)
             .single();
 
         if (priceError || !priceData) {
@@ -72,7 +72,7 @@ serve(async (req) => {
             invoice_id: null,
             product_id: item.product_id,
             description: item.product_name,
-            quantity: item.qty,
+            quantity: validatedPrice,
             unit_price: validatedPrice,
             line_total: item.qty * validatedPrice,
         });
@@ -112,7 +112,19 @@ serve(async (req) => {
     if (orderError) throw orderError;
     const orderId = insertedOrder.id;
 
-    // 2. Masukkan invoice baru
+    // 2. Masukkan kurir ke tabel order_couriers
+    const couriersToInsert = orderForm.courier_ids?.map(courierId => ({
+        order_id: orderId,
+        courier_id: courierId,
+    }));
+    if (couriersToInsert && couriersToInsert.length > 0) {
+        const { error: courierInsertError } = await supabase
+            .from('order_couriers')
+            .insert(couriersToInsert);
+        if (courierInsertError) throw courierInsertError;
+    }
+
+    // 3. Masukkan invoice baru
     const { data: insertedInvoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert([{

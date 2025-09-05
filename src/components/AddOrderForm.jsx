@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'react-hot-toast';
 import { Loader2, Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -44,9 +45,9 @@ const AddOrderForm = () => {
 
   const [orderForm, setOrderForm] = useState({
     customer_id: '',
-    planned_date: getTodayDate(), // Set planned_date to today
+    planned_date: getTodayDate(),
     notes: '',
-    courier_id: '',
+    courier_ids: [], // Mengubah dari single courier_id ke array
   });
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -102,8 +103,14 @@ const AddOrderForm = () => {
     setOrderForm({ ...orderForm, customer_id: val });
   };
   
-  const handleCourierChange = (val) => {
-    setOrderForm({ ...orderForm, courier_id: val });
+  // Mengubah handleCourierChange menjadi handleCourierCheckboxChange
+  const handleCourierCheckboxChange = (courierId, checked) => {
+    setOrderForm(prevForm => {
+      const newCourierIds = checked
+        ? [...prevForm.courier_ids, courierId]
+        : prevForm.courier_ids.filter(id => id !== courierId);
+      return { ...prevForm, courier_ids: newCourierIds };
+    });
   };
 
   const handleNewItemChange = (e) => {
@@ -191,7 +198,7 @@ const AddOrderForm = () => {
         ...orderForm,
         created_by: session.user.id,
         company_id: companyId,
-        courier_id: orderForm.courier_id === 'unassigned' ? null : orderForm.courier_id, 
+        courier_ids: orderForm.courier_ids.length > 0 ? orderForm.courier_ids : null, // Mengirim array courier_ids
       },
       orderItems,
     };
@@ -211,10 +218,8 @@ const AddOrderForm = () => {
         throw new Error('Server returned an error: ' + errorText);
       }
 
-      const data = await response.json();
-
       toast.success('Pesanan berhasil dibuat!');
-      navigate(`/orders/${data.id}`); 
+      navigate('/orders'); 
     } catch (error) {
       console.error('Error creating order:', error.message);
       toast.error('Gagal membuat pesanan: ' + error.message);
@@ -224,7 +229,7 @@ const AddOrderForm = () => {
   };
 
   const resetForm = () => {
-    setOrderForm({ customer_id: '', planned_date: '', notes: '', courier_id: '' });
+    setOrderForm({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
     setSelectedCustomerId('');
     setOrderItems([]);
     setNewItem({ product_id: '', qty: 0, price: 0 });
@@ -284,23 +289,24 @@ const AddOrderForm = () => {
                   onChange={handleOrderFormChange}
                   required
                 />
-                 <Select
-                  name="courier_id"
-                  value={orderForm.courier_id}
-                  onValueChange={handleCourierChange}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Tugaskan Kurir (Opsional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Tanpa Kurir</SelectItem>
+                 {/* Mengganti Select dengan Checkbox untuk kurir */}
+                 <div className="space-y-2">
+                  <Label>Tugaskan Kurir (Opsional)</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     {couriers.map((courier) => (
-                      <SelectItem key={courier.id} value={courier.id}>
-                        {courier.full_name}
-                      </SelectItem>
+                      <div key={courier.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`courier-${courier.id}`}
+                          checked={orderForm.courier_ids.includes(courier.id)}
+                          onCheckedChange={(checked) => handleCourierCheckboxChange(courier.id, checked)}
+                        />
+                        <Label htmlFor={`courier-${courier.id}`}>
+                          {courier.full_name}
+                        </Label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                 </div>
                 <Input
                   type="text"
                   name="notes"

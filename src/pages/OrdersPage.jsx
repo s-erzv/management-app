@@ -1,5 +1,5 @@
 // src/pages/OrdersPage.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom'; 
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const getStatusVariant = (status) => {
   switch (status) {
@@ -51,17 +52,16 @@ const OrdersPage = () => {
   const { session, userRole, companyId } = useAuth();
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]); // Tambahkan state untuk produk
+  const [products, setProducts] = useState([]);
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   
-  // Perbarui state untuk form edit
-  const [editForm, setEditForm] = useState({ customer_id: '', planned_date: '', notes: '' });
-  const [editItems, setEditItems] = useState([]); // State untuk item yang diedit
-  const [newEditItem, setNewEditItem] = useState({ product_id: '', qty: 0, price: 0 }); // State untuk item baru
+  const [editForm, setEditForm] = useState({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
+  const [editItems, setEditItems] = useState([]);
+  const [newEditItem, setNewEditItem] = useState({ product_id: '', qty: 0, price: 0 });
   const [isEditLoading, setIsEditLoading] = useState(false);
 
   // Filter states
@@ -70,14 +70,16 @@ const OrdersPage = () => {
   const [invoiceNumberStart, setInvoiceNumberStart] = useState('');
   const [invoiceNumberEnd, setInvoiceNumberEnd] = useState('');
 
-  const fetchOrdersAndCustomers = async (filters = {}) => {
+  const fetchOrdersAndCustomers = useCallback(async (filters = {}) => {
     setLoading(true);
+    if (!companyId) return;
+
     let query = supabase
       .from('orders')
       .select(`
         *,
         customers (id, name, customer_status, phone, address),
-        couriers:profiles (id, full_name),
+        order_couriers (courier:profiles(full_name)),
         order_items (*, products(id, name, is_returnable)),
         payments (*)
       `)
@@ -88,7 +90,7 @@ const OrdersPage = () => {
       query = query.eq('status', filters.status);
     }
     if (filters.courier && filters.courier !== 'all') {
-      query = query.eq('courier_id', filters.courier);
+      query = query.eq('order_couriers.courier_id', filters.courier);
     }
     if (filters.invoiceStart) {
       query = query.gte('invoice_number', filters.invoiceStart);
@@ -98,9 +100,9 @@ const OrdersPage = () => {
     }
 
     const { data: ordersData, error: ordersError } = await query;
-    const { data: customersData } = await supabase.from('customers').select('id, name');
-    const { data: couriersData } = await supabase.from('profiles').select('id, full_name').eq('role', 'user');
-    const { data: productsData } = await supabase.from('products').select('id, name, is_returnable');
+    const { data: customersData } = await supabase.from('customers').select('id, name, customer_status').eq('company_id', companyId);
+    const { data: couriersData } = await supabase.from('profiles').select('id, full_name').eq('role', 'user').eq('company_id', companyId);
+    const { data: productsData } = await supabase.from('products').select('id, name, is_returnable, company_id').eq('company_id', companyId);
 
     if (ordersError) {
       console.error('Error fetching data:', ordersError);
@@ -109,17 +111,17 @@ const OrdersPage = () => {
       setOrders(ordersData);
       setCustomers(customersData);
       setCouriers(couriersData);
-      setProducts(productsData); // Set data produk
+      setProducts(productsData);
     }
     setLoading(false);
-  };
+  }, [companyId]);
   
   const applyFilters = () => {
     fetchOrdersAndCustomers({
       status: statusFilter,
       courier: courierFilter,
-      invoiceStart: invoiceNumberStart,
-      invoiceEnd: invoiceNumberEnd,
+      invoiceNumberStart: invoiceNumberStart,
+      invoiceNumberEnd: invoiceNumberEnd,
     });
   };
 
@@ -127,7 +129,7 @@ const OrdersPage = () => {
     if(companyId) {
         fetchOrdersAndCustomers();
     }
-  }, [companyId]);
+  }, [companyId, fetchOrdersAndCustomers]);
   
   const handleOpenEditModal = (order) => {
     setCurrentOrder(order);
@@ -136,12 +138,14 @@ const OrdersPage = () => {
         customer_id: order.customer_id,
         planned_date: order.planned_date,
         notes: order.notes,
-        courier_id: order.courier_id,
+        courier_ids: order.order_couriers.map(c => c.courier_id),
       });
-      // Salin item pesanan yang sudah ada ke state editItems
       setEditItems(order.order_items.map(item => ({
-        ...item,
+        product_id: item.product_id,
         product_name: item.products.name,
+        qty: item.qty,
+        price: item.price,
+        item_type: item.item_type,
       })));
     } 
     setIsEditModalOpen(true);
@@ -150,7 +154,7 @@ const OrdersPage = () => {
   const handleEditModalClose = () => {
     setIsEditModalOpen(false);
     setCurrentOrder(null);
-    setEditForm({ customer_id: '', planned_date: '', notes: '', courier_id: '' });
+    setEditForm({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
     setEditItems([]);
     setNewEditItem({ product_id: '', qty: 0, price: 0 });
   };
@@ -159,13 +163,16 @@ const OrdersPage = () => {
     const { name, value } = e.target;
     setEditForm({ ...editForm, [name]: value });
   };
-
-  // Tambahkan fungsi untuk mengubah kurir pada form edit
-  const handleEditCourierChange = (val) => {
-    setEditForm({ ...editForm, courier_id: val });
-  };
   
-  // Tambahkan fungsi untuk item baru di form edit
+  const handleEditCourierCheckboxChange = (courierId, checked) => {
+    setEditForm(prevForm => {
+      const newCourierIds = checked
+        ? [...prevForm.courier_ids, courierId]
+        : prevForm.courier_ids.filter(id => id !== courierId);
+      return { ...prevForm, courier_ids: newCourierIds };
+    });
+  };
+
   const handleNewEditItemChange = (e) => {
     const { name, value } = e.target;
     setNewEditItem({ ...newEditItem, [name]: parseInt(value) || 0 });
@@ -235,64 +242,52 @@ const OrdersPage = () => {
       return;
     }
     
-    // Perbarui data di tabel 'orders'
-    const { error: orderUpdateError } = await supabase
-        .from('orders')
-        .update(editForm)
-        .eq('id', currentOrder.id);
-      
-    if (orderUpdateError) {
-      console.error('Error updating order:', orderUpdateError);
-      toast.error('Gagal memperbarui pesanan.');
-      setIsEditLoading(false);
-      return;
-    }
+    // Kirim payload ke Edge Function
+    try {
+      const payload = {
+        orderId: currentOrder.id,
+        orderDetails: { ...editForm, company_id: companyId },
+        orderItems: editItems.map(item => ({
+          product_id: item.product_id,
+          qty: item.qty,
+          price: item.price,
+          item_type: item.item_type,
+        })),
+      };
 
-    // Sinkronisasi item pesanan: hapus semua dan masukkan yang baru
-    const { error: deleteItemsError } = await supabase
-      .from('order_items')
-      .delete()
-      .eq('order_id', currentOrder.id);
-    
-    if (deleteItemsError) {
-      console.error('Error deleting old order items:', deleteItemsError);
-      toast.error('Gagal menghapus item pesanan lama.');
-      setIsEditLoading(false);
-      return;
-    }
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/edit-order', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const itemsToInsert = editItems.map(item => ({
-      order_id: currentOrder.id,
-      product_id: item.product_id,
-      qty: item.qty,
-      price: item.price,
-      item_type: item.item_type,
-    }));
-    
-    const { error: insertItemsError } = await supabase
-      .from('order_items')
-      .insert(itemsToInsert);
+      const result = await response.json();
 
-    if (insertItemsError) {
-      console.error('Error inserting new order items:', insertItemsError);
-      toast.error('Gagal menambahkan item pesanan baru.');
-      setIsEditLoading(false);
-      return;
-    }
+      if (!response.ok) {
+        throw new Error(result.error || 'Gagal memperbarui pesanan.');
+      }
     
-    toast.success('Pesanan berhasil diperbarui!');
-    fetchOrdersAndCustomers();
-    handleEditModalClose();
-    setIsEditLoading(false);
+      toast.success('Pesanan berhasil diperbarui!');
+      fetchOrdersAndCustomers();
+      handleEditModalClose();
+    } catch (error) {
+      console.error('Error updating order:', error.message);
+      toast.error('Gagal memperbarui pesanan: ' + error.message);
+    } finally {
+      setIsEditLoading(false);
+    }
   };
   
   const handleDeleteClick = async (orderId) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus pesanan ini?')) return;
     setLoading(true);
     
-    // Gunakan Supabase Function untuk menghapus semua data terkait
     try {
         const { data, error } = await supabase.functions.invoke('delete-order', {
+            method: 'DELETE',
             body: { orderId: orderId, companyId: companyId },
         });
 
@@ -315,7 +310,7 @@ const OrdersPage = () => {
   };
 
   const calculateTotal = (items) => {
-    return items.reduce((total, item) => total + (item.qty * item.price), 0);
+    return items?.reduce((total, item) => total + (item.qty * item.price), 0) || 0;
   };
   
   const handleExportToExcel = () => {
@@ -336,30 +331,34 @@ const OrdersPage = () => {
         .map(item => `${item.products.name} (${item.qty} x Rp${item.price})`)
         .join('; ');
 
+      const couriersList = order.order_couriers
+        .map(c => c.courier.full_name)
+        .join(', ');
+        
       const paymentsHistory = order.payments
         .map(p => `Rp${p.amount} (${p.method}, diterima oleh: ${p.received_by ?? 'N/A'})`)
         .join('; ');
 
       return [
-        `"${order.id}"`, // ID Pesanan
-        order.invoice_number, // Nomor Invoice
-        `"${order.customers?.name ?? 'N/A'}"`, // Nama Pelanggan
-        `"${order.customers?.address ?? 'N/A'}"`, // Alamat Pelanggan
-        `"${order.customers?.phone ?? 'N/A'}"`, // Telepon Pelanggan
-        order.planned_date, // Tanggal Pengiriman
-        order.status, // Status Pengiriman
-        order.payment_status, // Status Pembayaran
-        `"${order.couriers?.full_name ?? 'N/A'}"`, // Nama Kurir
-        totalOrderPrice, // Total Harga
-        totalPaid, // Pembayaran Diterima
-        remainingDue, // Sisa Tagihan
-        order.returned_qty, // Galon Dikembalikan
-        order.borrowed_qty, // Galon Dipinjam
-        order.purchased_empty_qty, // Galon Kosong Dibeli
-        order.transport_cost, // Biaya Transportasi
-        `"${productsList}"`, // Detail Produk
-        order.proof_of_delivery_url, // Bukti Pengiriman
-        `"${paymentsHistory}"` // Riwayat Pembayaran
+        `"${order.id}"`,
+        order.invoice_number,
+        `"${order.customers?.name ?? 'N/A'}"`,
+        `"${order.customers?.address ?? 'N/A'}"`,
+        `"${order.customers?.phone ?? 'N/A'}"`,
+        order.planned_date,
+        order.status,
+        order.payment_status,
+        `"${couriersList || 'N/A'}"`,
+        totalOrderPrice,
+        totalPaid,
+        remainingDue,
+        order.returned_qty,
+        order.borrowed_qty,
+        order.purchased_empty_qty,
+        order.transport_cost,
+        `"${productsList}"`,
+        order.proof_of_delivery_url,
+        `"${paymentsHistory}"`
       ].join(',');
     });
 
@@ -399,7 +398,7 @@ const OrdersPage = () => {
                 <Select
                   value={editForm.customer_id}
                   onValueChange={(val) => setEditForm({ ...editForm, customer_id: val })}
-                  disabled={true} // Pelanggan tidak dapat diubah
+                  disabled={true}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Pilih Pelanggan" />
@@ -419,23 +418,23 @@ const OrdersPage = () => {
                   onChange={handleEditFormChange}
                   required
                 />
-                <Select
-                  name="courier_id"
-                  value={editForm.courier_id}
-                  onValueChange={handleEditCourierChange}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Tugaskan Kurir (Opsional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Tanpa Kurir</SelectItem>
+                <div className="space-y-2">
+                  <Label>Tugaskan Kurir (Opsional)</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     {couriers.map((courier) => (
-                      <SelectItem key={courier.id} value={courier.id}>
-                        {courier.full_name}
-                      </SelectItem>
+                      <div key={courier.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-courier-${courier.id}`}
+                          checked={editForm.courier_ids?.includes(courier.id)}
+                          onCheckedChange={(checked) => handleEditCourierCheckboxChange(courier.id, checked)}
+                        />
+                        <Label htmlFor={`edit-courier-${courier.id}`}>
+                          {courier.full_name}
+                        </Label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </div>
                 <Input
                   name="notes"
                   placeholder="Catatan Pesanan (opsional)"
@@ -596,7 +595,15 @@ const OrdersPage = () => {
                 <TableCell>
                   Rp{calculateTotal(order.order_items)}
                 </TableCell>
-                <TableCell>{order.couriers?.full_name ?? 'Belum Ditugaskan'}</TableCell>
+                <TableCell>
+                    {order.order_couriers && order.order_couriers.length > 0 ? (
+                        <div className="flex flex-col space-y-1">
+                            {order.order_couriers.map(c => (
+                                <span key={c.courier.full_name}>{c.courier.full_name}</span>
+                            ))}
+                        </div>
+                    ) : 'Belum Ditugaskan'}
+                </TableCell>
                 <TableCell className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)}>Detail</Button>
                   <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)}>Edit</Button>
