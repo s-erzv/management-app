@@ -64,17 +64,18 @@ const SettingsPage = () => {
         <Tabs defaultValue="products" className="w-full">
           {/* TabsList dengan grid responsif */}
           <TabsList className="grid w-full justify-start grid-cols-1 gap-1 bg-transparent p-0 h-auto md:grid-cols-3">
+            
             {isAdminOrSuperAdmin && (
               <TabsTrigger
-                value="products"
+                value="payment-methods"
                 className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
               >
-                <Package className="h-4 w-4 mr-1" />
-                Manajemen Produk
+                <Banknote className="h-4 w-4 mr-1" />
+                Metode Pembayaran
               </TabsTrigger>
             )}
 
-            {isAdminOrSuperAdmin && (
+             {isAdminOrSuperAdmin && (
               <TabsTrigger
                 value="customer-statuses"
                 className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
@@ -83,14 +84,14 @@ const SettingsPage = () => {
                 Status Pelanggan
               </TabsTrigger>
             )}
-
+            
             {isAdminOrSuperAdmin && (
               <TabsTrigger
-                value="payment-methods"
+                value="products"
                 className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
               >
-                <Banknote className="h-4 w-4 mr-1" />
-                Metode Pembayaran
+                <Package className="h-4 w-4 mr-1" />
+                Manajemen Produk
               </TabsTrigger>
             )}
 
