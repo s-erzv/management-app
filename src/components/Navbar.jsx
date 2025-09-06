@@ -9,30 +9,38 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Home, Truck, Files, ReceiptText, Wallet, PiggyBank } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
+import { useState } from 'react';
 
 const navItems = [
-  { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['super_admin', 'admin', 'user'] },
-  { path: '/orders', name: 'Pesanan', icon: <ListOrdered className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/customers', name: 'Pelanggan', icon: <Users className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/stock', name: 'Stok & Utang Galon', icon: <Package className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/stock-reconciliation', name: 'Rekonsiliasi Stok', icon: <Files className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/central-orders', name: 'Pesan dari Pusat', icon: <Truck className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/expenses', name: 'Uang Terpakai', icon: <ReceiptText className="h-5 w-5" />, roles: ['super_admin', 'admin', 'user'] },
-  { path: '/financial-management', name: 'Manajemen Keuangan', icon: <PiggyBank className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/financials', name: 'Laporan Keuangan', icon: <Wallet className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/calendar', name: 'Jadwal', icon: <Calendar className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/reports', name: 'Laporan', icon: <BarChart className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/settings', name: 'Pengaturan', icon: <Settings className="h-5 w-5" />, roles: ['super_admin', 'admin'] },
-  { path: '/users', name: 'Manajemen Pengguna', icon: <Users className="h-5 w-5" />, roles: ['super_admin', 'admin'] }, 
+  { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/orders', name: 'Manajemen Pesanan', icon: <ListOrdered />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/customers', name: 'Customers', icon: <Users />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/stock', name: 'Manajemen Stok', icon: <Package />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/stock-reconciliation', name: 'Update Stok', icon: <Files />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/central-orders', name: 'Order Pusat', icon: <Truck />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/expenses', name: 'Uang Terpakai', icon: <ReceiptText />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/financial-management', name: 'Manajemen Keuangan', icon: <PiggyBank />, roles: ['super_admin', 'admin'] },
+  { path: '/financials', name: 'Keuangan', icon: <Wallet />, roles: ['super_admin', 'admin'] },
+  { path: '/reports', name: 'Analisis', icon: <BarChart />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/settings', name: 'Pengaturan', icon: <Settings />, roles: ['super_admin', 'admin'] },
+  { path: '/users', name: 'Manajemen Pengguna', icon: <Users />, roles: ['super_admin'] }, 
 ];
 
 const Sidebar = () => {
-  const { session, userRole } = useAuth();
+  const { session, userRole, companyName } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -50,80 +58,138 @@ const Sidebar = () => {
   
   const filteredItems = navItems.filter(item => item.roles.includes(userRole));
 
-  return (
-    <div className="flex h-screen">
-      <aside className="group fixed bg-gray-100 inset-y-0 left-0 z-50 flex w-16 hover:w-64 flex-col border-r bg-background transition-all duration-300 ease-in-out">
-        <nav className="flex flex-col gap-2 px-3 py-4 h-full overflow-y-auto scrollbar-hide"> {/* Tambahkan overflow-y-auto di sini */}
-          {/* Logo/Brand */}
-          <Link 
-            to="/dashboard" 
-            className="flex h-10 items-center gap-3 rounded-lg px-3 py-2 text-primary transition-all hover:bg-muted mb-4"
-          >
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
-              GA
-            </div>
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-semibold">
-              Galon App
-            </span>
-          </Link>
+  const NavContent = ({ onLinkClick, isMobile = false }) => (
+    <nav className="flex flex-col gap-2 px-3 py-4 h-full overflow-y-auto scrollbar-hide">
+      <Link 
+        to="/dashboard" 
+        className={`flex h-10 items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-gray-100 mb-4 ${isMobile ? '' : 'group'}`}
+        onClick={onLinkClick}
+      >
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+          {companyName ? companyName[0].toUpperCase() : 'A'}
+        </div>
+        <span className={`${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} text-sm font-semibold transition-opacity duration-300 whitespace-nowrap`}>
+          {companyName || 'Nama Perusahaan'}
+        </span>
+      </Link>
 
-          {/* Navigation Items */}
-          {filteredItems.map((item) => (
-            <Link
-              key={item.name}
-              to={item.path}
-              className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 py-2 transition-all hover:bg-muted
-                ${location.pathname === item.path 
-                  ? 'bg-muted text-foreground' 
-                  : 'text-muted-foreground hover:text-foreground'
-                }`}
-            >
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center">
-                {item.icon}
-              </div>
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-sm font-medium whitespace-nowrap">
-                {item.name}
-              </span>
-            </Link>
-          ))}
-
-          {/* User Menu - sejajar dengan menu lain */}
-          <div className="mt-auto w-full">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  className="flex h-10 w-full items-center justify-start gap-3 rounded-lg px-3 py-2 
-                            hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-                >
-                  <div className="flex h-5 w-5 items-center justify-center">
-                    <UserCircle className="h-5 w-5" />
-                  </div>
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-sm font-medium whitespace-nowrap">
-                    Profile
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{session.user.email}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      Role: {userRole}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Keluar</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+      {filteredItems.map((item) => (
+        <Link
+          key={item.name}
+          to={item.path}
+          className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 py-2 transition-all duration-150 ease-in-out
+            ${location.pathname === item.path 
+              ? 'bg-gray-200 text-gray-900 shadow-sm' 
+              : 'text-gray-600 hover:bg-gray-100'
+            } ${isMobile ? '' : 'group'}`}
+          onClick={onLinkClick}
+        >
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center">
+            {item.icon}
           </div>
-        </nav>
-      </aside>
-    </div>
+          <span className={`${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} text-sm font-medium transition-opacity duration-300 whitespace-nowrap`}>
+            {item.name}
+          </span>
+        </Link>
+      ))}
+
+      <div className="mt-auto w-full border-t border-gray-200 pt-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="flex h-10 w-full items-center justify-start gap-3 rounded-lg px-3 py-2 
+                        text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"
+            >
+              <div className="flex h-5 w-5 items-center justify-center">
+                <UserCircle className="h-5 w-5" />
+              </div>
+              <span className={`${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} text-sm font-medium transition-opacity duration-300 whitespace-nowrap`}>
+                Profile
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="start" forceMount>
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{session.user.email}</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  Role: {userRole}
+                </p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Keluar</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <div className="hidden sm:block">
+        <aside className="group fixed inset-y-0 left-0 z-50 flex w-16 hover:w-64 flex-col border-r border-gray-200 bg-white shadow-sm transition-all duration-300 ease-in-out">
+          <NavContent onLinkClick={() => {}} />
+        </aside>
+      </div>
+      
+      {/* Mobile Navbar with Hamburger Menu */}
+      <header className="sm:hidden sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b bg-white px-4 shadow-sm md:px-6">
+        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0 md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle navigation menu</span>
+            </Button>
+          </SheetTrigger>
+
+          <SheetContent side="left" className="flex flex-col bg-white" aria-describedby={undefined}>
+            <SheetHeader className="px-1">
+              <SheetTitle>Menu</SheetTitle>
+            </SheetHeader>
+
+            <NavContent onLinkClick={() => setIsSheetOpen(false)} isMobile={true} />
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex-1 text-center font-bold text-lg">
+          {companyName || 'Nama Perusahaan'}
+        </div>
+        <div className="ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <UserCircle className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{session.user.email}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    Role: {userRole}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Keluar</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+    </>
   );
 };
 

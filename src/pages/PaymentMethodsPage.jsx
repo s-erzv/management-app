@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
 import { Loader2, PlusCircle, PenLine, Trash2, Banknote, CreditCard } from 'lucide-react';
-import { Badge } from '@/components/ui/badge'; // Mengimpor komponen Badge
+import { Badge } from '@/components/ui/badge'; 
 
 const PaymentMethodsPage = () => {
   const { userProfile, companyId } = useAuth();
@@ -144,44 +144,47 @@ const PaymentMethodsPage = () => {
   };
 
   const handleDelete = async (methodId) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus metode pembayaran ini?')) {
-      const { error } = await supabase
-        .from('payment_methods')
-        .delete()
-        .eq('id', methodId);
-
-      if (error) {
-        console.error('Error deleting payment method:', error);
-        toast.error('Gagal menghapus metode pembayaran.');
-      } else {
-        toast.success('Metode pembayaran berhasil dihapus!');
-        fetchPaymentMethods();
-      }
+    if (!window.confirm('Apakah Anda yakin ingin menghapus metode pembayaran ini?')) {
+      return;
     }
+    setLoading(true);
+    const { error } = await supabase
+      .from('payment_methods')
+      .delete()
+      .eq('id', methodId);
+
+    if (error) {
+      console.error('Error deleting payment method:', error);
+      toast.error('Gagal menghapus metode pembayaran.');
+    } else {
+      toast.success('Metode pembayaran berhasil dihapus!');
+      fetchPaymentMethods();
+    }
+    setLoading(false);
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      <div className="flex justify-center items-center h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Metode Pembayaran</h1>
-        <Button onClick={() => handleOpenModal()} className="gap-2">
-          <PlusCircle className="h-4 w-4" />
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-bold">Manajemen Metode Pembayaran</h1>
+        <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90">
+          <PlusCircle className="h-4 w-4 mr-2" />
           Tambah Metode
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle>Daftar Metode Pembayaran</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-200">
             Kelola metode pembayaran yang tersedia untuk kurir.
           </CardDescription>
         </CardHeader>
@@ -196,11 +199,11 @@ const PaymentMethodsPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nama Metode</TableHead>
-                    <TableHead>Tipe</TableHead>
-                    <TableHead>Nama Akun</TableHead>
-                    <TableHead>Nomor Akun</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
+                    <TableHead className="min-w-[150px]">Nama Metode</TableHead>
+                    <TableHead className="min-w-[100px]">Tipe</TableHead>
+                    <TableHead className="min-w-[150px]">Nama Akun</TableHead>
+                    <TableHead className="min-w-[150px]">Nomor Akun</TableHead>
+                    <TableHead className="text-right min-w-[100px]">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,18 +220,18 @@ const PaymentMethodsPage = () => {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button 
-                            variant="outline" 
-                            size="sm" 
+                            variant="ghost" 
+                            size="icon" 
                             onClick={() => handleOpenModal(method)}
                           >
                             <PenLine className="h-4 w-4" />
                           </Button>
                           <Button 
-                            variant="destructive" 
-                            size="sm" 
+                            variant="ghost" 
+                            size="icon" 
                             onClick={() => handleDelete(method.id)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </div>
                       </TableCell>
@@ -242,7 +245,7 @@ const PaymentMethodsPage = () => {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{currentMethod ? 'Edit' : 'Tambah'} Metode Pembayaran</DialogTitle>
             <DialogDescription>
@@ -300,7 +303,7 @@ const PaymentMethodsPage = () => {
               </>
             )}
             <DialogFooter className="mt-4">
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90">
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (

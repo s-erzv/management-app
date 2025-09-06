@@ -1,11 +1,11 @@
-// src/pages/OrderDetailsPage.jsx (Optimized + Abort-safe)
+// src/pages/OrderDetailsPage.jsx (Optimized + Abort-safe + PaymentStatus Fixed)
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, Eye, Trash2, CreditCard, Banknote, RefreshCcw } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Loader2, ArrowLeft, Trash2, CreditCard, Banknote, RefreshCcw, CheckCircle2, AlertCircle, ListOrdered, ReceiptText, Clock, TruckIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-hot-toast';
@@ -18,6 +18,35 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import ProofOfDeliveryForm from '@/components/ProofOfDeliveryForm';
+
+// Badge status pengiriman
+const getDeliveryStatusBadge = (status) => {
+  switch ((status || '').toLowerCase()) {
+    case 'draft':
+      return <Badge className="bg-gray-200 text-[#10182b] gap-1"><Clock className="h-3 w-3" /> Menunggu</Badge>;
+    case 'sent':
+      return <Badge className="bg-[#10182b] text-white gap-1"><TruckIcon className="h-3 w-3" /> Dikirim</Badge>;
+    case 'delivered':
+    case 'completed':
+      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> Selesai</Badge>;
+    default:
+      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
+  }
+};
+
+// Badge status pembayaran (dipakai kalau mau tampilkan raw)
+const getPaymentStatusBadge = (status) => {
+  switch ((status || '').toLowerCase()) {
+    case 'paid':
+      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
+    case 'unpaid':
+      return <Badge className="bg-red-500 text-white gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
+    case 'partial':
+      return <Badge className="bg-yellow-400 text-black gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
+    default:
+      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
+  }
+};
 
 const OrderDetailsPage = () => {
   const { id } = useParams();
@@ -45,7 +74,7 @@ const OrderDetailsPage = () => {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { 
+    return () => {
       mountedRef.current = false;
       // Cancel ongoing requests
       if (abortControllerRef.current) {
@@ -60,6 +89,14 @@ const OrderDetailsPage = () => {
     e.code === '20' ||
     /AbortError/i.test(e.message || '')
   );
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount ?? 0);
+  };
 
   const calculateOrderTotal = useCallback((items) => {
     if (!Array.isArray(items)) return 0;
@@ -87,7 +124,7 @@ const OrderDetailsPage = () => {
     if (showLoading && mountedRef.current) {
       setLoading(true);
     }
-    
+
     if (mountedRef.current) {
       setError(null);
     }
@@ -122,7 +159,8 @@ const OrderDetailsPage = () => {
       const [paymentsRes, methodsRes] = await Promise.all([
         supabase
           .from('payments')
-          .select(`*, received_by:profiles(full_name), payment_method:payment_method_id(method_name, type)`)
+          // Catatan: sesuaikan alias relasi ini dengan nama FK di proyekmu
+          .select(`*, received_by:profiles(full_name), payment_method:payment_methods(method_name, type)`)
           .eq('order_id', orderData.id)
           .order('created_at', { ascending: false })
           .abortSignal(abortControllerRef.current.signal),
@@ -168,13 +206,11 @@ const OrderDetailsPage = () => {
         setPaymentMethods(methodsRes.data || []);
       }
     } catch (err) {
-      // Check specifically for the AbortError
       if (isAbortErr(err)) {
-        // This is the intended behavior, so we don't need to log it as an error
-        console.log('Request aborted by cleanup or new fetch.');
+        // expected on cleanup/race
         return;
       }
-      
+
       if (mountedRef.current) {
         console.error('fetchData error', err);
         setError({ message: err.message || 'Terjadi kesalahan tidak terduga' });
@@ -184,19 +220,16 @@ const OrderDetailsPage = () => {
         setLoading(false);
       }
     }
-  }, [id, isAuthenticated]);
+  }, [id, isAuthenticated, calculateOrderTotal, calculatePaymentsTotal]);
 
-  // Initial data fetch with stable dependencies
+  // Initial data fetch with stable dependencies + debounce
   useEffect(() => {
     let timeoutId;
-    
-    // Debounce to prevent rapid successive calls
     if (id && isAuthenticated) {
       timeoutId = setTimeout(() => {
         fetchData(true);
       }, 150);
     }
-
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
@@ -211,6 +244,22 @@ const OrderDetailsPage = () => {
   const remainingDue = Math.max(0, (Number(order?.grand_total) || orderTotal) - totalPaid);
   const isPaid = remainingDue <= 0.0001;
 
+  // Status pembayaran turunan (UI anti-stale)
+  const derivedPaymentStatus = useMemo(() => {
+    const gt = Number(order?.grand_total ?? orderTotal) || 0;
+    if (totalPaid <= 0) return 'unpaid';
+    if (totalPaid >= gt - 0.0001) return 'paid';
+    return 'partial';
+  }, [order?.grand_total, orderTotal, totalPaid]);
+
+  // Map untuk badge (gunakan derived)
+  const paymentStatusMap = {
+    paid: { variant: 'default', label: 'LUNAS', icon: <CheckCircle2 className="h-3 w-3" /> },
+    unpaid: { variant: 'destructive', label: 'BELUM LUNAS', icon: <AlertCircle className="h-3 w-3" /> },
+    partial: { variant: 'secondary', label: 'SEBAGIAN', icon: <AlertCircle className="h-3 w-3" /> },
+  };
+  const currentPaymentStatus = paymentStatusMap[derivedPaymentStatus];
+
   const normalizedMethods = useMemo(
     () => (paymentMethods || []).map(m => ({
       id: m.id,
@@ -219,20 +268,19 @@ const OrderDetailsPage = () => {
     })),
     [paymentMethods]
   );
-  
-  const paymentMethodsCash = useMemo(() => 
-    normalizedMethods.filter(m => m.type === 'cash'), 
-    [normalizedMethods]
-  );
-  
-  const paymentMethodsTransfer = useMemo(() => 
-    normalizedMethods.filter(m => m.type === 'transfer'), 
+
+  const paymentMethodsCash = useMemo(() =>
+    normalizedMethods.filter(m => m.type === 'cash'),
     [normalizedMethods]
   );
 
-  // Set default payment method only once
+  const paymentMethodsTransfer = useMemo(() =>
+    normalizedMethods.filter(m => m.type === 'transfer'),
+    [normalizedMethods]
+  );
+
+  // Set default payment method only once (fallback ke index 0)
   const effectivePaymentMethodId = paymentMethodId || (normalizedMethods[0]?.id ?? '');
-  
   const selectedMethod = useMemo(
     () => normalizedMethods.find(m => String(m.id) === String(effectivePaymentMethodId)),
     [normalizedMethods, effectivePaymentMethodId]
@@ -241,11 +289,38 @@ const OrderDetailsPage = () => {
   const paymentFormIsValid = paymentAmount && parseFloat(paymentAmount) > 0 && effectivePaymentMethodId;
   const isPaymentFormDisabled = isPaid || remainingDue <= 0;
 
-  // --- actions ---
+  // --- helpers actions ---
   const handleDataUpdate = useCallback(() => {
-    fetchData(false); // Refresh without showing main loading
+    fetchData(false); // Refresh tanpa main loading
   }, [fetchData]);
 
+  const statusFromTotals = useCallback((paid, grand) => {
+    if (paid <= 0) return 'unpaid';
+    if (paid >= grand - 0.0001) return 'paid';
+    return 'partial';
+  }, []);
+
+  const recomputeAndUpdateOrderStatus = useCallback(async (orderId, grandTotalFallback) => {
+    const { data: rows, error: selErr } = await supabase
+      .from('payments')
+      .select('amount')
+      .eq('order_id', orderId);
+
+    if (selErr) throw selErr;
+
+    const sum = (rows ?? []).reduce((s, r) => s + Number(r.amount || 0), 0);
+    const gt = Number(order?.grand_total ?? grandTotalFallback ?? 0) || 0;
+    const newStatus = statusFromTotals(sum, gt);
+
+    const { error: updErr } = await supabase
+      .from('orders')
+      .update({ payment_status: newStatus })
+      .eq('id', orderId);
+
+    if (updErr) throw updErr;
+  }, [order?.grand_total, statusFromTotals]);
+
+  // --- actions ---
   const handleAddPayment = async (e) => {
     e.preventDefault();
     if (!paymentFormIsValid) {
@@ -257,7 +332,7 @@ const OrderDetailsPage = () => {
     setOpLoading(true);
     try {
       const amountNum = parseFloat(paymentAmount);
-      const { data: inserted, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('payments')
         .insert({
           order_id: order.id,
@@ -266,13 +341,14 @@ const OrderDetailsPage = () => {
           paid_at: new Date().toISOString(),
           company_id: order.company_id,
           received_by: selectedMethod?.type === 'cash' ? userId : null,
-        })
-        .select();
+        });
 
       if (insertError) throw insertError;
 
       const newTotalPaid = totalPaid + amountNum;
-      const newStatus = (newTotalPaid >= (Number(order.grand_total) || orderTotal)) ? 'paid' : 'partial';
+      const gt = Number(order?.grand_total ?? orderTotal) || 0;
+      const newStatus = statusFromTotals(newTotalPaid, gt);
+
       const { error: updErr } = await supabase
         .from('orders')
         .update({ payment_status: newStatus })
@@ -304,6 +380,9 @@ const OrderDetailsPage = () => {
         .eq('id', paymentId);
 
       if (delErr) throw delErr;
+
+      // Recompute status di DB agar konsisten walau perubahan dari luar UI
+      await recomputeAndUpdateOrderStatus(order.id, orderTotal);
 
       toast.success('Pembayaran dihapus.');
       handleDataUpdate();
@@ -362,8 +441,10 @@ const OrderDetailsPage = () => {
         throw new Error(errorText || 'Gagal membuat invoice PDF.');
       }
       const { pdfUrl } = await response.json();
-      const whatsappMessage = `Assalamualaikum warahmatullahi wa...m warahmatullahi wabarakatuh.\n\nHormat kami,\nNama Perusahaan`;
-      const whatsappUrl = `https://wa.me/${order.customers.phone}?text=${encodeURIComponent(whatsappMessage)}`;
+      // Sesuaikan template WA-mu sendiri
+      const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.\n\nBerikut tagihan Anda.\n${pdfUrl}\n\nTerima kasih.`;
+      const phone = (order.customers?.phone || '').replace(/[^\d]/g, '');
+      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`;
       window.open(whatsappUrl, '_blank');
       toast.success('Invoice berhasil dikirim!', { id: 'invoice-toast' });
     } catch (err) {
@@ -374,28 +455,28 @@ const OrderDetailsPage = () => {
     }
   };
 
+  // --- render guards ---
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        Memuat data pesanan...
+      <div className="flex justify-center items-center min-h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
+      <div className="container mx-auto p-4 md:p-8 max-w-7xl">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 text-[#10182b] hover:bg-gray-100">
           <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
         </Button>
-        <Card>
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Terjadi kesalahan</CardTitle>
+            <CardTitle className="text-[#10182b]">Terjadi kesalahan</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-red-600">{error.message}</p>
-            <Button variant="outline" onClick={() => fetchData(true)} className="mt-4">
+            <Button variant="outline" onClick={() => fetchData(true)} className="mt-4 text-[#10182b] hover:bg-gray-100">
               <RefreshCcw className="mr-2 h-4 w-4" /> Coba lagi
             </Button>
           </CardContent>
@@ -406,13 +487,13 @@ const OrderDetailsPage = () => {
 
   if (!order) {
     return (
-      <div className="p-6">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
+      <div className="container mx-auto p-4 md:p-8 max-w-7xl">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 text-[#10182b] hover:bg-gray-100">
           <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
         </Button>
-        <Card>
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle>Pesanan tidak ditemukan</CardTitle>
+            <CardTitle className="text-[#10182b]">Pesanan tidak ditemukan</CardTitle>
           </CardHeader>
           <CardContent>
             <p>Data pesanan tidak tersedia.</p>
@@ -426,109 +507,104 @@ const OrderDetailsPage = () => {
   const items = order.order_items || [];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Kembali
-        </Button>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => fetchData(false)}>
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+          <ListOrdered className="h-8 w-8" />
+          Detail Pesanan
+        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => fetchData(false)} className="text-[#10182b] hover:bg-gray-100">
             <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
           </Button>
-          <Button variant="default" onClick={() => setIsProofFormOpen(true)}>
-            <Eye className="mr-2 h-4 w-4" /> Selesaikan Pengiriman
+          <Button onClick={() => setIsProofFormOpen(true)} className="bg-[#10182b] text-white hover:bg-[#20283b]">
+            <CheckCircle2 className="mr-2 h-4 w-4" /> Selesaikan Pengiriman
           </Button>
-          <Button variant="secondary" onClick={handleSendInvoice} disabled={isSendingInvoice}>
-            {isSendingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+          <Button variant="outline" onClick={handleSendInvoice} disabled={isSendingInvoice} className="text-[#10182b] hover:bg-gray-100">
+            {isSendingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ReceiptText className="mr-2 h-4 w-4" />}
             Kirim Invoice
           </Button>
         </div>
       </div>
 
-      <Card>
+      <Card className="border border-gray-200 shadow-sm transition-all hover:shadow-md">
         <CardHeader>
-          <CardTitle>Detail Pesanan</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-[#10182b]">
+            Pesanan #{order.invoice_number || order.id.slice(0, 8)}
+          </CardTitle>
+          <CardDescription>Rincian lengkap pesanan dan statusnya.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">Pelanggan</p>
-              <p className="font-medium">{order.customers?.name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Status Pengiriman</p>
-              <Badge>{order.status}</Badge>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Status Pembayaran</p>
-              <Badge variant={
-                order.payment_status === 'paid' ? 'default' :
-                order.payment_status === 'unpaid' ? 'destructive' : 'secondary'
-              }>
-                {order.payment_status}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Total</p>
-              <p className="font-semibold">Rp {order.grand_total?.toLocaleString?.('id-ID') ?? orderTotal.toLocaleString('id-ID')}</p>
-            </div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-500">Pelanggan</p>
+            <p className="font-semibold text-base text-[#10182b]">{order.customers?.name}</p>
           </div>
-
-          <Separator />
-
-          <div>
-            <h3 className="font-semibold mb-2">Item</h3>
-            <div className="space-y-2">
-              {items.length === 0 && <p className="text-sm text-gray-500">Tidak ada item.</p>}
-              {items.map((it) => (
-                <div key={it.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <p className="font-medium">{it.products?.name || 'Produk'}</p>
-                    <p className="text-gray-500">
-                      {Number(it.qty)} × Rp {Number(it.price).toLocaleString('id-ID')} {it.item_type ? `• ${it.item_type}` : ''}
-                    </p>
-                  </div>
-                  <div className="font-semibold">
-                    Rp {(Number(it.qty) * Number(it.price)).toLocaleString('id-ID')}
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-500">Status Pengiriman</p>
+            {getDeliveryStatusBadge(order.status)}
           </div>
-
-          <Separator />
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">Total Dibayar</p>
-              <p className="font-semibold">Rp {totalPaid.toLocaleString('id-ID')}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Sisa Tagihan</p>
-              <p className="font-semibold">Rp {remainingDue.toLocaleString('id-ID')}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Status</p>
-              <Badge variant={isPaid ? 'default' : 'secondary'}>{isPaid ? 'LUNAS' : 'BELUM LUNAS'}</Badge>
-            </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-500">Status Pembayaran</p>
+            <Badge variant={currentPaymentStatus.variant} className="flex items-center gap-1 font-semibold bg-[#10182b] text-white">
+              {currentPaymentStatus.icon} {currentPaymentStatus.label}
+            </Badge>
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-500">Total</p>
+            <p className="font-bold text-lg text-[#10182b]">{formatCurrency(order.grand_total ?? orderTotal)}</p>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="border border-gray-200 shadow-sm transition-all hover:shadow-md">
           <CardHeader>
-            <CardTitle>Riwayat Pembayaran</CardTitle>
+            <CardTitle className="text-[#10182b]">Item Pesanan</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              {items.length === 0 && <p className="text-sm text-gray-500">Tidak ada item.</p>}
+              {items.map((it) => (
+                <div key={it.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-2 last:border-b-0 last:pb-0">
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-[#10182b]">{it.products?.name || 'Produk'}</p>
+                    <p className="text-xs text-gray-500">
+                      {Number(it.qty)} × {formatCurrency(Number(it.price))} {it.item_type ? `• ${it.item_type}` : ''}
+                    </p>
+                  </div>
+                  <div className="font-semibold mt-2 sm:mt-0 text-[#10182b]">
+                    {formatCurrency(Number(it.qty) * Number(it.price))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">Total Dibayar</p>
+                <p className="font-semibold text-base text-[#10182b]">{formatCurrency(totalPaid)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">Sisa Tagihan</p>
+                <p className="font-bold text-base text-red-500">{formatCurrency(remainingDue)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-gray-200 shadow-sm transition-all hover:shadow-md">
+          <CardHeader>
+            <CardTitle className="text-[#10182b]">Riwayat Pembayaran</CardTitle>
+            <CardDescription>Pembayaran yang sudah dicatat untuk pesanan ini.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {payments.length === 0 && <p className="text-sm text-gray-500">Belum ada pembayaran.</p>}
             {payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between border rounded-lg p-3">
+              <div key={p.id} className="flex items-center justify-between border rounded-lg p-3 hover:bg-gray-50 transition-colors">
                 <div className="space-y-0.5">
-                  <p className="font-medium">Rp {Number(p.amount).toLocaleString('id-ID')}</p>
+                  <p className="font-medium text-[#10182b]">{formatCurrency(Number(p.amount))}</p>
                   <p className="text-xs text-gray-500">
-                    {new Date(p.paid_at || p.created_at).toLocaleString('id-ID')} • {p.payment_method?.method_name} ({p.payment_method?.type})
+                    {new Date(p.paid_at || p.created_at).toLocaleString('id-ID')} • {p.payment_method?.method_name}
                   </p>
                   {p.received_by?.full_name && (
                     <p className="text-xs text-gray-500">Diterima oleh: {p.received_by.full_name}</p>
@@ -550,6 +626,7 @@ const OrderDetailsPage = () => {
                   onClick={() => handleDeletePayment(p.id)}
                   disabled={opLoading}
                   title="Hapus pembayaran"
+                  className="bg-red-500 hover:bg-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -558,13 +635,27 @@ const OrderDetailsPage = () => {
           </CardContent>
         </Card>
 
+        {order.proof_public_url && (
+          <Card className="border border-gray-200 shadow-sm transition-all hover:shadow-md">
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Bukti Pengiriman</CardTitle>
+              <CardDescription>File bukti pengiriman yang diunggah.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <a href={order.proof_public_url} target="_blank" rel="noreferrer" className="underline text-blue-600 font-medium">
+                Lihat bukti pengiriman
+              </a>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Form Pembayaran */}
-        <Card>
+        <Card className={`border border-gray-200 shadow-sm transition-all hover:shadow-md ${isPaymentFormDisabled ? 'opacity-60' : ''}`}>
           <CardHeader>
-            <CardTitle>Tambah Pembayaran</CardTitle>
+            <CardTitle className="text-[#10182b]">Tambah Pembayaran</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
               <Input
                 type="number"
                 placeholder="Nominal"
@@ -572,7 +663,7 @@ const OrderDetailsPage = () => {
                 onChange={(e) => setPaymentAmount(e.target.value)}
                 min="0"
                 step="1000"
-                className="w-1/2"
+                className="w-full md:w-1/2"
                 disabled={isPaymentFormDisabled}
               />
               <Select
@@ -580,7 +671,7 @@ const OrderDetailsPage = () => {
                 onValueChange={setPaymentMethodId}
                 disabled={isPaymentFormDisabled}
               >
-                <SelectTrigger className="w-1/2">
+                <SelectTrigger className="w-full md:w-1/2">
                   <SelectValue placeholder="Pilih metode pembayaran" />
                 </SelectTrigger>
                 <SelectContent>
@@ -591,28 +682,33 @@ const OrderDetailsPage = () => {
                         <SelectItem key={method.id} value={String(method.id)}>
                           <div className="flex items-center gap-2">
                             <Banknote className="h-4 w-4" />
-                            <span>{method.method_name} ({method.type})</span>
+                            <span>{method.method_name}</span>
                           </div>
                         </SelectItem>
                       ))}
                       <Separator className="my-1" />
                     </>
                   )}
-                  <div className="px-2 py-1 text-xs text-gray-500">Transfer</div>
-                  {paymentMethodsTransfer.map((method) => (
-                    <SelectItem key={method.id} value={String(method.id)}>
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        <span>{method.method_name} ({method.type})</span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {paymentMethodsTransfer.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-xs text-gray-500">Transfer</div>
+                      {paymentMethodsTransfer.map((method) => (
+                        <SelectItem key={method.id} value={String(method.id)}>
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="h-4 w-4" />
+                            <span>{method.method_name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <Separator className="my-1" />
+                    </>
+                  )}
                   {/* tampilkan metode lain jika ada selain cash/transfer */}
-                  {normalizedMethods.filter(m => !['cash','transfer'].includes(m.type)).map((method) => (
+                  {normalizedMethods.filter(m => !['cash', 'transfer'].includes(m.type)).map((method) => (
                     <SelectItem key={method.id} value={String(method.id)}>
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4" />
-                        <span>{method.method_name} ({method.type})</span>
+                        <span>{method.method_name}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -622,25 +718,12 @@ const OrderDetailsPage = () => {
             {isPaymentFormDisabled && (
               <p className="text-sm text-green-600 mt-2">Pesanan ini sudah lunas, tidak bisa menambah pembayaran lagi.</p>
             )}
-            <Button onClick={handleAddPayment} className="w-full" disabled={loading || !paymentFormIsValid}>
+            <Button onClick={handleAddPayment} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading || !paymentFormIsValid}>
               {opLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tambahkan Pembayaran'}
             </Button>
           </CardContent>
         </Card>
       </div>
-
-      {order.proof_public_url && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Bukti Pengiriman</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <a href={order.proof_public_url} target="_blank" rel="noreferrer" className="underline text-blue-600">
-              Lihat bukti pengiriman
-            </a>
-          </CardContent>
-        </Card>
-      )}
 
       <ProofOfDeliveryForm
         isOpen={isProofFormOpen}

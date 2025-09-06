@@ -10,7 +10,6 @@ import CustomersPage from './pages/CustomersPage';
 import SettingsPage from './pages/SettingsPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailsPage from './pages/OrderDetailsPage';
-import CalendarPage from './pages/CalendarPage';
 import StockAndGalonPage from './pages/StockAndGalonPage';
 import ReportsPage from './pages/ReportsPage';
 import UserManagementPage from './pages/UserManagementPage';
@@ -40,9 +39,9 @@ const App = () => {
 
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen">
-        {userProfile && <Sidebar />}
-        <main className="flex-1 p-4 md:p-8">
+      {userProfile && <Sidebar />}
+      <main className="min-h-screen bg-white md:ml-16 transition-all duration-300">
+        <div className="p-4 md:p-8">
           <Routes>
             <Route path="/login" element={!userProfile ? <AuthPage /> : <Navigate to="/dashboard" />} />
             <Route
@@ -50,24 +49,20 @@ const App = () => {
               element={session ? <DashboardPage /> : <Navigate to="/login" />}
             />
             <Route
-              path="/calendar"
-              element={session && isAdminOrSuperAdmin ? <CalendarPage /> : <Navigate to="/dashboard" />}
-            />
-            <Route
               path="/settings"
               element={session && isAdminOrSuperAdmin ? <SettingsPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/customers"
-              element={session && isAdminOrSuperAdmin ? <CustomersPage /> : <Navigate to="/dashboard" />}
+             element={session && (isAdminOrSuperAdmin || isCourier) ? <CustomersPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/orders"
-              element={session && isAdminOrSuperAdmin ? <OrdersPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <OrdersPage /> : <Navigate to="/dashboard" />}
             />
            <Route
               path="/orders/add"
-              element={session && isAdminOrSuperAdmin ? <AddOrderForm /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <AddOrderForm /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/orders/:id"
@@ -75,31 +70,27 @@ const App = () => {
             />
             <Route
               path="/stock"
-              element={session && isAdminOrSuperAdmin ? <StockAndGalonPage /> : <Navigate to="/dashboard" />}
+             element={session && (isAdminOrSuperAdmin || isCourier) ? <StockAndGalonPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/stock-reconciliation"
-              element={session && isAdminOrSuperAdmin ? <UpdateStockPage /> : <Navigate to="/dashboard" />}
+             element={session && (isAdminOrSuperAdmin || isCourier) ? <UpdateStockPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/reports"
-              element={session && isAdminOrSuperAdmin ? <ReportsPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ?<ReportsPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/central-orders"
-              element={session && isAdminOrSuperAdmin ? <CentralOrderPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <CentralOrderPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/central-order/:id"
-              element={session && isAdminOrSuperAdmin ? <CentralOrderFormPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <CentralOrderFormPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/central-order/new"
-              element={session && isAdminOrSuperAdmin ? <CentralOrderFormPage /> : <Navigate to="/dashboard" />}
-            />
-            <Route
-              path="/users"
-              element={session && isAdminOrSuperAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <CentralOrderFormPage /> : <Navigate to="/dashboard" />}
             />
             <Route
               path="/complete-delivery/:orderId"
@@ -118,9 +109,15 @@ const App = () => {
               element={session && isAdminOrSuperAdmin ? <FinancialManagementPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
+            {isSuperAdmin && (
+              <Route
+                path="/users"
+                element={<UserManagementPage />}
+              />
+            )}
           </Routes>
-        </main>
-      </div>
+        </div>
+      </main>
       <Toaster />
     </BrowserRouter>
   );

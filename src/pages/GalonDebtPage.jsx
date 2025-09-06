@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Package, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const GalonDebtPage = () => {
@@ -80,46 +80,52 @@ const GalonDebtPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      <div className="flex justify-center items-center min-h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <h1 className="text-2xl font-bold mb-6">Manajemen Utang Galon</h1>
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
+      <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+        <Package className="h-8 w-8" />
+        Manajemen Utang Galon
+      </h1>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Daftar Utang Galon Pelanggan</CardTitle>
-          <Button onClick={fetchGalonDebts}>Refresh Data</Button>
+      <Card className="border-0 shadow-sm bg-white">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
+          <Button onClick={fetchGalonDebts} disabled={loading} variant="outline" className="text-[#10182b] hover:bg-gray-100">
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh Data
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border-t overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Pelanggan</TableHead>
-                  <TableHead>Nomor Telepon</TableHead>
-                  <TableHead>Jumlah Galon Dipinjam</TableHead>
-                  <TableHead className="w-[120px]">Aksi</TableHead>
+                  <TableHead className="text-[#10182b]">Pelanggan</TableHead>
+                  <TableHead className="text-[#10182b]">Nomor Telepon</TableHead>
+                  <TableHead className="text-[#10182b]">Jumlah Galon Dipinjam</TableHead>
+                  <TableHead className="w-[120px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {debts.length > 0 ? (
                   debts.map((debt) => (
                     <TableRow key={debt.customer_id}>
-                      <TableCell>{debt.customer_name}</TableCell>
+                      <TableCell className="font-medium text-[#10182b]">{debt.customer_name}</TableCell>
                       <TableCell>{debt.customer_phone}</TableCell>
                       <TableCell>{debt.total_borrowed_qty}</TableCell>
                       <TableCell>
                         <Button 
-                          variant="secondary" 
                           size="sm" 
                           onClick={() => handleSettleDebt(debt.customer_id)}
                           disabled={loading}
+                          className="bg-green-500 text-white hover:bg-green-600"
                         >
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
                           Lunas
                         </Button>
                       </TableCell>

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useNavigate } from 'react-router-dom';  
+import { Loader2 } from 'lucide-react';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -42,7 +43,7 @@ const LoginForm = () => {
   return (
     <form onSubmit={handleLogin} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="email" className="block text-sm font-medium text-muted-foreground">
           Email
         </label>
         <Input
@@ -55,7 +56,7 @@ const LoginForm = () => {
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="password" className="block text-sm font-medium text-muted-foreground">
           Kata Sandi
         </label>
         <Input
@@ -67,8 +68,8 @@ const LoginForm = () => {
           required
         />
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? 'Memproses...' : 'Login'}
+      <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Login'}
       </Button>
       {message && (
         <p className={`text-sm text-center ${message.startsWith('Login Gagal') ? 'text-red-500' : 'text-green-500'}`}>

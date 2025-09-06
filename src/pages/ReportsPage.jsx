@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Loader2, TrendingUp, Package, History, BarChart } from "lucide-react";
 import { toast } from "react-hot-toast";
 import ProductStockTable from '@/components/reports/ProductStockTable';
 import DemandReportTable from '@/components/reports/DemandReportTable';
@@ -109,64 +109,116 @@ const ReportsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      <div className="flex justify-center items-center h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
       </div>
     );
   }
 
   return (
-  <div className="container mx-auto p-4 md:p-8 space-y-8">
-    <h1 className="text-2xl font-bold mb-6">Laporan & Analisis</h1>
+    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+          <BarChart className="h-8 w-8" />
+          Laporan & Analisis
+        </h1>
+      </div>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Stok vs Permintaan per Produk</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        {/* Tambahkan pengecekan ini sebelum merender grafik */}
-        {reportData.chartData && reportData.chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={500}>
-            <LineChart data={reportData.chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="name"
-                angle={-30}
-                textAnchor="end"
-                interval={0}
-                height={100}
-              />
-              <YAxis />
-              <Legend verticalAlign="top" align="right" height={36}/>
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="stock"
-                stroke="#0000ff"
-                name="Stok"
-              />
-              <Line
-                type="monotone"
-                dataKey="demand"
-                stroke="#ff0000"
-                name="Permintaan"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex justify-center items-center h-40">
-            <p className="text-muted-foreground">Tidak ada data untuk grafik.</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-    
-    <ProductStockTable products={reportData.products} />
-    <StockReconciliationHistoryTable reconciliations={reportData.reconciliations} products={reportData.products} />
-    <DemandReportTable demandData={reportData.demand} />
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <TrendingUp className="h-6 w-6" /> Stok vs Permintaan per Produk
+          </CardTitle>
+          <CardDescription className="text-gray-200">
+            Perbandingan visual stok tersedia dengan total permintaan dari pesanan aktif.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {reportData.chartData && reportData.chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={reportData.chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="name"
+                  angle={-30}
+                  textAnchor="end"
+                  interval={0}
+                  height={100}
+                />
+                <YAxis />
+                <Tooltip />
+                <Legend verticalAlign="top" align="right" height={36}/>
+                <Line
+                  type="monotone"
+                  dataKey="stock"
+                  stroke="#10182b"
+                  name="Stok"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="demand"
+                  stroke="#ff6b6b"
+                  name="Permintaan"
+                  strokeWidth={2}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex justify-center items-center h-40">
+              <p className="text-muted-foreground">Tidak ada data untuk grafik.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       
-  </div>
-);
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-8">
+          <Card className="border-0 shadow-lg bg-white">
+            <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Package className="h-6 w-6" /> Stok Produk Saat Ini
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <ProductStockTable products={reportData.products} />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-0 shadow-lg bg-white">
+            <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <TrendingUp className="h-6 w-6" /> Total Permintaan per Produk
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <DemandReportTable demandData={reportData.demand} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-0 shadow-lg bg-white">
+          <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <History className="h-6 w-6" /> Riwayat Update Stok
+            </CardTitle>
+            <CardDescription className="text-gray-200">
+              Catatan penyesuaian stok yang telah dilakukan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <StockReconciliationHistoryTable reconciliations={reportData.reconciliations} products={reportData.products} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 };
 
 export default ReportsPage;

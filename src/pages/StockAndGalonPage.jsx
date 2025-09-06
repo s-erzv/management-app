@@ -26,11 +26,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Package, PackageCheck, Banknote, PlusCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Loader2, Package, PackageCheck, Banknote, RefreshCw, CheckCircle2, Users, ReceiptText } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge'; // Pastikan Badge diimpor
+import { Badge } from '@/components/ui/badge';
 
 const StockAndGalonPage = () => {
   const { companyId } = useAuth();
@@ -41,7 +41,7 @@ const StockAndGalonPage = () => {
   const [manualMovements, setManualMovements] = useState([]);
   const [currentStock, setCurrentStock] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // State baru untuk refresh
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('stock');
   const [activeStockTab, setActiveStockTab] = useState('summary');
 
@@ -133,7 +133,7 @@ const StockAndGalonPage = () => {
   };
   
   const fetchGalonDebts = async () => {
-    setRefreshing(true); // Mulai refresh
+    setRefreshing(true);
     const { data, error } = await supabase.rpc('get_customer_galon_debt', { p_company_id: companyId });
     if (error) {
       console.error('Error fetching galon debts:', error);
@@ -141,7 +141,7 @@ const StockAndGalonPage = () => {
     } else {
       setDebts(data);
     }
-    setRefreshing(false); // Selesai refresh
+    setRefreshing(false);
   };
 
   const handleInputChange = (e) => {
@@ -245,71 +245,86 @@ const StockAndGalonPage = () => {
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <h1 className="text-2xl font-bold mb-6">Manajemen Stok & Utang Galon</h1>
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
+      <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+        <Package className="h-8 w-8" />
+        Manajemen Stok & Utang Galon
+      </h1>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="stock" className="gap-2">
+        <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
+          <TabsTrigger value="stock" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
             <PackageCheck className="h-4 w-4" /> Stok Produk
           </TabsTrigger>
-          <TabsTrigger value="debt" className="gap-2">
+          <TabsTrigger value="debt" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
             <Banknote className="h-4 w-4" /> Utang Galon
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="stock" className="pt-4 space-y-6">
-          <div className="flex items-center space-x-4 mb-4">
-            <Label htmlFor="product-select">Pilih Produk</Label>
-            <Select
-              id="product-select"
-              value={selectedProductId}
-              onValueChange={(val) => {
-                setSelectedProductId(val);
-                setActiveStockTab('summary');
-              }}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Pilih Produk" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map(product => (
-                  <SelectItem key={product.id} value={product.id}>
-                    {product.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center space-x-0 sm:space-x-4 space-y-2 sm:space-y-0">
+              <CardTitle className="text-lg font-semibold text-[#10182b]">
+                Pilih Produk
+              </CardTitle>
+              <Select
+                id="product-select"
+                value={selectedProductId}
+                onValueChange={(val) => {
+                  setSelectedProductId(val);
+                  setActiveStockTab('summary');
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Pilih Produk" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map(product => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardHeader>
+          </Card>
           
           <Tabs value={activeStockTab} onValueChange={setActiveStockTab}>
-            <TabsList>
-              <TabsTrigger value="summary">Ringkasan Stok</TabsTrigger>
-              <TabsTrigger value="adjustment">Penyesuaian Stok</TabsTrigger>
+            <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
+              <TabsTrigger value="summary" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Ringkasan Stok</TabsTrigger>
+              <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
             </TabsList>
             
             <TabsContent value="summary" className="pt-4 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
+                <Card className="border-0 shadow-sm bg-white">
                   <CardHeader>
-                    <CardTitle>Stok Tersedia</CardTitle>
+                    <CardTitle className="text-[#10182b]">Stok Tersedia</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-4xl font-bold">{currentStock}</p>
+                    <p className="text-4xl font-bold text-[#10182b]">{currentStock}</p>
                   </CardContent>
                 </Card>
               </div>
 
               {selectedProduct && selectedProduct.is_returnable && (
-                <Card>
+                <Card className="border-0 shadow-sm bg-white">
                   <CardHeader>
-                    <CardTitle>Ringkasan Galon Returnable</CardTitle>
+                    <CardTitle className="text-[#10182b]">Ringkasan Galon Returnable</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                       <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold">Dibeli (Galon Kosong)</h3>
+                        <h3 className="text-lg font-semibold text-[#10182b]">Dibeli (Galon Kosong)</h3>
                         <button
                           className="text-3xl font-bold text-purple-600 hover:underline"
                           onClick={() => fetchDetail('dibeli')}
@@ -318,7 +333,7 @@ const StockAndGalonPage = () => {
                         </button>
                       </div>
                       <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold">Dikembalikan</h3>
+                        <h3 className="text-lg font-semibold text-[#10182b]">Dikembalikan</h3>
                         <button
                           className="text-3xl font-bold text-green-600 hover:underline"
                           onClick={() => fetchDetail('dikembalikan')}
@@ -327,7 +342,7 @@ const StockAndGalonPage = () => {
                         </button>
                       </div>
                       <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold">Dipinjam</h3>
+                        <h3 className="text-lg font-semibold text-[#10182b]">Dipinjam</h3>
                         <button
                           className="text-3xl font-bold text-yellow-600 hover:underline"
                           onClick={() => fetchDetail('dipinjam')}
@@ -339,45 +354,51 @@ const StockAndGalonPage = () => {
                   </CardContent>
                 </Card>
               )}
-
-              <h2 className="text-xl font-bold mt-8 mb-4">Log Semua Pergerakan Stok</h2>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tanggal</TableHead>
-                      <TableHead>Produk</TableHead>
-                      <TableHead>Jenis</TableHead>
-                      <TableHead>Jumlah</TableHead>
-                      <TableHead>Catatan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {movements.map(m => (
-                      <TableRow key={m.id}>
-                        <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
-                        <TableCell>{m.products?.name}</TableCell>
-                        <TableCell>{m.type || m.item_type}</TableCell>
-                        <TableCell>{m.qty}</TableCell>
-                        <TableCell>{m.notes}</TableCell>
-                      </TableRow>
-                    ))}
-                    {movements.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                          Tidak ada data pergerakan stok.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              
+              <Card className="border-0 shadow-sm bg-white">
+                <CardHeader>
+                  <CardTitle className="text-[#10182b]">Log Semua Pergerakan Stok</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="rounded-md border-t overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                          <TableHead className="text-[#10182b]">Produk</TableHead>
+                          <TableHead className="text-[#10182b]">Jenis</TableHead>
+                          <TableHead className="text-[#10182b]">Jumlah</TableHead>
+                          <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {movements.map(m => (
+                          <TableRow key={m.id}>
+                            <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
+                            <TableCell>{m.products?.name}</TableCell>
+                            <TableCell>{m.type || m.item_type}</TableCell>
+                            <TableCell>{m.qty}</TableCell>
+                            <TableCell>{m.notes}</TableCell>
+                          </TableRow>
+                        ))}
+                        {movements.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              Tidak ada data pergerakan stok.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="adjustment" className="pt-4 space-y-6">
-              <Card>
+              <Card className="border-0 shadow-sm bg-white">
                 <CardHeader>
-                  <CardTitle>Penyesuaian Stok</CardTitle>
+                  <CardTitle className="text-[#10182b]">Penyesuaian Stok</CardTitle>
                   <CardDescription>
                     Tambahkan stok masuk atau keluar secara manual.
                   </CardDescription>
@@ -410,75 +431,81 @@ const StockAndGalonPage = () => {
                       value={newMovementForm.notes}
                       onChange={handleInputChange}
                     />
-                    <Button type="submit" className="w-full" disabled={loading}>
+                    <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Penyesuaian'}
                     </Button>
                   </form>
                 </CardContent>
               </Card>
               
-              <h2 className="text-xl font-bold mt-8 mb-4">Riwayat Penyesuaian Manual</h2>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tanggal</TableHead>
-                      <TableHead>Produk</TableHead>
-                      <TableHead>Jenis</TableHead>
-                      <TableHead>Jumlah</TableHead>
-                      <TableHead>Catatan</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {manualMovements.map(m => (
-                      <TableRow key={m.id}>
-                        <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
-                        <TableCell>{m.products?.name}</TableCell>
-                        <TableCell>{m.type}</TableCell>
-                        <TableCell>{m.qty}</TableCell>
-                        <TableCell>{m.notes}</TableCell>
-                      </TableRow>
-                    ))}
-                    {manualMovements.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                          Tidak ada data penyesuaian manual.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              <Card className="border-0 shadow-sm bg-white">
+                <CardHeader>
+                  <CardTitle className="text-[#10182b]">Riwayat Penyesuaian Manual</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="rounded-md border-t overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                          <TableHead className="text-[#10182b]">Produk</TableHead>
+                          <TableHead className="text-[#10182b]">Jenis</TableHead>
+                          <TableHead className="text-[#10182b]">Jumlah</TableHead>
+                          <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {manualMovements.map(m => (
+                          <TableRow key={m.id}>
+                            <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
+                            <TableCell>{m.products?.name}</TableCell>
+                            <TableCell>{m.type}</TableCell>
+                            <TableCell>{m.qty}</TableCell>
+                            <TableCell>{m.notes}</TableCell>
+                          </TableRow>
+                        ))}
+                        {manualMovements.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              Tidak ada data penyesuaian manual.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
           </Tabs>
         </TabsContent>
 
         <TabsContent value="debt" className="pt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Daftar Utang Galon Pelanggan</CardTitle>
-              <Button onClick={fetchGalonDebts} disabled={loading || refreshing}>
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
+              <Button onClick={fetchGalonDebts} disabled={loading || refreshing} className="text-[#10182b] hover:bg-gray-100" variant="outline">
                 {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 <span className="ml-2">Refresh Data</span>
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border">
+              <div className="rounded-md border-t overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Pelanggan</TableHead>
-                      <TableHead>Nomor Telepon</TableHead>
-                      <TableHead>Jumlah Galon Dipinjam</TableHead>
-                      <TableHead className="w-[120px]">Aksi</TableHead>
+                      <TableHead className="min-w-[150px] text-[#10182b]">Pelanggan</TableHead>
+                      <TableHead className="min-w-[150px] text-[#10182b]">Nomor Telepon</TableHead>
+                      <TableHead className="min-w-[150px] text-[#10182b]">Jumlah Galon Dipinjam</TableHead>
+                      <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {debts.length > 0 ? (
                       debts.map((debt) => (
                         <TableRow key={debt.customer_id}>
-                          <TableCell>{debt.customer_name}</TableCell>
+                          <TableCell className="font-medium text-[#10182b]">{debt.customer_name}</TableCell>
                           <TableCell>{debt.customer_phone}</TableCell>
                           <TableCell>{debt.total_borrowed_qty}</TableCell>
                           <TableCell>
@@ -511,9 +538,9 @@ const StockAndGalonPage = () => {
       </Tabs>
 
       <Dialog open={openDetail} onOpenChange={setOpenDetail}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{detailTitle}</DialogTitle>
+            <DialogTitle className="text-[#10182b]">{detailTitle}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {detailData.length > 0 ? (
@@ -521,9 +548,9 @@ const StockAndGalonPage = () => {
                 <div key={d.id} className="p-2 border rounded-md">
                   <p className="font-medium">{d.customers?.name}</p>
                   <p className="text-sm text-gray-500">{d.customers?.phone}</p>
-                  {d.returned_qty > 0 && <p>Returned: {d.returned_qty}</p>}
-                  {d.borrowed_qty > 0 && <p>Borrowed: {d.borrowed_qty}</p>}
-                  {d.purchased_empty_qty > 0 && <p>Purchased Empty: {d.purchased_empty_qty}</p>}
+                  {d.returned_qty > 0 && <p>Dikembalikan: {d.returned_qty}</p>}
+                  {d.borrowed_qty > 0 && <p>Dipinjam: {d.borrowed_qty}</p>}
+                  {d.purchased_empty_qty > 0 && <p>Dibeli (Kosong): {d.purchased_empty_qty}</p>}
                 </div>
               ))
             ) : (

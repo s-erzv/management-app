@@ -1,7 +1,6 @@
 // src/components/dashboards/UserDashboard.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -19,7 +18,6 @@ import {
   Package, 
   MapPin, 
   Calendar,
-  CreditCard,
   CheckCircle2,
   Clock,
   TruckIcon,
@@ -33,64 +31,88 @@ import {
   Box
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
-const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi UserDashboard dan terima props
-  const { session } = useAuth();
+// Tambahkan prop userId di sini
+const UserDashboard = ({ userId }) => {
   const navigate = useNavigate();
+  const { session, userRole } = useAuth();
+  const currentUserId = session?.user?.id;
+
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('active');
 
   useEffect(() => {
-    fetchData();
-  }, [session]);
+    if (userId) {
+      fetchData(userId);
+    }
+  }, [userId]);
 
-  const fetchData = async () => {
+  // Terima userId sebagai parameter
+  const fetchData = async (id) => {
     setLoading(true);
-    if (session) {
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (name, address, phone),
-          order_items (product_id, qty, price, item_type, products(name, is_returnable, company_id))
-        `)
-        .eq('courier_id', session.user.id)
-        .order('planned_date', { ascending: true });
+    try {
+      if (!id) return;
 
-      if (tasksError) {
-        console.error('Error fetching data:', tasksError);
-        toast.error('Gagal memuat data tugas.');
-      } else {
-        const tasksWithTotals = tasksData.map(order => {
-          const total = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-          return { ...order, total };
-        });
+      // Perbaikan: Gunakan tabel order_couriers untuk mengambil pesanan
+      const { data: orderCouriersData, error: ordersError } = await supabase
+        .from('order_couriers')
+        .select(`
+          order:orders (
+            *,
+            customers (name, address, phone),
+            order_items (product_id, qty, price, item_type, products(name, is_returnable, company_id))
+          )
+        `)
+        .eq('courier_id', id)
+        .order('created_at', { referencedTable: 'orders', ascending: true }); // Mengurutkan dari tabel orders
         
-        const orderIds = tasksWithTotals.map(t => t.id);
+      if (ordersError) {
+        console.error('Error fetching data:', ordersError);
+        toast.error('Gagal memuat data tugas.');
+        setTasks([]);
+        return;
+      }
+      
+      const tasksData = (orderCouriersData || []).map(oc => oc.order).filter(order => order); // Ambil objek order dari hasil join
+      
+      const tasksWithTotals = tasksData.map(order => {
+        const total = (order.order_items || []).reduce(
+          (sum, item) => sum + (item.qty * item.price),
+          0
+        );
+        return { ...order, total };
+      });
+      
+      const orderIds = tasksWithTotals.map(t => t.id);
+      let paymentsByOrderId = {};
+      if (orderIds.length > 0) {
         const { data: paymentsData, error: paymentsError } = await supabase
           .from('payments')
           .select('order_id, amount')
           .in('order_id', orderIds);
-          
+
         if (paymentsError) {
           console.error('Error fetching payments:', paymentsError);
         } else {
-          const paymentsByOrderId = paymentsData.reduce((acc, curr) => {
+          paymentsByOrderId = (paymentsData || []).reduce((acc, curr) => {
             acc[curr.order_id] = (acc[curr.order_id] || 0) + curr.amount;
             return acc;
           }, {});
-
-          const finalTasks = tasksWithTotals.map(task => ({
-            ...task,
-            total_paid: paymentsByOrderId[task.id] || 0,
-            remaining_due: task.total - (paymentsByOrderId[task.id] || 0)
-          }));
-          setTasks(finalTasks);
         }
       }
+
+      const finalTasks = tasksWithTotals.map(task => ({
+        ...task,
+        total_paid: paymentsByOrderId[task.id] || 0,
+        remaining_due: task.total - (paymentsByOrderId[task.id] || 0)
+      }));
+
+      setTasks(finalTasks);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
   
   const updateOrderStatus = async (order, newStatus) => {
@@ -100,48 +122,54 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
     }
     setLoading(true);
     
-    if (newStatus === 'sent') {
-      const soldItems = order.order_items.filter(item => item.item_type === 'beli');
-      if (soldItems.length > 0) {
-        for (const item of soldItems) {
-          const company_id = item.products.company_id;
-          const { error } = await supabase
-            .from('stock_movements')
-            .insert({
-              type: 'keluar',
-              qty: item.qty,
-              notes: `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
-              order_id: order.id,
-              user_id: session.user.id,
-              product_id: item.product_id,
-              company_id: company_id
-            });
-          if (error) {
-            console.error('Error recording stock movement:', error);
-            toast.error('Gagal mencatat pergerakan stok.');
-            setLoading(false);
-            return;
+    try {
+      if (newStatus === 'sent') {
+        const soldItems = (order.order_items || []).filter(item => item.item_type === 'beli');
+        if (soldItems.length > 0) {
+          for (const item of soldItems) {
+            if (!item.products) {
+              console.error('Data produk tidak ditemukan untuk item:', item);
+              toast.error('Gagal mencatat pergerakan stok: Data produk tidak lengkap.');
+              return;
+            }
+            const company_id = item.products.company_id;
+            const { error } = await supabase
+              .from('stock_movements')
+              .insert({
+                type: 'keluar',
+                qty: item.qty,
+                notes: `Galon keluar untuk pesanan #${String(order.id).slice(0, 8)} (dibeli)`,
+                order_id: order.id,
+                user_id: userId,
+                product_id: item.product_id,
+                company_id: company_id
+              });
+            if (error) {
+              console.error('Error recording stock movement:', error);
+              toast.error('Gagal mencatat pergerakan stok.');
+              return;
+            }
           }
         }
       }
-    }
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', order.id);
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', order.id);
 
-    if (error) {
-      console.error('Error updating status:', error);
-      toast.error('Gagal memperbarui status.');
-    } else {
-      toast.success('Status berhasil diperbarui!');
-      fetchData();
+      if (error) {
+        console.error('Error updating status:', error);
+        toast.error('Gagal memperbarui status.');
+      } else {
+        toast.success('Status berhasil diperbarui!');
+        fetchData(userId);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
   
-  // PERBAIKAN: Ubah rute navigasi
   const handleNavigateToCompletionPage = (orderId) => {
     navigate(`/complete-delivery/${orderId}`);
   };
@@ -156,34 +184,34 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
   });
   
   const totalItemsToDeliver = incompleteTasks.reduce((sum, task) => {
-    return sum + task.order_items.reduce((itemSum, item) => itemSum + item.qty, 0);
+    return sum + (task.order_items || []).reduce((itemSum, item) => itemSum + item.qty, 0);
   }, 0);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      'draft': { variant: 'secondary', label: 'Menunggu', icon: Clock },
-      'sent': { variant: 'default', label: 'Dikirim', icon: TruckIcon },
-      'completed': { variant: 'success', label: 'Selesai', icon: CheckCircle2 }
+      'draft': { variant: 'secondary', label: 'Menunggu', icon: Clock, className: 'bg-gray-200 text-[#10182b]' },
+      'sent': { variant: 'default', label: 'Dikirim', icon: TruckIcon, className: 'bg-[#10182b] text-white' },
+      'completed': { variant: 'success', label: 'Selesai', icon: CheckCircle2, className: 'bg-green-500 text-white' }
     };
     
     const config = statusConfig[status] || statusConfig['draft'];
     const Icon = config.icon;
     
     return (
-      <Badge variant={config.variant} className="gap-1">
+      <Badge variant={config.variant} className={`gap-1 ${config.className}`}>
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
     );
   };
 
-  const getPaymentStatusBadge = (remainingDue, totalPaid, total) => {
-    if (remainingDue <= 0) {
-      return <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" />Lunas</Badge>;
+  const getPaymentStatusBadge = (remainingDue, totalPaid) => {
+    if (remainingDue <= 0.0001) {
+      return <Badge variant="success" className="gap-1 bg-green-500 text-white"><CheckCircle2 className="h-3 w-3" />Lunas</Badge>;
     } else if (totalPaid > 0) {
-      return <Badge variant="warning" className="gap-1"><AlertCircle className="h-3 w-3" />Sebagian</Badge>;
+      return <Badge variant="warning" className="gap-1 bg-yellow-400 text-black"><AlertCircle className="h-3 w-3" />Sebagian</Badge>;
     } else {
-      return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" />Belum Bayar</Badge>;
+      return <Badge variant="destructive" className="gap-1 bg-red-500 text-white"><AlertCircle className="h-3 w-3" />Belum Bayar</Badge>;
     }
   };
 
@@ -192,7 +220,7 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0
-    }).format(amount);
+    }).format(amount ?? 0);
   };
 
   const formatDate = (dateString) => {
@@ -204,33 +232,33 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
   };
 
   const TaskCard = ({ task, isCompleted = false }) => (
-    <Card className={`transition-all hover:shadow-lg ${isCompleted ? 'opacity-75' : ''}`}>
+    <Card className={`border-0 shadow-sm transition-all hover:shadow-lg ${isCompleted ? 'opacity-75' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Package className="h-4 w-4 text-primary" />
-              Pesanan #{task.id.slice(0, 8)}
+            <CardTitle className="text-lg flex items-center gap-2 text-[#10182b]">
+              <Package className="h-4 w-4 text-[#10182b]" />
+              Pesanan #{String(task.id).slice(0, 8)}
             </CardTitle>
             <CardDescription className="flex items-center gap-2">
-              <Calendar className="h-3 w-3" />
-              {formatDate(task.planned_date)}
+              <Calendar className="h-3 w-3 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{formatDate(task.planned_date)}</span>
             </CardDescription>
           </div>
           <div className="flex flex-col gap-2 items-end">
             {getStatusBadge(task.status)}
-            {getPaymentStatusBadge(task.remaining_due, task.total_paid, task.total)}
+            {getPaymentStatusBadge(task.remaining_due, task.total_paid)}
           </div>
         </div>
       </CardHeader>
       
       <CardContent className="space-y-4">
         {/* Customer Info */}
-        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+        <div className="bg-gray-100 rounded-lg p-3 space-y-2">
           <div className="flex items-start gap-2">
             <User className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div className="flex-1">
-              <p className="font-medium text-sm">{task.customers?.name}</p>
+              <p className="font-medium text-sm text-[#10182b]">{task.customers?.name}</p>
             </div>
           </div>
           <div className="flex items-start gap-2">
@@ -247,17 +275,17 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
 
         {/* Order Items */}
         <div className="space-y-2">
-          <p className="text-sm font-medium flex items-center gap-2">
-            <PackageCheck className="h-4 w-4" />
+          <p className="text-sm font-medium flex items-center gap-2 text-[#10182b]">
+            <PackageCheck className="h-4 w-4 text-[#10182b]" />
             Detail Pesanan
           </p>
-          <div className="bg-background border rounded-lg p-3 space-y-1">
-            {task.order_items?.map((item, idx) => (
+          <div className="bg-white border rounded-lg p-3 space-y-1">
+            {(task.order_items || []).map((item, idx) => (
               <div key={idx} className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">
                   {item.products?.name || 'Produk'} ({item.item_type})
                 </span>
-                <span className="font-medium">
+                <span className="font-medium text-[#10182b]">
                   {item.qty} x {formatCurrency(item.price)}
                 </span>
               </div>
@@ -271,15 +299,15 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total Pesanan</span>
-            <span className="font-semibold">{formatCurrency(task.total)}</span>
+            <span className="font-semibold text-[#10182b]">{formatCurrency(task.total)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Sudah Dibayar</span>
             <span className="text-green-600 font-medium">{formatCurrency(task.total_paid)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium flex items-center gap-1">
-              <Banknote className="h-4 w-4" />
+            <span className="text-sm font-medium flex items-center gap-1 text-[#10182b]">
+              <Banknote className="h-4 w-4 text-[#10182b]" />
               Sisa Tagihan
             </span>
             <span className={`font-bold text-lg ${task.remaining_due > 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -289,12 +317,12 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
         </div>
 
         {/* Action Buttons */}
-        {!isCompleted && (
+        {(userId === currentUserId || userRole === 'admin') && !isCompleted && (
           <div className="pt-2">
             {task.status === 'draft' && (
               <Button 
                 onClick={() => updateOrderStatus(task, 'sent')} 
-                className="w-full"
+                className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
                 disabled={loading}
               >
                 <TruckIcon className="mr-2 h-4 w-4" />
@@ -304,9 +332,9 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
             )}
             {task.status === 'sent' && (
               <Button 
-                onClick={() => handleNavigateToCompletionPage(task.id)} // Menggunakan fungsi navigasi
+                onClick={() => handleNavigateToCompletionPage(task.id)}
                 disabled={loading}
-                className="w-full"
+                className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
                 variant="default"
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -330,50 +358,51 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
   );
 
   return (
-    <div className="container mx-auto p-4 md:p-6 max-w-6xl">
+    <div className="container mx-auto p-4 md:p-8 max-w-6xl space-y-8">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-          <TruckIcon className="h-8 w-8 text-primary" />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+          <TruckIcon className="h-8 w-8" />
           Dashboard Kurir
         </h1>
         <p className="text-muted-foreground">Kelola pengiriman dan pesanan Anda</p>
       </div>
 
       {/* Stats Cards */}
-      {!loading && incompleteTasks.length > 0 && (
+      {/* Bagian ini hanya ditampilkan jika user adalah kurir yang sedang login */}
+      {currentUserId && userId === currentUserId && !loading && incompleteTasks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
+          <Card className="border-0 shadow-sm bg-white">
             <CardHeader className="pb-2">
-              <CardDescription>Tugas Hari Ini</CardDescription>
+              <CardDescription className="text-muted-foreground">Tugas Hari Ini</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold flex items-center gap-2">
-                <Package className="h-6 w-6 text-primary" />
+              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Package className="h-6 w-6 text-[#10182b]" />
                 {todayTasks.length}
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-0 shadow-sm bg-white">
             <CardHeader className="pb-2">
-              <CardDescription>Total Aktif</CardDescription>
+              <CardDescription className="text-muted-foreground">Total Aktif</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold flex items-center gap-2">
-                <Clock className="h-6 w-6 text-orange-500" />
+              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Clock className="h-6 w-6 text-[#10182b]" />
                 {incompleteTasks.length}
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-0 shadow-sm bg-white">
             <CardHeader className="pb-2">
-              <CardDescription>Barang Perlu Dikirim</CardDescription>
+              <CardDescription className="text-muted-foreground">Barang Perlu Dikirim</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold flex items-center gap-2">
-                <Box className="h-6 w-6 text-gray-700" />
+              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Box className="h-6 w-6 text-[#10182b]" />
                 {totalItemsToDeliver}
               </div>
             </CardContent>
@@ -382,20 +411,20 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
       )}
 
       {loading ? (
-        <Card className="p-12">
+        <Card className="p-12 border-0 shadow-sm bg-white">
           <div className="flex flex-col justify-center items-center gap-3">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <Loader2 className="h-10 w-10 animate-spin text-[#10182b]" />
             <p className="text-muted-foreground">Memuat data pengiriman...</p>
           </div>
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-            <TabsTrigger value="active" className="gap-2">
+          <TabsList className="grid w-full grid-cols-2 lg:w-[400px] bg-gray-100 text-[#10182b]">
+            <TabsTrigger value="active" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
               <Clock className="h-4 w-4" />
               Tugas Aktif ({incompleteTasks.length})
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2">
+            <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
               <History className="h-4 w-4" />
               Riwayat ({completedTasks.length})
             </TabsTrigger>
@@ -409,10 +438,10 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
                 ))}
               </div>
             ) : (
-              <Card className="p-12">
+              <Card className="p-12 border-0 shadow-sm bg-white">
                 <div className="flex flex-col items-center justify-center text-center space-y-3">
-                  <Package className="h-12 w-12 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold">Tidak Ada Tugas Aktif</h3>
+                  <Package className="h-12 w-12 text-[#10182b]" />
+                  <h3 className="text-lg font-semibold text-[#10182b]">Tidak Ada Tugas Aktif</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
                     Semua pengiriman telah diselesaikan. Silakan cek kembali nanti untuk tugas baru.
                   </p>
@@ -429,10 +458,10 @@ const UserDashboard = ({ profile, data }) => { // Ganti nama komponen menjadi Us
                 ))}
               </div>
             ) : (
-              <Card className="p-12">
+              <Card className="p-12 border-0 shadow-sm bg-white">
                 <div className="flex flex-col items-center justify-center text-center space-y-3">
-                  <History className="h-12 w-12 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold">Belum Ada Riwayat</h3>
+                  <History className="h-12 w-12 text-[#10182b]" />
+                  <h3 className="text-lg font-semibold text-[#10182b]">Belum Ada Riwayat</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
                     Riwayat pengiriman yang telah diselesaikan akan muncul di sini.
                   </p>

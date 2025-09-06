@@ -84,9 +84,9 @@ const CentralOrderPage = () => {
 
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold">Daftar Pesanan dari Pusat</h1>
-        <Button onClick={() => navigate('/central-order/new')}>
+        <Button onClick={() => navigate('/central-order/new')} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90">
           <PlusCircle className="h-4 w-4 mr-2" /> Buat Pesanan Baru
         </Button>
       </div>
@@ -96,16 +96,16 @@ const CentralOrderPage = () => {
           <CardTitle>Riwayat Pesanan</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nomor Pesanan</TableHead>
-                  <TableHead>Tanggal Pesan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Total Transaksi</TableHead>
-                  <TableHead>Dibuat Oleh</TableHead>
-                  <TableHead>Aksi</TableHead>
+                  <TableHead className="min-w-[150px]">Nomor Pesanan</TableHead>
+                  <TableHead className="min-w-[150px]">Tanggal Pesan</TableHead>
+                  <TableHead className="min-w-[120px]">Status</TableHead>
+                  <TableHead className="min-w-[150px]">Total Transaksi</TableHead>
+                  <TableHead className="min-w-[150px]">Dibuat Oleh</TableHead>
+                  <TableHead className="min-w-[100px]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

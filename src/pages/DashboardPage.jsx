@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RocketIcon } from 'lucide-react';
+import { RocketIcon, Users, ListOrdered } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 
 import SuperAdminDashboard from '@/components/dashboards/SuperAdminDashboard';
@@ -39,36 +39,46 @@ const DashboardPage = () => {
 
   const fetchData = async (role, userId) => {
     try {
-      // Ambil data produk
-      const { data: productsData } = await supabase.from('products').select('*');
+      const todayString = new Date().toISOString().split('T')[0];
 
       if (role === 'super_admin' || role === 'admin') {
-        const today = new Date().toISOString().split('T')[0];
-        const { data: ordersToday } = await supabase
+        const { data: productsData } = await supabase.from('products').select('*');
+        
+        // Perbaikan: Ubah filter dari `created_at` ke `planned_date`
+        const { data: ordersToday, error: ordersError } = await supabase
           .from('orders')
           .select('id, payment_status')
-          .gte('created_at', `${today}T00:00:00Z`)
-          .lte('created_at', `${today}T23:59:59Z`);
+          .eq('planned_date', todayString);
 
-        setDashboardData({
-          products: productsData || [],
-          totalOrdersToday: ordersToday?.length || 0,
-          paidOrders: ordersToday?.filter(o => o.payment_status === 'paid').length || 0,
-          unpaidOrders: ordersToday?.filter(o => o.payment_status === 'unpaid').length || 0,
-        });
+        if (ordersError) {
+          console.error('Error fetching orders for dashboard:', ordersError);
+          setDashboardData({
+            products: productsData || [],
+            totalOrdersToday: 0,
+            paidOrders: 0,
+            unpaidOrders: 0,
+          });
+        } else {
+          const unpaidCount = ordersToday?.filter(o => o.payment_status !== 'paid').length || 0;
+
+          setDashboardData({
+            products: productsData || [],
+            totalOrdersToday: ordersToday?.length || 0,
+            paidOrders: ordersToday?.filter(o => o.payment_status === 'paid').length || 0,
+            unpaidOrders: unpaidCount,
+          });
+        }
       }
 
       if (role === 'user') {
-        const today = new Date().toISOString().split('T')[0];
         const { data: tasks } = await supabase
           .from('orders')
           .select('id')
           .eq('courier_id', userId)
-          .eq('planned_date', today)
+          .eq('planned_date', todayString)
           .neq('status', 'completed');
           
         setDashboardData({
-          products: productsData || [],
           tasksToday: tasks?.length || 0
         });
       }
@@ -116,7 +126,7 @@ const DashboardPage = () => {
     );
   }
 
-  const { role, full_name } = userProfile;
+  const { role } = userProfile;
 
   const renderDashboardComponent = () => {
     switch (role) {
@@ -125,7 +135,7 @@ const DashboardPage = () => {
       case 'admin':
         return <AdminDashboard profile={userProfile} data={dashboardData} />;
       case 'user':
-        return <UserDashboard profile={userProfile} data={dashboardData} />;
+        return <UserDashboard userId={userProfile.id} />;
       default:
         return (
           <Alert>

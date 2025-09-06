@@ -189,25 +189,27 @@ const ProductSettings = () => {
 
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className="border-0 shadow-lg bg-white">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#10182b] text-white rounded-t-lg">
         <CardTitle>Manajemen Produk</CardTitle>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => {
-              resetForm();
-              const initialPrices = customerStatuses.map(status => ({
-                customer_status: status.status_name,
-                name: status.status_name,
-                price: ''
-              }));
-              setProductPrices(initialPrices);
-              setIsModalOpen(true);
-            }}>
+            <Button
+              className="bg-white text-[#10182b] hover:bg-gray-200"
+              onClick={() => {
+                resetForm();
+                const initialPrices = customerStatuses.map(status => ({
+                  customer_status: status.status_name,
+                  name: status.status_name,
+                  price: ''
+                }));
+                setProductPrices(initialPrices);
+                setIsModalOpen(true);
+              }}>
               <PlusCircle className="h-4 w-4 mr-2" /> Tambah Produk
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{currentProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</DialogTitle>
               <DialogDescription>
@@ -215,7 +217,7 @@ const ProductSettings = () => {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Nama Produk</Label>
                 <Input
                   id="name"
@@ -228,7 +230,7 @@ const ProductSettings = () => {
                   required
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="stock">Stok Awal</Label>
                 <Input
                   id="stock"
@@ -255,11 +257,11 @@ const ProductSettings = () => {
               </div>
               
               <div className="space-y-2">
-                <Label>Harga per Status Pelanggan</Label>
+                <Label className="font-medium">Harga per Status Pelanggan</Label>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                 {productPrices.map(p => (
-                  <div key={p.customer_status} className="flex items-center gap-2">
-                    <Label className="w-1/3">{p.name}</Label>
+                  <div key={p.customer_status} className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                    <Label className="w-full sm:w-1/3">{p.name}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -267,13 +269,14 @@ const ProductSettings = () => {
                       value={p.price}
                       onChange={(e) => handlePriceChange(p.customer_status, e.target.value)}
                       required
+                      className="w-full"
                     />
                   </div>
                 ))}
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading || !canSubmit}>
+              <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading || !canSubmit}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (currentProduct ? 'Perbarui Produk' : 'Tambah Produk')}
               </Button>
             </form>
@@ -292,10 +295,10 @@ const ProductSettings = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nama Produk</TableHead>
-                  <TableHead>Stok</TableHead>
-                  <TableHead>Dapat Dikembalikan</TableHead>
-                  <TableHead>Aksi</TableHead>
+                  <TableHead className="min-w-[150px]">Nama Produk</TableHead>
+                  <TableHead className="min-w-[100px]">Stok</TableHead>
+                  <TableHead className="min-w-[150px]">Dapat Dikembalikan</TableHead>
+                  <TableHead className="min-w-[120px]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -305,7 +308,7 @@ const ProductSettings = () => {
                     <TableCell>{product.stock}</TableCell>
                     <TableCell>{product.is_returnable ? 'Ya' : 'Tidak'}</TableCell>
                     <TableCell>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="ghost"
                           size="icon"

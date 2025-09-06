@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash2, FileIcon } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
 
 const CentralOrderFormPage = () => {
   const { id } = useParams();
@@ -58,6 +59,13 @@ const CentralOrderFormPage = () => {
     attachments: [],
   });
   const [uploading, setUploading] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [newPayment, setNewPayment] = useState({
+    amount: '',
+    payment_method_id: '',
+    proof: null,
+  });
+  const [payments, setPayments] = useState([]);
 
   // Tab 3 State
   const [deliveryDetails, setDeliveryDetails] = useState({
@@ -67,6 +75,30 @@ const CentralOrderFormPage = () => {
   });
   const [receivedItems, setReceivedItems] = useState([]);
   
+  const totalOrderValue = useMemo(() => {
+    return orderItems.reduce((sum, item) => {
+      const qty = parseFloat(item.qty) || 0;
+      const price = parseFloat(item.price) || 0;
+      return sum + (qty * price);
+    }, 0);
+  }, [orderItems]);
+
+  const totalPaid = useMemo(() => {
+    return payments.reduce((sum, p) => sum + p.amount, 0);
+  }, [payments]);
+
+  const remainingDue = useMemo(() => {
+    return totalOrderValue - totalPaid;
+  }, [totalOrderValue, totalPaid]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+  
   useEffect(() => {
     if (!authLoading && companyId) {
       fetchData();
@@ -75,7 +107,10 @@ const CentralOrderFormPage = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    await fetchProductsAndPrices();
+    await Promise.all([
+      fetchProductsAndPrices(),
+      fetchPaymentMethods()
+    ]);
     if (id) {
       setIsNewOrder(false);
       await fetchCentralOrder(id);
@@ -118,6 +153,17 @@ const CentralOrderFormPage = () => {
     }
   };
   
+  const fetchPaymentMethods = async () => {
+    if (!companyId) return;
+    const { data, error } = await supabase
+      .from('payment_methods')
+      .select('id, method_name')
+      .eq('company_id', companyId);
+    if (!error) {
+      setPaymentMethods(data);
+    }
+  };
+
   const fetchCentralOrder = async (orderId) => {
     if (!companyId) return;
 
@@ -137,6 +183,15 @@ const CentralOrderFormPage = () => {
       setLoading(false);
       return;
     }
+
+    const { data: paymentsData } = await supabase
+      .from('financial_transactions')
+      .select('amount, transaction_date, proof_url, payment_method:payment_method_id(method_name)')
+      .eq('source_table', 'central_orders')
+      .eq('source_id', orderId)
+      .eq('type', 'expense');
+
+    setPayments(paymentsData || []);
     
     setOrderDate(orderData.order_date);
     setOrderItems(orderData.items.map(item => ({
@@ -281,7 +336,7 @@ const CentralOrderFormPage = () => {
 
     setUploading(true);
     const fileExt = file.name.split('.').pop();
-    const filePath = `central-orders/${userProfile.company_id}/${id}/${type}_${Date.now()}.${fileExt}`;
+    const filePath = `${userProfile.company_id}/${id}/${type}_${Date.now()}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from('proofs')
@@ -325,7 +380,7 @@ const CentralOrderFormPage = () => {
       const { error } = await supabase
         .from('central_orders')
         .update({
-          total_transaction: transactionDetails.total_transaction || null,
+          total_transaction: totalOrderValue || null,
           driver_tip: transactionDetails.driver_tip || null,
           notes: transactionDetails.notes || '',
         })
@@ -337,6 +392,61 @@ const CentralOrderFormPage = () => {
       toast.error('Gagal memperbarui detail transaksi.');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const handlePaymentFormChange = (field, value) => {
+      setNewPayment(prev => ({ ...prev, [field]: value }));
+  };
+  
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    if (!newPayment.amount || !newPayment.payment_method_id) {
+        toast.error('Jumlah dan metode pembayaran harus diisi.');
+        return;
+    }
+    
+    setUploading(true);
+    let proofUrl = null;
+    try {
+      if (newPayment.proof) {
+        const fileExt = newPayment.proof.name.split('.').pop();
+        const filePath = `${companyId}/transactions/${id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('proofs')
+          .upload(filePath, newPayment.proof);
+
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('proofs')
+          .getPublicUrl(filePath);
+        proofUrl = publicUrlData.publicUrl;
+      }
+      
+      const { error: insertError } = await supabase
+        .from('financial_transactions')
+        .insert({
+          company_id: companyId,
+          type: 'expense',
+          amount: parseFloat(newPayment.amount),
+          payment_method_id: newPayment.payment_method_id,
+          proof_url: proofUrl,
+          source_table: 'central_orders',
+          source_id: id,
+        });
+        
+      if (insertError) throw insertError;
+
+      toast.success('Pembayaran berhasil dicatat!');
+      setNewPayment({ amount: '', payment_method_id: '', proof: null });
+      fetchCentralOrder(id);
+
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error('Gagal mencatat pembayaran: ' + error.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -371,12 +481,11 @@ const CentralOrderFormPage = () => {
             notes: `Barang diterima dari pusat (Nomor Surat: ${deliveryDetails.central_note_number})`,
             company_id: userProfile.company_id,
             user_id: userProfile.id,
-            central_order_id: id, // Corrected from order_id to central_order_id
+            central_order_id: id,
           })));
         if (movementError) throw movementError;
       }
       
-      // Mengambil data qty asli dari state orderItems untuk dimasukkan ke upsert
       const updatedItemsPayload = receivedItems.map(receivedItem => {
       const originalItem = orderItems.find(
         (item) => item.product_id === receivedItem.product_id
@@ -385,8 +494,8 @@ const CentralOrderFormPage = () => {
         central_order_id: id,
         product_id: receivedItem.product_id,
         received_qty: receivedItem.received_qty,
-        qty: originalItem ? originalItem.qty : 0, // Menyertakan qty
-        price: originalItem ? originalItem.price : 0, // Menyertakan price
+        qty: originalItem ? originalItem.qty : 0,
+        price: originalItem ? originalItem.price : 0,
       };
     });
 
@@ -417,17 +526,38 @@ const CentralOrderFormPage = () => {
 
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold">{isNewOrder ? 'Pesanan Baru dari Pusat' : `Detail Pesanan #${id?.slice(0, 8)}`}</h1>
         <Button onClick={() => navigate('/central-orders')} variant="outline">Kembali</Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="order-items">1. Detail & Item</TabsTrigger>
-          {!isNewOrder && <TabsTrigger value="attachments-expenses">2. Pembayaran & Lampiran</TabsTrigger>}
-          {isCrossCheckEnabled && <TabsTrigger value="cross-check">3. Pengecekan Barang Datang</TabsTrigger>}
-        </TabsList>
+        <div className="bg-white rounded-lg border p-1 mb-6">
+          <TabsList className="grid w-full justify-start grid-cols-1 gap-1 bg-transparent p-0 h-auto md:grid-cols-3">
+            <TabsTrigger 
+              className="w-full text-xs sm:text-sm px-2 py-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white rounded-md" 
+              value="order-items"
+            >
+              1. Detail & Item
+            </TabsTrigger>
+            {!isNewOrder && (
+              <TabsTrigger 
+                className="w-full text-xs sm:text-sm px-2 py-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white rounded-md" 
+                value="attachments-expenses"
+              >
+                2. Pembayaran & Lampiran
+              </TabsTrigger>
+            )}
+            {isCrossCheckEnabled && (
+              <TabsTrigger 
+                className="w-full text-xs sm:text-sm px-2 py-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white rounded-md" 
+                value="cross-check"
+              >
+                3. Pengecekan Barang Datang
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         {/* Tab 1: Detail & Item */}
         <TabsContent value="order-items">
@@ -446,8 +576,8 @@ const CentralOrderFormPage = () => {
               <h3 className="font-semibold mt-6">Daftar Item</h3>
               <div className="space-y-4">
                 {orderItems.map((item, index) => (
-                  <div key={index} className="flex gap-2 items-end">
-                    <div className="flex-1">
+                  <div key={index} className="flex flex-col sm:flex-row gap-2 items-end">
+                    <div className="w-full sm:w-auto flex-1">
                       <Label htmlFor={`product-${index}`}>Produk</Label>
                       <Select
                         value={item.product_id}
@@ -465,7 +595,7 @@ const CentralOrderFormPage = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-24">
+                    <div className="w-full sm:w-24">
                       <Label htmlFor={`qty-${index}`}>Jumlah</Label>
                       <Input
                         id={`qty-${index}`}
@@ -475,7 +605,7 @@ const CentralOrderFormPage = () => {
                         min="1"
                       />
                     </div>
-                    <div className="w-32">
+                    <div className="w-full sm:w-32">
                       <Label htmlFor={`price-${index}`}>Harga Per Item</Label>
                       <Input
                         id={`price-${index}`}
@@ -491,6 +621,7 @@ const CentralOrderFormPage = () => {
                       variant="destructive"
                       size="icon"
                       onClick={() => handleRemoveItem(index)}
+                      className="mt-2 sm:mt-0"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -500,7 +631,7 @@ const CentralOrderFormPage = () => {
               <Button type="button" variant="outline" className="w-full" onClick={handleAddItem}>
                 <Plus className="h-4 w-4 mr-2" /> Tambah Item
               </Button>
-              <Button onClick={handleSaveOrder} className="w-full mt-4" disabled={loading || authLoading}>
+              <Button onClick={handleSaveOrder} className="w-full mt-4 bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading || authLoading}>
                 {loading || authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Pesanan'}
               </Button>
             </CardContent>
@@ -546,16 +677,131 @@ const CentralOrderFormPage = () => {
                     </div>
                   </div>
                 </div>
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                  <Label className="text-xl font-semibold flex items-center gap-2 mb-2">
+                      <DollarSign className="h-5 w-5" /> Pembayaran
+                  </Label>
+                  <div className="space-y-2">
+                    <Label>Total Transaksi</Label>
+                    <p className="text-2xl font-bold">{formatCurrency(totalOrderValue)}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Total Dibayar</Label>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sisa Pembayaran</Label>
+                    <p className="text-xl font-bold text-red-600">{formatCurrency(remainingDue)}</p>
+                  </div>
+
+                  <Separator />
+
+                  <form onSubmit={handleRecordPayment} className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_amount">Nominal Pembayaran</Label>
+                        <Input
+                          id="payment_amount"
+                          type="number"
+                          placeholder="Jumlah Pembayaran"
+                          value={newPayment.amount}
+                          onChange={(e) => setNewPayment(prev => ({...prev, amount: e.target.value}))}
+                          min="0"
+                          required
+                          disabled={remainingDue <= 0}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_method">Metode Pembayaran</Label>
+                        <Select
+                          value={newPayment.payment_method_id}
+                          onValueChange={(value) => setNewPayment(prev => ({...prev, payment_method_id: value}))}
+                          required
+                          disabled={remainingDue <= 0}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih metode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {paymentMethods.map(method => (
+                              <SelectItem key={method.id} value={method.id}>
+                                {method.method_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="proof-payment">Bukti Transfer/Pembayaran</Label>
+                      <Input
+                        id="proof-payment"
+                        type="file"
+                        onChange={(e) => setNewPayment(prev => ({...prev, proof: e.target.files[0]}))}
+                        accept="image/*"
+                        disabled={remainingDue <= 0}
+                      />
+                    </div>
+                    <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={uploading || remainingDue <= 0}>
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Pembayaran'}
+                    </Button>
+                    {remainingDue <= 0 && <p className="text-sm text-green-600 text-center">Pembayaran sudah lunas.</p>}
+                  </form>
+                </div>
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                    <Label className="text-xl font-semibold flex items-center gap-2 mb-2">
+                        <Wallet className="h-5 w-5" /> Riwayat Pembayaran
+                    </Label>
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50">
+                            <TableHead>Tanggal</TableHead>
+                            <TableHead>Jumlah</TableHead>
+                            <TableHead>Metode</TableHead>
+                            <TableHead>Bukti</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {payments.map(p => (
+                            <TableRow key={p.id}>
+                              <TableCell>{new Date(p.transaction_date).toLocaleDateString()}</TableCell>
+                              <TableCell>{formatCurrency(p.amount)}</TableCell>
+                              <TableCell>{p.payment_method.method_name}</TableCell>
+                              <TableCell>
+                                {p.proof_url ? (
+                                  <a href={p.proof_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                    Lihat Bukti
+                                  </a>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {payments.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                Belum ada riwayat pembayaran.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                </div>
+
+                <Separator />
 
                 <div className="space-y-4">
-                  <Label>Detail Transaksi</Label>
-                  <Input
-                    label="Total Transaksi"
-                    type="number"
-                    placeholder="Total Transaksi"
-                    value={transactionDetails.total_transaction}
-                    onChange={(e) => setTransactionDetails({...transactionDetails, total_transaction: e.target.value})}
-                  />
+                  <Label>Detail Transaksi Lainnya</Label>
                   <Input
                     label="Tip Supir"
                     type="number"
@@ -571,8 +817,8 @@ const CentralOrderFormPage = () => {
                     onChange={(e) => setTransactionDetails({...transactionDetails, notes: e.target.value})}
                   />
                 </div>
-                <Button onClick={handleUpdateTransaction} className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Detail Transaksi'}
+                <Button onClick={handleUpdateTransaction} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Detail Transaksi Lainnya'}
                 </Button>
               </CardContent>
             </Card>
@@ -624,14 +870,14 @@ const CentralOrderFormPage = () => {
                 </div>
 
                 <h3 className="font-semibold mt-6">Detail Barang Diterima</h3>
-                <div className="rounded-md border">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Produk</TableHead>
-                        <TableHead>Jumlah Dipesan</TableHead>
-                        <TableHead>Jumlah Diterima</TableHead>
-                        <TableHead>Selisih</TableHead>
+                        <TableHead className="min-w-[120px]">Produk</TableHead>
+                        <TableHead className="min-w-[120px]">Jumlah Dipesan</TableHead>
+                        <TableHead className="min-w-[150px]">Jumlah Diterima</TableHead>
+                        <TableHead className="min-w-[100px]">Selisih</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -655,7 +901,7 @@ const CentralOrderFormPage = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <Button onClick={handleFinalizeReceipt} className="w-full" disabled={loading}>
+                <Button onClick={handleFinalizeReceipt} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pengecekan & Perbarui Stok'}
                 </Button>
               </CardContent>

@@ -31,12 +31,12 @@ const CompleteDeliveryPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [transferMethod, setTransferMethod] = useState(''); // State untuk metode transfer spesifik
+  const [transferMethod, setTransferMethod] = useState('');
   const [receivedByName, setReceivedByName] = useState('');
   const [cashAmount, setCashAmount] = useState('0');
   const [transferAmount, setTransferAmount] = useState('0');
   const [file, setFile] = useState(null);
-  const [transferProofFile, setTransferProofFile] = useState(null); // State baru untuk bukti transfer
+  const [transferProofFile, setTransferProofFile] = useState(null);
   const [formState, setFormState] = useState({
     returnedQty: '0',
     borrowedQty: '0',
@@ -92,18 +92,21 @@ const CompleteDeliveryPage = () => {
       total_paid,
       remaining_due: total - total_paid,
     };
+     const companyIdFromOrder = orderData.company_id ?? null;
+     const companyIdFromProduct =
+       orderData.order_items?.find(i => i?.products?.company_id)?.products?.company_id ?? null;
+     const effectiveCompanyId = companyIdFromOrder ?? companyIdFromProduct;
     
-    const { data: methodsData, error: methodsError } = await supabase
-        .from('payment_methods')
-        .select('*');
+     let pmQuery = supabase.from('payment_methods').select('*').eq('is_active', true);
+     if (effectiveCompanyId) pmQuery = pmQuery.eq('company_id', effectiveCompanyId);
+     const { data: methodsData, error: methodsError } = await pmQuery;
 
     if (methodsError) {
         console.error('Error fetching payment methods:', methodsError);
     } else {
         setPaymentMethods(methodsData || []);
-        if (methodsData?.length > 0) {
-            setPaymentMethod(methodsData.find(m => m.type === 'cash')?.method_name || 'pending');
-        }
+        // Set default payment method to 'pending'
+        setPaymentMethod('pending');
     }
 
     setOrder(orderWithDetails);
@@ -115,14 +118,12 @@ const CompleteDeliveryPage = () => {
   };
   
   useEffect(() => {
+    if (!order) return;
     const remaining = order?.remaining_due || 0;
-    const cash = parseFloat(cashAmount) || 0;
-    const transfer = parseFloat(transferAmount) || 0;
-
-    const selectedMethod = paymentMethods.find(m => m.method_name === paymentMethod);
+    const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
 
     if (paymentMethod === 'hybrid') {
-      const remainingForTransfer = remaining - cash;
+      const remainingForTransfer = remaining - (parseFloat(cashAmount) || 0);
       setTransferAmount(remainingForTransfer > 0 ? remainingForTransfer.toString() : '0');
     } else if (selectedMethod?.type === 'cash') {
       setCashAmount(remaining.toString());
@@ -134,7 +135,6 @@ const CompleteDeliveryPage = () => {
       setCashAmount('0');
       setTransferAmount('0');
     }
-
   }, [paymentMethod, order, cashAmount, paymentMethods]);
 
   const handleFormChange = (e) => {
@@ -148,7 +148,7 @@ const CompleteDeliveryPage = () => {
 
   const handlePaymentMethodChange = (value) => {
     setPaymentMethod(value);
-    setTransferMethod(''); // Reset transfer method saat metode utama berubah
+    setTransferMethod('');
   }
   
 const handleCompleteDelivery = async (e) => {
@@ -157,12 +157,20 @@ const handleCompleteDelivery = async (e) => {
     toast.error('ID pesanan atau bukti pengiriman tidak ada.');
     return;
   }
-
-  // Validasi tambahan untuk bukti transfer
-  const selectedPaymentMethod = paymentMethods.find(m => m.method_name === paymentMethod);
-  const isTransfer = selectedPaymentMethod?.type === 'transfer' || paymentMethod === 'hybrid';
+   const selectedPaymentMethod = paymentMethods.find(m => m.id === paymentMethod);
+   const isTransfer = paymentMethod === 'hybrid' || selectedPaymentMethod?.type === 'transfer';
   if (isTransfer && !transferProofFile) {
     toast.error('Mohon unggah bukti transfer.');
+    return;
+  }
+  
+  if (paymentMethod === 'hybrid' && !transferMethod) {
+    toast.error('Mohon pilih metode transfer.');
+    return;
+  }
+  
+  if (paymentMethod !== 'pending' && !receivedByName) {
+    toast.error('Nama penerima harus diisi.');
     return;
   }
 
@@ -202,19 +210,24 @@ const handleCompleteDelivery = async (e) => {
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
 
+      const pmToSend = paymentMethod === "hybrid"
+          ? transferMethod
+          : paymentMethod;
+       const pmName = pmToSend === 'pending' || pmToSend === 'hybrid'
+          ? pmToSend
+          : (paymentMethods.find(m => m.id === pmToSend)?.method_name ?? pmToSend);
+       
     const payload = {
       orderId,
       paymentAmount: finalPaymentAmount,
-      paymentMethod:
-        paymentMethod === "hybrid"
-          ? `Hybrid (${transferMethod})`
-          : paymentMethod,
+      paymentMethod: pmToSend,
+     paymentMethodName: pmName, 
       returnedQty: parseInt(formState.returnedQty, 10) || 0,
       borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
       purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
       transportCost: parseFloat(formState.transportCost) || 0,
       proofFileUrl: deliveryFilePath,
-      transferProofUrl, // Kirim URL bukti transfer ke Edge Function
+      transferProofUrl,
       receivedByName,
     };
 
@@ -249,18 +262,25 @@ const handleCompleteDelivery = async (e) => {
 
   if (loading || !order) {
     return (
-      <div className="flex flex-col justify-center items-center h-screen">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex flex-col justify-center items-center min-h-screen bg-white">
+        <Loader2 className="h-10 w-10 animate-spin text-[#10182b]" />
         <p className="mt-4 text-muted-foreground">Memuat detail pesanan...</p>
       </div>
     );
   }
+  
+  // Combine all payment methods for the dropdown
+  const combinedPaymentMethods = [
+    { id: 'pending', method_name: 'Pending', type: 'pending' },
+    { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' },
+    ...paymentMethods
+  ];
 
   const hasReturnableItems = order.order_items.some(item => item.products?.is_returnable);
   const deliveredQty = order.order_items.reduce((sum, item) => sum + (item.qty || 0), 0);
   const showPaymentFields = order.payment_status !== 'paid' && order.remaining_due > 0;
-  
-  const selectedMethod = paymentMethods.find(m => m.method_name === paymentMethod);
+
+  const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
   const transferMethods = paymentMethods.filter(m => m.type === 'transfer');
 
   const showCashFields = showPaymentFields && (selectedMethod?.type === 'cash' || paymentMethod === 'hybrid');
@@ -269,52 +289,55 @@ const handleCompleteDelivery = async (e) => {
   const formatCurrency = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-2xl">
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+    <div className="container mx-auto p-4 md:p-8 max-w-2xl space-y-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-[#10182b] hover:bg-gray-100">
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Selesaikan Pesanan #{order.id.slice(0, 8)}</h1>
-          <p className="text-muted-foreground">Lengkapi informasi dan bukti pengiriman.</p>
+          <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+            <TruckIcon className="h-8 w-8" />
+            Selesaikan Pesanan
+          </h1>
+          <p className="text-muted-foreground">Lengkapi informasi dan bukti pengiriman untuk pesanan #{order.id.slice(0, 8)}.</p>
         </div>
       </div>
 
       <form onSubmit={handleCompleteDelivery} className="grid gap-6">
-        <Card>
+        <Card className="border-0 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle>Informasi Pesanan</CardTitle>
+            <CardTitle className="text-[#10182b]">Informasi Pesanan</CardTitle>
             <CardDescription>Rincian pelanggan dan barang yang dikirim.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <Label className="text-muted-foreground">Pelanggan</Label>
-              <p className="font-medium">{order.customers?.name}</p>
+              <p className="font-medium text-[#10182b]">{order.customers?.name}</p>
             </div>
             <div>
               <Label className="text-muted-foreground">Alamat</Label>
-              <p>{order.customers?.address}</p>
+              <p className="text-[#10182b]">{order.customers?.address}</p>
             </div>
             <div>
               <Label className="text-muted-foreground">Sisa Tagihan</Label>
-              <p className="font-bold text-red-600">{formatCurrency(order.remaining_due)}</p>
+              <p className="font-bold text-red-600 text-lg">{formatCurrency(order.remaining_due)}</p>
             </div>
             <Separator />
             <div className="space-y-2">
-              <Label className="font-medium">Detail Barang</Label>
+              <Label className="font-medium text-[#10182b]">Detail Barang</Label>
               {order.order_items.map((item, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm">
-                  <span>{item.products?.name} ({item.item_type})</span>
-                  <span>{item.qty} x {formatCurrency(item.price)}</span>
+                  <span className="text-muted-foreground">{item.products?.name} ({item.item_type})</span>
+                  <span className="text-[#10182b]">{item.qty} x {formatCurrency(item.price)}</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-0 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle>Rincian Penyelesaian</CardTitle>
+            <CardTitle className="text-[#10182b]">Rincian Penyelesaian</CardTitle>
             <CardDescription>Masukkan detail pembayaran, pengembalian, dan biaya.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -327,18 +350,11 @@ const handleCompleteDelivery = async (e) => {
                       <SelectValue placeholder="Pilih metode pembayaran" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="hybrid">Tunai & Transfer</SelectItem>
-                      <Separator />
-                      {paymentMethods.length > 0 ? (
-                        paymentMethods.map(method => (
-                          <SelectItem key={method.id} value={method.method_name}>
-                            {method.method_name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem disabled>Tidak ada metode pembayaran</SelectItem>
-                      )}
+                       {combinedPaymentMethods.map(method => (
+                         <SelectItem key={method.id} value={method.id}>
+                           {method.method_name}
+                         </SelectItem>
+                       ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -353,7 +369,7 @@ const handleCompleteDelivery = async (e) => {
                       <SelectContent>
                         {transferMethods.length > 0 ? (
                           transferMethods.map(method => (
-                            <SelectItem key={method.id} value={method.method_name}>
+                            <SelectItem key={method.id} value={method.id}>
                               {method.method_name} ({method.account_name})
                             </SelectItem>
                           ))
@@ -486,7 +502,7 @@ const handleCompleteDelivery = async (e) => {
         </Card>
         
         <div className="mt-4">
-          <Button type="submit" className="w-full" disabled={submitting || (showTransferFields && !transferProofFile)}>
+          <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={submitting || (showTransferFields && !transferProofFile)}>
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (

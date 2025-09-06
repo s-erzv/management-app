@@ -16,6 +16,9 @@ serve(async (req) => {
   try {
     const { orderId, orderDetails, orderItems } = await req.json()
     
+    // Pisahkan courier_ids dari orderDetails
+    const { courier_ids, ...restOfOrderDetails } = orderDetails;
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -42,11 +45,31 @@ serve(async (req) => {
     // 2. Update tabel orders
     const { error: orderUpdateError } = await supabase
       .from('orders')
-      .update(orderDetails)
+      .update(restOfOrderDetails) // Gunakan objek yang sudah dipisahkan
       .eq('id', orderId);
     if (orderUpdateError) throw orderUpdateError;
+    
+    // 3. Update tabel order_couriers
+    // Hapus semua entri lama
+    const { error: deleteCouriersError } = await supabase
+        .from('order_couriers')
+        .delete()
+        .eq('order_id', orderId);
+    if (deleteCouriersError) throw deleteCouriersError;
 
-    // 3. Update tabel order_items
+    // Masukkan entri baru jika ada
+    if (courier_ids && courier_ids.length > 0) {
+        const couriersToInsert = courier_ids.map(courier_id => ({
+            order_id: orderId,
+            courier_id: courier_id
+        }));
+        const { error: insertCouriersError } = await supabase
+            .from('order_couriers')
+            .insert(couriersToInsert);
+        if (insertCouriersError) throw insertCouriersError;
+    }
+
+    // 4. Update tabel order_items
     // Hapus item-item lama
     const { error: deleteItemsError } = await supabase
       .from('order_items')
@@ -65,7 +88,7 @@ serve(async (req) => {
       .insert(itemsToInsert);
     if (insertItemsError) throw insertItemsError;
     
-    // 4. Update tabel invoices
+    // 5. Update tabel invoices
     const newSubtotal = orderItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
     const { error: invoiceUpdateError } = await supabase
         .from('invoices')
@@ -73,12 +96,12 @@ serve(async (req) => {
             subtotal: newSubtotal,
             grand_total: newSubtotal,
             balance_due: newSubtotal,
-            notes: orderDetails.notes,
+            notes: restOfOrderDetails.notes,
         })
         .eq('order_id', orderId);
     if (invoiceUpdateError) throw invoiceUpdateError;
 
-    // 5. Hitung dan catat pergerakan stok
+    // 6. Hitung dan catat pergerakan stok
     for (const oldItem of oldOrder.order_items) {
       const newItem = orderItems.find(i => i.product_id === oldItem.product_id);
       if (!newItem) {

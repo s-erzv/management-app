@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Download, Plus, X } from 'lucide-react';
+import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Dialog,
@@ -33,17 +33,19 @@ import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom'; 
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-const getStatusVariant = (status) => {
+// Fungsi baru untuk mendapatkan badge status yang dinamis
+const getStatusBadge = (status) => {
   switch (status) {
-    case 'completed':
-      return 'default';
-    case 'sent':
-      return 'secondary';
     case 'draft':
-      return 'outline';
+      return <Badge className="bg-gray-200 text-[#10182b]"><Clock className="h-3 w-3 mr-1" /> Menunggu</Badge>;
+    case 'sent':
+      return <Badge className="bg-[#10182b] text-white"><TruckIcon className="h-3 w-3 mr-1" /> Dalam Pengiriman</Badge>;
+    case 'completed':
+      return <Badge className="bg-green-500 text-white"><CheckCircle2 className="h-3 w-3 mr-1" /> Selesai</Badge>;
     default:
-      return 'outline';
+      return <Badge className="bg-gray-200 text-[#10182b]">{status}</Badge>;
   }
 };
 
@@ -79,7 +81,7 @@ const OrdersPage = () => {
       .select(`
         *,
         customers (id, name, customer_status, phone, address),
-        order_couriers (courier:profiles(full_name)),
+        order_couriers (courier:profiles(id, full_name)),
         order_items (*, products(id, name, is_returnable)),
         payments (*)
       `)
@@ -92,11 +94,11 @@ const OrdersPage = () => {
     if (filters.courier && filters.courier !== 'all') {
       query = query.eq('order_couriers.courier_id', filters.courier);
     }
-    if (filters.invoiceStart) {
-      query = query.gte('invoice_number', filters.invoiceStart);
+    if (filters.invoiceNumberStart) {
+      query = query.gte('invoice_number', filters.invoiceNumberStart);
     }
-    if (filters.invoiceEnd) {
-      query = query.lte('invoice_number', filters.invoiceEnd);
+    if (filters.invoiceNumberEnd) {
+      query = query.lte('invoice_number', filters.invoiceNumberEnd);
     }
 
     const { data: ordersData, error: ordersError } = await query;
@@ -138,7 +140,7 @@ const OrdersPage = () => {
         customer_id: order.customer_id,
         planned_date: order.planned_date,
         notes: order.notes,
-        courier_ids: order.order_couriers.map(c => c.courier_id),
+        courier_ids: order.order_couriers.map(c => c.courier.id),
       });
       setEditItems(order.order_items.map(item => ({
         product_id: item.product_id,
@@ -313,6 +315,14 @@ const OrdersPage = () => {
     return items?.reduce((total, item) => total + (item.qty * item.price), 0) || 0;
   };
   
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+  
   const handleExportToExcel = () => {
     const header = [
       "ID Pesanan", "Nomor Invoice", "Nama Pelanggan", "Alamat Pelanggan", "Telepon Pelanggan",
@@ -375,16 +385,26 @@ const OrdersPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manajemen Pesanan</h1>
-        {userRole === 'admin' && (
-          <Button onClick={() => navigate('/orders/add')}>+ Tambah Pesanan</Button>
-        )}
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+          <ListOrdered className="h-8 w-8" />
+          Manajemen Pesanan
+        </h1>
+        <div className="flex flex-wrap gap-2">
+          {['admin', 'user'].includes(userRole) && (
+            <Button onClick={() => navigate('/orders/add')} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#20283b]">
+              <Plus className="h-4 w-4 mr-2" /> Tambah Pesanan
+            </Button>
+          )}
+          <Button onClick={handleExportToExcel} className="flex items-center gap-2 w-full sm:w-auto text-[#10182b] hover:bg-gray-100" variant="outline">
+              <Download className="h-4 w-4" /> Export ke Excel
+          </Button>
+        </div>
       </div>
       
       <Dialog open={isEditModalOpen} onOpenChange={handleEditModalClose}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Pesanan #{currentOrder?.invoice_number}</DialogTitle>
             <DialogDescription>
@@ -393,62 +413,67 @@ const OrdersPage = () => {
           </DialogHeader>
           <form onSubmit={handleEditFormSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>Detail Pesanan</Label>
-              <div className="space-y-2">
-                <Select
-                  value={editForm.customer_id}
-                  onValueChange={(val) => setEditForm({ ...editForm, customer_id: val })}
-                  disabled={true}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih Pelanggan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="date"
-                  name="planned_date"
-                  value={editForm.planned_date}
-                  onChange={handleEditFormChange}
-                  required
-                />
-                <div className="space-y-2">
-                  <Label>Tugaskan Kurir (Opsional)</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {couriers.map((courier) => (
-                      <div key={courier.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`edit-courier-${courier.id}`}
-                          checked={editForm.courier_ids?.includes(courier.id)}
-                          onCheckedChange={(checked) => handleEditCourierCheckboxChange(courier.id, checked)}
-                        />
-                        <Label htmlFor={`edit-courier-${courier.id}`}>
-                          {courier.full_name}
-                        </Label>
-                      </div>
-                    ))}
+              <Label htmlFor="customer_id">Pelanggan</Label>
+              <Select
+                name="customer_id"
+                value={editForm.customer_id}
+                onValueChange={(val) => setEditForm({ ...editForm, customer_id: val })}
+                disabled={true}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pilih Pelanggan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="planned_date">Tanggal Pengiriman</Label>
+              <Input
+                type="date"
+                name="planned_date"
+                value={editForm.planned_date}
+                onChange={handleEditFormChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tugaskan Kurir (Opsional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {couriers.map((courier) => (
+                  <div key={courier.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`edit-courier-${courier.id}`}
+                      checked={editForm.courier_ids?.includes(courier.id)}
+                      onCheckedChange={(checked) => handleEditCourierCheckboxChange(courier.id, checked)}
+                    />
+                    <Label htmlFor={`edit-courier-${courier.id}`}>
+                      {courier.full_name}
+                    </Label>
                   </div>
-                </div>
-                <Input
-                  name="notes"
-                  placeholder="Catatan Pesanan (opsional)"
-                  value={editForm.notes}
-                  onChange={handleEditFormChange}
-                />
+                ))}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Catatan Pesanan</Label>
+              <Input
+                name="notes"
+                placeholder="Catatan Pesanan (opsional)"
+                value={editForm.notes}
+                onChange={handleEditFormChange}
+              />
             </div>
             
             <Separator />
 
             <div className="space-y-2">
               <Label>Item Pesanan</Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                 <Select
                   value={newEditItem.product_id}
                   onValueChange={handleProductSelectChange}
@@ -464,163 +489,176 @@ const OrdersPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  type="number"
-                  placeholder="Jumlah"
-                  name="qty"
-                  value={newEditItem.qty}
-                  onChange={handleNewEditItemChange}
-                  min="0"
-                  disabled={!newEditItem.product_id}
-                />
-                <Button type="button" onClick={handleEditItemAdd} disabled={!newEditItem.product_id || newEditItem.qty <= 0} size="icon">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Jumlah"
+                    name="qty"
+                    value={newEditItem.qty}
+                    onChange={handleNewEditItemChange}
+                    min="0"
+                    disabled={!newEditItem.product_id}
+                  />
+                  <Button type="button" onClick={handleEditItemAdd} disabled={!newEditItem.product_id || newEditItem.qty <= 0} size="icon" className="bg-[#10182b] text-white hover:bg-[#20283b]">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              <p className="text-sm text-muted-foreground mt-1">
-                Harga per item: Rp{newEditItem.price.toLocaleString('id-ID')}
+              <p className="text-sm text-muted-foreground">
+                Harga per item: {formatCurrency(newEditItem.price)}
               </p>
 
               <div className="flex flex-wrap gap-2 mt-2">
                 {editItems.map((item, index) => (
                   <Badge key={index} variant="secondary">
-                    {item.product_name} x{item.qty} (Rp{item.price.toLocaleString('id-ID')})
+                    {item.product_name} x{item.qty} ({formatCurrency(item.price)})
                     <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => handleEditItemRemove(index)} />
                   </Badge>
                 ))}
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isEditLoading}>
+            <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={isEditLoading}>
               {isEditLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Perbarui Pesanan'}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
       
-      <div className="mb-6 flex space-x-4">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="sent">Dikirim</SelectItem>
-            <SelectItem value="completed">Selesai</SelectItem>
-          </SelectContent>
-        </Select>
+      <Card className="border-0 shadow-sm bg-white">
+        <CardHeader className="p-6">
+          <CardTitle className="text-lg font-semibold text-[#10182b]">
+            <Filter className="h-4 w-4 inline mr-2" /> Filter Pesanan
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-0 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="sent">Dikirim</SelectItem>
+              <SelectItem value="completed">Selesai</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <Select value={courierFilter} onValueChange={setCourierFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter Kurir" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua Kurir</SelectItem>
-            {couriers.map(courier => (
-              <SelectItem key={courier.id} value={courier.id}>{courier.full_name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select value={courierFilter} onValueChange={setCourierFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Kurir" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Kurir</SelectItem>
+              {couriers.map(courier => (
+                <SelectItem key={courier.id} value={courier.id}>{courier.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <Input
-          placeholder="Invoice dari..."
-          type="number"
-          value={invoiceNumberStart}
-          onChange={(e) => setInvoiceNumberStart(e.target.value)}
-          className="w-[180px]"
-        />
-        <Input
-          placeholder="Invoice sampai..."
-          type="number"
-          value={invoiceNumberEnd}
-          onChange={(e) => setInvoiceNumberEnd(e.target.value)}
-          className="w-[180px]"
-        />
-        <Button onClick={applyFilters}>Filter</Button>
-        <Button onClick={() => {
-            setStatusFilter('all');
-            setCourierFilter('all');
-            setInvoiceNumberStart('');
-            setInvoiceNumberEnd('');
-            fetchOrdersAndCustomers();
-        }} variant="outline">Reset</Button>
-        <Button onClick={handleExportToExcel} className="flex items-center gap-2">
-            <Download className="h-4 w-4" /> Export ke Excel
-        </Button>
-      </div>
+          <Input
+            placeholder="Invoice dari..."
+            type="number"
+            value={invoiceNumberStart}
+            onChange={(e) => setInvoiceNumberStart(e.target.value)}
+            className="w-full"
+          />
+          <Input
+            placeholder="Invoice sampai..."
+            type="number"
+            value={invoiceNumberEnd}
+            onChange={(e) => setInvoiceNumberEnd(e.target.value)}
+            className="w-full"
+          />
+          <Button onClick={applyFilters} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]">Filter</Button>
+          <Button onClick={() => {
+              setStatusFilter('all');
+              setCourierFilter('all');
+              setInvoiceNumberStart('');
+              setInvoiceNumberEnd('');
+              fetchOrdersAndCustomers();
+          }} variant="outline" className="w-full text-[#10182b] hover:bg-gray-100">Reset</Button>
+        </CardContent>
+      </Card>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nomor Invoice</TableHead>
-              <TableHead>Pelanggan</TableHead>
-              <TableHead>Tanggal Pengiriman</TableHead>
-              <TableHead>Produk</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Total Harga</TableHead>
-              <TableHead>Kurir</TableHead>
-              <TableHead className="w-[150px]">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                </TableCell>
-              </TableRow>
-            ) : (
-            orders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell className="font-medium">{order.invoice_number}</TableCell>
-                <TableCell>{order.customers?.name ?? 'N/A'}</TableCell>
-                <TableCell>{order.planned_date}</TableCell>
-                <TableCell className="w-[200px]">
-                  <div className="flex flex-wrap gap-1">
-                    {order.order_items.map(item => (
-                      <Badge key={item.id} variant="secondary">
-                        {item.products.name} ({item.qty})
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getStatusVariant(order.status)}>
-                    {order.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  Rp{calculateTotal(order.order_items)}
-                </TableCell>
-                <TableCell>
-                    {order.order_couriers && order.order_couriers.length > 0 ? (
-                        <div className="flex flex-col space-y-1">
-                            {order.order_couriers.map(c => (
-                                <span key={c.courier.full_name}>{c.courier.full_name}</span>
-                            ))}
-                        </div>
-                    ) : 'Belum Ditugaskan'}
-                </TableCell>
-                <TableCell className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)}>Detail</Button>
-                  <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)}>Edit</Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)}>Hapus</Button>
-                </TableCell>
-              </TableRow>
-            )))}
-            {orders.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  Tidak ada data pesanan.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Card className="border-0 shadow-sm bg-white">
+        <CardHeader className="p-6">
+          <CardTitle className="text-lg font-semibold text-[#10182b]">
+            Daftar Pesanan
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="rounded-md border-t overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px] text-[#10182b]">No. Invoice</TableHead>
+                  <TableHead className="w-[150px] text-[#10182b]">Pelanggan</TableHead>
+                  <TableHead className="w-[150px] text-[#10182b]">Tgl. Pengiriman</TableHead>
+                  <TableHead className="text-[#10182b]">Produk</TableHead>
+                  <TableHead className="w-[100px] text-[#10182b]">Status</TableHead>
+                  <TableHead className="w-[120px] text-[#10182b]">Total Harga</TableHead>
+                  <TableHead className="w-[150px] text-[#10182b]">Kurir</TableHead>
+                  <TableHead className="w-[180px] text-[#10182b]">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#10182b]" />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                orders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">{order.invoice_number}</TableCell>
+                    <TableCell>{order.customers?.name ?? 'N/A'}</TableCell>
+                    <TableCell>{order.planned_date}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {order.order_items.map(item => (
+                          <Badge key={item.id} variant="secondary" className="text-[#10182b] ">
+                            {item.products.name} ({item.qty})
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(order.status)}
+                    </TableCell>
+                    <TableCell>
+                      {formatCurrency(calculateTotal(order.order_items))}
+                    </TableCell>
+                    <TableCell>
+                        {order.order_couriers && order.order_couriers.length > 0 ? (
+                            <div className="flex flex-col space-y-1">
+                                {order.order_couriers.map((c, index) => (
+                                    <span key={index}>{c.courier?.full_name ?? 'Kurir tidak ditemukan'}</span>
+                                ))}
+                            </div>
+                        ) : 'Belum Ditugaskan'}
+                    </TableCell>
+                    <TableCell className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Detail</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)} className="bg-red-500 hover:bg-red-600 text-white">Hapus</Button>
+                    </TableCell>
+                  </TableRow>
+                )))}
+                {orders.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      Tidak ada data pesanan.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

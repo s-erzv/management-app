@@ -138,19 +138,21 @@ const CustomerStatusSettings = () => {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className="border-0 shadow-lg bg-white">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#10182b] text-white rounded-t-lg p-6">
         <CardTitle>Manajemen Status Pelanggan</CardTitle>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => {
-              resetForm();
-              setIsModalOpen(true);
-            }}>
+            <Button
+              className="bg-white text-[#10182b] hover:bg-gray-200"
+              onClick={() => {
+                resetForm();
+                setIsModalOpen(true);
+              }}>
               <PlusCircle className="h-4 w-4 mr-2" /> Tambah Status
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{currentStatus ? 'Edit Status' : 'Tambah Status Baru'}</DialogTitle>
               <DialogDescription>
@@ -158,7 +160,7 @@ const CustomerStatusSettings = () => {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="status-name">Nama Status</Label>
                 <Input
                   id="status-name"
@@ -168,7 +170,7 @@ const CustomerStatusSettings = () => {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (currentStatus ? 'Perbarui Status' : 'Tambah Status')}
               </Button>
             </form>
@@ -187,8 +189,8 @@ const CustomerStatusSettings = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nama Status</TableHead>
-                  <TableHead>Aksi</TableHead>
+                  <TableHead className="min-w-[200px]">Nama Status</TableHead>
+                  <TableHead className="min-w-[100px]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -17,7 +17,7 @@ import { Loader2, Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CustomerForm from './CustomerForm';
 import { Separator } from '@/components/ui/separator';
 
@@ -47,7 +47,7 @@ const AddOrderForm = () => {
     customer_id: '',
     planned_date: getTodayDate(),
     notes: '',
-    courier_ids: [], // Mengubah dari single courier_id ke array
+    courier_ids: [],
   });
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -103,7 +103,6 @@ const AddOrderForm = () => {
     setOrderForm({ ...orderForm, customer_id: val });
   };
   
-  // Mengubah handleCourierChange menjadi handleCourierCheckboxChange
   const handleCourierCheckboxChange = (courierId, checked) => {
     setOrderForm(prevForm => {
       const newCourierIds = checked
@@ -198,7 +197,7 @@ const AddOrderForm = () => {
         ...orderForm,
         created_by: session.user.id,
         company_id: companyId,
-        courier_ids: orderForm.courier_ids.length > 0 ? orderForm.courier_ids : null, // Mengirim array courier_ids
+        courier_ids: orderForm.courier_ids.length > 0 ? orderForm.courier_ids : null,
       },
       orderItems,
     };
@@ -244,17 +243,20 @@ const AddOrderForm = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto p-4 md:p-8 max-w-2xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold">Tambah Pesanan Baru</h1>
         <Button onClick={() => navigate('/orders')} variant="outline">Kembali</Button>
       </div>
-      <Card>
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+          <CardTitle>Formulir Pesanan</CardTitle>
+        </CardHeader>
         <CardContent className="pt-6">
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Detail Pesanan</Label>
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="customer_id">Pelanggan</Label>
                 <Select
                   name="customer_id"
                   value={selectedCustomerId}
@@ -282,6 +284,9 @@ const AddOrderForm = () => {
                     </div>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="planned_date">Tanggal Pengiriman</Label>
                 <Input
                   type="date"
                   name="planned_date"
@@ -289,44 +294,48 @@ const AddOrderForm = () => {
                   onChange={handleOrderFormChange}
                   required
                 />
-                 {/* Mengganti Select dengan Checkbox untuk kurir */}
-                 <div className="space-y-2">
-                  <Label>Tugaskan Kurir (Opsional)</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {couriers.map((courier) => (
-                      <div key={courier.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`courier-${courier.id}`}
-                          checked={orderForm.courier_ids.includes(courier.id)}
-                          onCheckedChange={(checked) => handleCourierCheckboxChange(courier.id, checked)}
-                        />
-                        <Label htmlFor={`courier-${courier.id}`}>
-                          {courier.full_name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                 </div>
-                <Input
-                  type="text"
-                  name="notes"
-                  placeholder="Catatan (opsional)"
-                  value={orderForm.notes}
-                  onChange={handleOrderFormChange}
-                />
               </div>
             </div>
 
-            <Separator />
             <div className="space-y-2">
-              <label>Item Pesanan</label>
-              <div className="flex gap-2">
+              <Label>Tugaskan Kurir (Opsional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {couriers.map((courier) => (
+                  <div key={courier.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`courier-${courier.id}`}
+                      checked={orderForm.courier_ids.includes(courier.id)}
+                      onCheckedChange={(checked) => handleCourierCheckboxChange(courier.id, checked)}
+                    />
+                    <Label htmlFor={`courier-${courier.id}`}>
+                      {courier.full_name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="notes">Catatan Pesanan (opsional)</Label>
+              <Input
+                type="text"
+                name="notes"
+                placeholder="Catatan (opsional)"
+                value={orderForm.notes}
+                onChange={handleOrderFormChange}
+              />
+            </div>
+
+            <Separator />
+            <div className="space-y-4">
+              <Label>Item Pesanan</Label>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Select
                   value={newItem.product_id}
                   onValueChange={handleProductSelectChange}
                   disabled={!selectedCustomerId}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-1/2">
                     <SelectValue placeholder="Pilih Produk" />
                   </SelectTrigger>
                   <SelectContent>
@@ -337,18 +346,20 @@ const AddOrderForm = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  type="number"
-                  placeholder="Jumlah"
-                  name="qty"
-                  value={newItem.qty}
-                  onChange={handleNewItemChange}
-                  min="0"
-                  disabled={!newItem.product_id}
-                />
-                <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2 w-full sm:w-1/2">
+                  <Input
+                    type="number"
+                    placeholder="Jumlah"
+                    name="qty"
+                    value={newItem.qty}
+                    onChange={handleNewItemChange}
+                    min="0"
+                    disabled={!newItem.product_id}
+                  />
+                  <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               <p className="text-sm text-muted-foreground mt-1">
@@ -365,7 +376,7 @@ const AddOrderForm = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading || orderItems.length === 0}>
+            <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading || orderItems.length === 0}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buat Pesanan'}
             </Button>
           </form>

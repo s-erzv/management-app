@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Select,
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 const CustomersPage = () => {
   const { session, companyId } = useAuth();
@@ -170,24 +171,29 @@ const CustomersPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      <div className="flex justify-center items-center min-h-screen bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#10182b]" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manajemen Pelanggan</h1>
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
+          <Users className="h-8 w-8" />
+          Manajemen Pelanggan
+        </h1>
         <Button onClick={() => {
           resetForm();
           setIsModalOpen(true);
-        }}>+ Tambah Pelanggan</Button>
+        }} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#20283b]">
+          <Plus className="h-4 w-4 mr-2" /> Tambah Pelanggan
+        </Button>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{currentCustomer ? 'Edit Pelanggan' : 'Tambah Pelanggan Baru'}</DialogTitle>
             <DialogDescription>
@@ -195,29 +201,41 @@ const CustomersPage = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleFormSubmit} className="space-y-4">
-            <Input
-              name="name"
-              placeholder="Nama Pelanggan"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-            />
-            <Input
-              name="phone"
-              placeholder="Nomor Telepon"
-              value={formData.phone}
-              onChange={handleInputChange}
-              required
-            />
-            <Input
-              name="address"
-              placeholder="Alamat Lengkap"
-              value={formData.address}
-              onChange={handleInputChange}
-              required
-            />
-            <div>
-              <Label>Status Pelanggan</Label>
+            <div className="space-y-2">
+              <Label htmlFor="name">Nama Pelanggan</Label>
+              <Input
+                id="name"
+                name="name"
+                placeholder="Nama Pelanggan"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Nomor Telepon</Label>
+              <Input
+                id="phone"
+                name="phone"
+                placeholder="Nomor Telepon"
+                value={formData.phone}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="address">Alamat Lengkap</Label>
+              <Input
+                id="address"
+                name="address"
+                placeholder="Alamat Lengkap"
+                value={formData.address}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="customer_status">Status Pelanggan</Label>
               <Select
                 name="customer_status"
                 value={formData.customer_status}
@@ -236,47 +254,56 @@ const CustomersPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : currentCustomer ? 'Perbarui Pelanggan' : 'Tambah Pelanggan'}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nama</TableHead>
-              <TableHead>Telepon</TableHead>
-              <TableHead>Alamat</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {customers.map((customer) => (
-              <TableRow key={customer.id}>
-                <TableCell>{customer.name}</TableCell>
-                <TableCell>{customer.phone}</TableCell>
-                <TableCell>{customer.address}</TableCell>
-                <TableCell>{customer.customer_statuses?.status_name ?? 'N/A'}</TableCell>
-                <TableCell className="flex gap-2">
-                  <Button variant="outline" onClick={() => handleEditClick(customer)}>Edit</Button>
-                  <Button variant="destructive" onClick={() => handleDeleteClick(customer.id)}>Hapus</Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {customers.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
-                  Tidak ada data pelanggan.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      
+      <Card className="border-0 shadow-sm bg-white">
+        <CardHeader className="p-6">
+          <CardTitle className="text-lg font-semibold text-[#10182b]">
+            Daftar Pelanggan
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="rounded-md border-t overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Nama</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Telepon</TableHead>
+                  <TableHead className="min-w-[200px] text-[#10182b]">Alamat</TableHead>
+                  <TableHead className="min-w-[120px] text-[#10182b]">Status</TableHead>
+                  <TableHead className="min-w-[180px] text-[#10182b]">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customers.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell className="font-medium text-[#10182b]">{customer.name}</TableCell>
+                    <TableCell>{customer.phone}</TableCell>
+                    <TableCell>{customer.address}</TableCell>
+                    <TableCell>{customer.customer_statuses?.status_name ?? 'N/A'}</TableCell>
+                    <TableCell className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditClick(customer)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(customer.id)} className="bg-red-500 hover:bg-red-600">Hapus</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {customers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      Tidak ada data pelanggan.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

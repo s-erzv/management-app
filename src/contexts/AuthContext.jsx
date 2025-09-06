@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.jsx
+
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -23,7 +25,13 @@ export const AuthProvider = ({ children }) => {
 
       profileLoadPromise = supabase
         .from('profiles')
-        .select('id, role, company_id, full_name')
+        .select(`
+          id, 
+          role, 
+          company_id, 
+          full_name,
+          companies(name) // Fetch company name
+        `)
         .eq('id', userId)
         .single();
 
@@ -135,6 +143,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     userRole: userProfile?.role,
     companyId: userProfile?.company_id,
+    companyName: userProfile?.companies?.name, // Extract company name
     isAuthenticated: !!session,
     userId: session?.user?.id,
   }), [session, userProfile, loading]);

@@ -13,13 +13,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 
 const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
   const { companyId } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rekening, setRekening] = useState(''); // Tambahkan state untuk rekening
+  const [rekening, setRekening] = useState(''); 
   const [loading, setLoading] = useState(false);
 
   const handleAddUser = async (e) => {
@@ -46,7 +47,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
           role: 'user', 
           companyId,
           full_name: fullName,
-          rekening: rekening, // Tambahkan rekening ke body
+          rekening: rekening,
         }),
       });
       
@@ -61,7 +62,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
       setEmail('');
       setPassword('');
       setFullName('');
-      setRekening(''); // Reset state rekening
+      setRekening(''); 
       onOpenChange(false);
 
     } catch (error) {
@@ -83,7 +84,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
         </DialogHeader>
         <form onSubmit={handleAddUser} className="space-y-4">
           <div>
-            <label className="text-sm font-medium">Nama Lengkap</label>
+            <Label className="text-sm font-medium">Nama Lengkap</Label>
             <Input
               type="text"
               placeholder="Nama Lengkap"
@@ -93,7 +94,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Email</label>
+            <Label className="text-sm font-medium">Email</Label>
             <Input
               type="email"
               placeholder="nama@email.com"
@@ -103,7 +104,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Kata Sandi</label>
+            <Label className="text-sm font-medium">Kata Sandi</Label>
             <Input
               type="password"
               placeholder="••••••••"
@@ -113,7 +114,7 @@ const AddUserForm = ({ open, onOpenChange, onUserAdded }) => {
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Nomor Rekening</label>
+            <Label className="text-sm font-medium">Nomor Rekening</Label>
             <Input
               type="text"
               placeholder="Nomor Rekening"
