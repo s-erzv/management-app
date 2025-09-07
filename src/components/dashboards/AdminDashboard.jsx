@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,7 +38,7 @@ const AdminDashboard = ({ profile, data }) => {
   }, [companyId]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 container mx-auto p-4 md:p-8 max-w-7xl"> {/* ⬅️ tweak: bungkus container biar padding/width konsisten */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight">
@@ -51,64 +50,31 @@ const AdminDashboard = ({ profile, data }) => {
         </div>
       </div>
       
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList
-          className="
-            w-full
-            flex flex-row flex-wrap sm:flex-nowrap
-            items-stretch justify-start
-            gap-2 md:gap-3
-            bg-white border border-gray-200 rounded-xl p-1
-            mb-3
-          "
-        >
-          <TabsTrigger
-            value="overview"
-            className="
-              w-full sm:w-auto
-              min-w-0
-              flex items-center gap-2
-              px-3 py-2 rounded-lg text-sm font-semibold text-gray-700
-              data-[state=active]:bg-[#10182b] data-[state=active]:text-white
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-            "
-          >
-            <DashboardIcon className="h-4 w-4" />
-            <span className="truncate">Ringkasan Admin</span>
-          </TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full"> {/* ⬅️ tweak: pastikan w-full */}
+         <TabsList className="grid w-full justify-start grid-cols-1 gap-1 md:gap-2 bg-transparent p-0 h-auto md:grid-cols-3"> {/* ⬅️ tweak: md:gap-2 */}
+            <TabsTrigger
+              value="overview"
+              className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
+            >
+              <span className="truncate">Ringkasan Admin</span>
+            </TabsTrigger>
 
-          <TabsTrigger
-            value="courier-dashboard"
-            className="
-              w-full sm:w-auto
-              min-w-0
-              flex items-center gap-2
-              px-3 py-2 rounded-lg text-sm font-semibold text-gray-700
-              data-[state=active]:bg-[#10182b] data-[state=active]:text-white
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-            "
-          >
-            <Truck className="h-4 w-4" />
-            <span className="truncate">Dashboard Kurir</span>
-          </TabsTrigger>
+            <TabsTrigger
+              value="courier-dashboard"
+              className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
+            >
+              <span className="truncate">Dashboard Kurir</span>
+            </TabsTrigger>
 
-          <TabsTrigger
-            value="user-management"
-            className="
-              w-full sm:w-auto
-              min-w-0
-              flex items-center gap-2
-              px-3 py-2 rounded-lg text-sm font-semibold text-gray-700
-              data-[state=active]:bg-[#10182b] data-[state=active]:text-white
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-            "
-          >
-            <Users className="h-4 w-4" />
-            <span className="truncate">Manajemen Pengguna</span>
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger
+              value="user-management"
+              className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
+            >
+              <span className="truncate">Manajemen Pengguna</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="overview" className="pt-4 space-y-6">
+        <TabsContent value="overview" className="mt-4 pt-4 space-y-6"> {/* ⬅️ tweak: tambah mt-4 supaya ada jarak dari TabsList */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="hover:shadow-lg transition-shadow duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -148,9 +114,9 @@ const AdminDashboard = ({ profile, data }) => {
                 <CardTitle className="text-sm font-medium">Stok Produk</CardTitle>
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="flex items-center space-x-2">
+              <CardContent className="flex items-center flex-wrap gap-2"> {/* ⬅️ tweak: flex-wrap + gap biar nggak nimpah */}
                 <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger className="w-[120px] h-8">
+                  <SelectTrigger className="w-[120px] sm:w-[160px] h-8"> {/* ⬅️ tweak: tambah sm:w-[160px] (w lama tetap ada) */}
                     <SelectValue placeholder="Pilih Produk" />
                   </SelectTrigger>
                   <SelectContent>
@@ -159,7 +125,7 @@ const AdminDashboard = ({ profile, data }) => {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="text-xl font-bold">
+                <div className="text-xl font-bold min-w-[3ch]"> {/* ⬅️ tweak: min-w biar angka nggak lompat-lompat */}
                   {selectedProduct?.stock ?? 0}
                 </div>
               </CardContent>
@@ -175,12 +141,12 @@ const AdminDashboard = ({ profile, data }) => {
           </Alert>
         </TabsContent>
         
-        <TabsContent value="courier-dashboard" className="pt-4">
-          <div className="mb-4 flex items-center space-x-2">
+        <TabsContent value="courier-dashboard" className="mt-4 pt-4"> {/* ⬅️ tweak: tambah mt-4 */}
+          <div className="mb-4 flex items-center flex-wrap gap-2"> {/* ⬅️ tweak: flex-wrap + gap-2 */}
             <UserCircle2 className="h-5 w-5 text-gray-600" />
             <span className="text-sm font-medium text-gray-600">Pilih Kurir:</span>
             <Select onValueChange={setSelectedUserId}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px] sm:w-[240px]"> {/* ⬅️ tweak: tambah sm:w */}
                 <SelectValue placeholder="Pilih Kurir" />
               </SelectTrigger>
               <SelectContent>
@@ -208,7 +174,7 @@ const AdminDashboard = ({ profile, data }) => {
           )}
         </TabsContent>
         
-        <TabsContent value="user-management" className="pt-4">
+        <TabsContent value="user-management" className="mt-4 pt-4"> {/* ⬅️ tweak: tambah mt-4 */}
           <UserManagementPage />
         </TabsContent>
       </Tabs>
