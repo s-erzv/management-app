@@ -20,7 +20,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [logoFile, setLogoFile] = useState(null);
-  const [googleSheetsLink, setGoogleSheetsLink] = useState(''); // State baru
+  const [googleSheetsLink, setGoogleSheetsLink] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAddAdmin = async (e) => {
@@ -35,27 +35,15 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
         throw new Error('User not authenticated');
       }
 
-      let logoUrl = null;
-      if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop();
-        const filePath = `company_logos/${crypto.randomUUID()}.${fileExt}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('logos')
-          .upload(filePath, logoFile, {
-            cacheControl: '3600',
-            upsert: false,
-          });
-        
-        if (uploadError) {
-          throw new Error('Gagal mengunggah logo: ' + uploadError.message);
-        }
-
-        const { data: publicUrlData } = supabase.storage
-          .from('logos')
-          .getPublicUrl(filePath);
-        
-        logoUrl = publicUrlData.publicUrl;
-      }
+      // Langkah 1: Buat user dan perusahaan terlebih dahulu (tanpa logo)
+      const payload = { 
+        email, 
+        password, 
+        role: 'admin', 
+        companyName,
+        full_name: fullName,
+        googleSheetsLink,
+      };
 
       const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-user', {
         method: 'POST',
@@ -63,15 +51,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ 
-          email, 
-          password, 
-          role: 'admin', 
-          companyName,
-          full_name: fullName,
-          logoUrl,
-          googleSheetsLink, // Kirim link ke Edge Function
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -80,8 +60,45 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
         throw new Error(data.error || 'Failed to create admin');
       }
       
+      const { userId, companyId } = data;
+      let logoUrl = null;
+
+      // Langkah 2: Unggah logo jika ada
+      if (logoFile && companyId) {
+        const fileExt = logoFile.name.split('.').pop();
+        const filePath = `company_logos/${companyId}-${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(filePath, logoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+        
+        if (uploadError) {
+          console.warn('Gagal mengunggah logo, melanjutkan tanpa logo:', uploadError);
+          toast.error('Gagal mengunggah logo, tetapi admin berhasil ditambahkan.');
+        } else {
+          const { data: publicUrlData } = supabase.storage
+            .from('logos')
+            .getPublicUrl(filePath);
+          
+          logoUrl = publicUrlData.publicUrl;
+
+          // Langkah 3: Perbarui perusahaan dengan URL logo
+          const { error: updateError } = await supabase
+            .from('companies')
+            .update({ logo_url: logoUrl })
+            .eq('id', companyId);
+          
+          if (updateError) {
+            console.error('Gagal memperbarui URL logo:', updateError);
+          }
+        }
+      }
+
       toast.success('Admin dan perusahaan berhasil ditambahkan!');
-      onUserAdded({ id: data.userId, email, full_name: fullName, role: 'admin' });
+      onUserAdded({ id: userId, email, full_name: fullName, role: 'admin' });
       resetForm();
 
     } catch (error) {

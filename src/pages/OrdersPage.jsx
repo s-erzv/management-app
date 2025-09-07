@@ -76,6 +76,24 @@ const OrdersPage = () => {
     setLoading(true);
     if (!companyId) return;
 
+    // Langkah 1: Tentukan ID pesanan yang cocok dengan filter kurir, jika ada.
+    let filteredOrderIds = null;
+    if (filters.courier && filters.courier !== 'all') {
+      const { data: matchingOrderCouriers, error: courierFilterError } = await supabase
+        .from('order_couriers')
+        .select('order_id')
+        .eq('courier_id', filters.courier);
+
+      if (courierFilterError) {
+        console.error('Error fetching orders by courier:', courierFilterError);
+        toast.error('Gagal memuat pesanan berdasarkan kurir.');
+        setLoading(false);
+        return;
+      }
+      filteredOrderIds = matchingOrderCouriers.map(oc => oc.order_id);
+    }
+
+    // Langkah 2: Bangun kueri utama dengan semua filter.
     let query = supabase
       .from('orders')
       .select(`
@@ -88,17 +106,22 @@ const OrdersPage = () => {
       .order('created_at', { ascending: false })
       .eq('company_id', companyId);
 
+    // Terapkan filter status
     if (filters.status && filters.status !== 'all') {
       query = query.eq('status', filters.status);
     }
-    if (filters.courier && filters.courier !== 'all') {
-      query = query.eq('order_couriers.courier_id', filters.courier);
-    }
+
+    // Terapkan filter nomor invoice
     if (filters.invoiceNumberStart) {
       query = query.gte('invoice_number', filters.invoiceNumberStart);
     }
     if (filters.invoiceNumberEnd) {
       query = query.lte('invoice_number', filters.invoiceNumberEnd);
+    }
+    
+    // Terapkan filter kurir menggunakan daftar ID pesanan yang sudah didapat
+    if (filteredOrderIds !== null) {
+        query = query.in('id', filteredOrderIds);
     }
 
     const { data: ordersData, error: ordersError } = await query;
@@ -117,15 +140,6 @@ const OrdersPage = () => {
     }
     setLoading(false);
   }, [companyId]);
-  
-  const applyFilters = () => {
-    fetchOrdersAndCustomers({
-      status: statusFilter,
-      courier: courierFilter,
-      invoiceNumberStart: invoiceNumberStart,
-      invoiceNumberEnd: invoiceNumberEnd,
-    });
-  };
 
   useEffect(() => {
     if(companyId) {
@@ -408,6 +422,15 @@ ${companyName}`;
     link.click();
     document.body.removeChild(link);
     toast.success('Data berhasil diekspor!');
+  };
+
+  const applyFilters = () => {
+    fetchOrdersAndCustomers({
+      status: statusFilter,
+      courier: courierFilter,
+      invoiceNumberStart: invoiceNumberStart,
+      invoiceNumberEnd: invoiceNumberEnd,
+    });
   };
 
   return (

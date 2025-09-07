@@ -97,8 +97,6 @@ const OrderDetailsPage = () => {
     }).format(amount ?? 0);
   };
   
-  // Hapus fungsi calculateOrderTotal
-
   const calculatePaymentsTotal = useCallback((rows) => {
     if (!Array.isArray(rows)) return 0;
     return rows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -125,7 +123,6 @@ const OrderDetailsPage = () => {
 
     try {
       // 1) Load order first
-      // Perbarui query untuk mengambil empty_bottle_price
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
@@ -178,7 +175,7 @@ const OrderDetailsPage = () => {
           paymentsWithUrls.map(async (p) => {
             if (!p.proof_url) return p;
             const { data: pub } = await supabase.storage
-              .from('payment_proofs')
+              .from('proofs')
               .getPublicUrl(p.proof_url);
             return { ...p, proof_public_url: pub?.publicUrl };
           })
@@ -225,12 +222,10 @@ const OrderDetailsPage = () => {
 
   const totalPaid = useMemo(() => calculatePaymentsTotal(payments), [payments, calculatePaymentsTotal]);
   
-  // Gunakan grand_total yang sudah disimpan di database
   const grandTotal = order?.grand_total || 0;
   const remainingDue = Math.max(0, grandTotal - totalPaid);
   const isPaid = remainingDue <= 0.0001;
 
-  // Status pembayaran turunan (UI anti-stale)
   const derivedPaymentStatus = useMemo(() => {
     const gt = Number(order?.grand_total) || 0;
     if (totalPaid <= 0) return 'unpaid';
@@ -433,7 +428,6 @@ nama company kita;`;
     }
   };
 
-
   // --- render guards ---
   if (loading) {
     return (
@@ -609,13 +603,8 @@ nama company kita;`;
                     <p className="text-xs text-gray-500">Diterima oleh: {p.received_by.full_name}</p>
                   )}
                   {p.proof_public_url && (
-                    <a
-                      href={p.proof_public_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline text-blue-600"
-                    >
-                      Lihat bukti transfer
+                    <a href={p.proof_public_url} target="_blank" rel="noreferrer">
+                       <img src={p.proof_public_url} alt="Bukti Transfer" className="mt-2 w-24 h-auto rounded-md border" />
                     </a>
                   )}
                 </div>
@@ -641,8 +630,8 @@ nama company kita;`;
               <CardDescription>File bukti pengiriman yang diunggah.</CardDescription>
             </CardHeader>
             <CardContent>
-              <a href={order.proof_public_url} target="_blank" rel="noreferrer" className="underline text-blue-600 font-medium">
-                Lihat bukti pengiriman
+              <a href={order.proof_public_url} target="_blank" rel="noreferrer">
+                <img src={order.proof_public_url} alt="Bukti Pengiriman" className="w-48 h-auto rounded-md border" />
               </a>
             </CardContent>
           </Card>

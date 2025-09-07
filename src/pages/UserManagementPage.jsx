@@ -1,5 +1,5 @@
 // src/pages/UserManagementPage.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -36,6 +36,9 @@ const UserManagementPage = () => {
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
 
+  // Filter state
+  const [selectedCompanyId, setSelectedCompanyId] = useState('all');
+
   // modal tambah user/admin
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -68,7 +71,7 @@ const UserManagementPage = () => {
     setLoadingCompanies(true);
     const { data, error } = await supabase
       .from('companies')
-      .select('id, name, created_at, google_sheets_link') // Ambil google_sheets_link
+      .select('id, name, created_at, google_sheets_link')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -159,7 +162,6 @@ const UserManagementPage = () => {
   };
   
   const openGoogleSheets = (link, companyId) => {
-      // Tambahkan parameter company_id ke URL jika link tersedia
       if (link) {
         window.open(`${link}?company_id=${companyId}`, '_blank');
       } else {
@@ -167,6 +169,13 @@ const UserManagementPage = () => {
       }
   };
 
+  // Filter users based on selected company
+  const filteredUsers = useMemo(() => {
+    if (selectedCompanyId === 'all') {
+      return users;
+    }
+    return users.filter(user => user.company_id === selectedCompanyId);
+  }, [users, selectedCompanyId]);
 
   /* ------------------------- RENDER ------------------------- */
 
@@ -220,6 +229,28 @@ const UserManagementPage = () => {
           <CardDescription className="text-gray-200">Kelola daftar pengguna yang ada di sistem.</CardDescription>
         </CardHeader>
         <CardContent>
+          {userRole === 'super_admin' && (
+              <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm font-medium text-gray-700">Filter Perusahaan:</span>
+                  <Select
+                      value={selectedCompanyId}
+                      onValueChange={setSelectedCompanyId}
+                      disabled={loadingCompanies}
+                  >
+                      <SelectTrigger className="w-[250px]">
+                          <SelectValue placeholder="Pilih Perusahaan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="all">Semua Perusahaan</SelectItem>
+                          {companies.map(c => (
+                              <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                              </SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+              </div>
+          )}
           {loadingUsers ? (
             <div className="flex justify-center items-center h-40">
               <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
@@ -237,7 +268,7 @@ const UserManagementPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.full_name ?? '-'}</TableCell>
                       <TableCell>{user.email ?? '-'}</TableCell>
@@ -278,7 +309,7 @@ const UserManagementPage = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {users.length === 0 && (
+                  {filteredUsers.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         Tidak ada data.

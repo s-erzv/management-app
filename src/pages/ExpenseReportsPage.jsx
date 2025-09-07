@@ -30,6 +30,7 @@ import { toast } from 'react-hot-toast';
 import { Loader2, Plus, Trash, Eye, FileText, Calendar, User, CreditCard, CheckCircle, Clock, Send } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const ExpenseReportsPage = () => {
   const { companyId, userProfile, session } = useAuth();
@@ -47,9 +48,10 @@ const ExpenseReportsPage = () => {
   const [paymentTo, setPaymentTo] = useState('');
   
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [isMarkAsPaidModalOpen, setIsMarkAsPaidModalOpen] = useState(false); // State baru untuk modal
+  const [isMarkAsPaidModalOpen, setIsMarkAsPaidModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [selectedAdminPaymentMethodId, setSelectedAdminPaymentMethodId] = useState('');
+  const [adminFee, setAdminFee] = useState(0);
 
   useEffect(() => {
     if (companyId) {
@@ -162,6 +164,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
 
   const handleMarkAsPaid = (report) => {
     setSelectedReport(report);
+    setAdminFee(0); // Reset admin fee when modal opens
     setIsMarkAsPaidModalOpen(true);
   };
   
@@ -174,10 +177,12 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
       setIsMarkAsPaidModalOpen(false);
 
       try {
+          const finalAmount = selectedReport.total_amount + parseFloat(adminFee);
+          
           // 1. Perbarui status laporan menjadi 'paid'
           const { error: updateError } = await supabase
               .from('expense_reports')
-              .update({ status: 'paid' })
+              .update({ status: 'paid', total_amount: finalAmount })
               .eq('id', selectedReport.id);
           if (updateError) throw updateError;
           
@@ -187,8 +192,8 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
               .insert({
                   company_id: companyId,
                   type: 'expense',
-                  amount: selectedReport.total_amount,
-                  description: `Reimbursement untuk ${selectedReport.user?.full_name || 'karyawan'}`,
+                  amount: finalAmount,
+                  description: `Reimbursement untuk ${selectedReport.user?.full_name || 'karyawan'} (termasuk biaya admin Rp${parseFloat(adminFee).toLocaleString('id-ID')})`,
                   payment_method_id: selectedAdminPaymentMethodId,
                   source_table: 'expense_reports',
                   source_id: selectedReport.id,
@@ -276,6 +281,10 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
   const expenseTypes = ['Bongkar', 'Bensin', 'Makan', 'Kasbon', 'Lainnya'];
   const totalAmount = calculateTotal();
   const currentSubmitter = employees.find(emp => emp.id === submitterId);
+  const finalAmountDisplay = selectedReport ? selectedReport.total_amount + parseFloat(adminFee) : 0;
+  
+  const pendingReports = reports.filter(r => r.status === 'pending');
+  const paidReports = reports.filter(r => r.status === 'paid');
 
   return (
     <div className="min-h-screen">
@@ -461,7 +470,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
           </CardContent>
         </Card>
         
-        {/* History Section */}
+        {/* History Section with Tabs */}
         <Card className="border-0 shadow-lg bg-white">
           <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
             <CardTitle className="text-xl lg:text-2xl text-[#10182b] flex items-center gap-2">
@@ -473,87 +482,156 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 lg:p-6">
-            {reports.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">Belum Ada Laporan</h3>
-                <p className="text-gray-500">Mulai buat laporan pengeluaran pertama Anda dengan form di atas</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {reports.map((report) => (
-                  <Card 
-                    key={report.id} 
-                    className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-[#10182b] hover:-translate-y-1" 
-                    onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="text-xl lg:text-2xl text-[#10182b] mb-1">
-                            Rp{report.total_amount.toLocaleString('id-ID')}
-                          </CardTitle>
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <User className="h-4 w-4" />
-                            {report.user?.full_name || '-'}
+            <Tabs defaultValue="pending" className="space-y-4">
+              <TabsList className="grid w-full sm:w-auto grid-cols-2">
+                <TabsTrigger value="pending" className="gap-2">
+                  <Clock className="h-4 w-4" /> Pending ({pendingReports.length})
+                </TabsTrigger>
+                <TabsTrigger value="paid" className="gap-2">
+                  <CheckCircle className="h-4 w-4" /> Lunas ({paidReports.length})
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="pending" className="space-y-4">
+                {pendingReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">Tidak Ada Laporan Pending</h3>
+                    <p className="text-gray-500">Semua laporan sudah diselesaikan.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {pendingReports.map((report) => (
+                      <Card 
+                        key={report.id} 
+                        className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-amber-500 hover:-translate-y-1" 
+                        onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <CardTitle className="text-xl lg:text-2xl text-[#10182b] mb-1">
+                                Rp{report.total_amount.toLocaleString('id-ID')}
+                              </CardTitle>
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <User className="h-4 w-4" />
+                                {report.user?.full_name || '-'}
+                              </div>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 bg-amber-100 text-amber-800">
+                              <Clock className="h-3 w-3" /> PENDING
+                            </span>
                           </div>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
-                          report.status === 'paid' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {report.status === 'paid' ? (
-                            <>
-                              <CheckCircle className="h-3 w-3" />
-                              LUNAS
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="h-3 w-3" />
-                              PENDING
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            Tanggal
-                          </span>
-                          <span className="font-medium">
-                            {new Date(report.report_date).toLocaleDateString('id-ID')}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 flex items-center gap-1">
-                            <CreditCard className="h-4 w-4" />
-                            Metode
-                          </span>
-                          <span className="font-medium capitalize">
-                            {report.payment_method === 'transfer' ? 'Transfer' : 'Tunai'}
-                          </span>
-                        </div>
-                        <div className="flex justify-end mt-4">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-[#10182b] hover:bg-[#10182b] hover:text-white"
-                            onClick={(e) => { e.stopPropagation(); setSelectedReport(report); setIsDetailModalOpen(true); }}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Lihat Detail
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600 flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                Tanggal
+                              </span>
+                              <span className="font-medium">
+                                {new Date(report.report_date).toLocaleDateString('id-ID')}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600 flex items-center gap-1">
+                                <CreditCard className="h-4 w-4" />
+                                Metode
+                              </span>
+                              <span className="font-medium capitalize">
+                                {report.payment_method === 'transfer' ? 'Transfer' : 'Tunai'}
+                              </span>
+                            </div>
+                            <div className="flex justify-end mt-4">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white"
+                                onClick={(e) => { e.stopPropagation(); setSelectedReport(report); setIsDetailModalOpen(true); }}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Lihat Detail
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="paid" className="space-y-4">
+                 {paidReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">Tidak Ada Laporan Lunas</h3>
+                    <p className="text-gray-500">Laporan yang sudah dibayar akan muncul di sini.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {paidReports.map((report) => (
+                      <Card 
+                        key={report.id} 
+                        className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-green-500 hover:-translate-y-1" 
+                        onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <CardTitle className="text-xl lg:text-2xl text-[#10182b] mb-1">
+                                Rp{report.total_amount.toLocaleString('id-ID')}
+                              </CardTitle>
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <User className="h-4 w-4" />
+                                {report.user?.full_name || '-'}
+                              </div>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 bg-green-100 text-green-800">
+                              <CheckCircle className="h-3 w-3" /> LUNAS
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600 flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                Tanggal
+                              </span>
+                              <span className="font-medium">
+                                {new Date(report.report_date).toLocaleDateString('id-ID')}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600 flex items-center gap-1">
+                                <CreditCard className="h-4 w-4" />
+                                Metode
+                              </span>
+                              <span className="font-medium capitalize">
+                                {report.payment_method === 'transfer' ? 'Transfer' : 'Tunai'}
+                              </span>
+                            </div>
+                             <div className="flex justify-end mt-4">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white"
+                                onClick={(e) => { e.stopPropagation(); setSelectedReport(report); setIsDetailModalOpen(true); }}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Lihat Detail
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
@@ -727,6 +805,28 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
                       </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                          <Label>Total Reimbursement</Label>
+                          <p className="text-lg font-bold">
+                              Rp{selectedReport?.total_amount.toLocaleString('id-ID')}
+                          </p>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="admin-fee">Biaya Admin (Opsional)</Label>
+                          <Input
+                              id="admin-fee"
+                              type="number"
+                              placeholder="Masukkan biaya admin"
+                              value={adminFee}
+                              onChange={(e) => setAdminFee(e.target.value)}
+                          />
+                      </div>
+                      <div className="space-y-2">
+                          <Label>Total Akhir</Label>
+                          <p className="text-2xl font-bold text-[#10182b]">
+                              Rp{(selectedReport.total_amount + parseFloat(adminFee)).toLocaleString('id-ID')}
+                          </p>
+                      </div>
                       <div className="space-y-2">
                           <Label htmlFor="admin-payment-method">Metode Pembayaran Perusahaan</Label>
                           <Select

@@ -42,7 +42,7 @@ const CentralOrderFormPage = () => {
   const { userProfile, loading: authLoading, companyId } = useAuth();
   
   const [products, setProducts] = useState([]);
-  const [purchasePrices, setPurchasePrices] = useState({}); // Mengubah nama state agar lebih spesifik
+  const [purchasePrices, setPurchasePrices] = useState({});
   const [loading, setLoading] = useState(true);
   const [isNewOrder, setIsNewOrder] = useState(true);
   
@@ -57,6 +57,7 @@ const CentralOrderFormPage = () => {
     driver_tip: '',
     notes: '',
     attachments: [],
+    admin_fee: 0, // State baru untuk biaya admin
   });
   const [uploading, setUploading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -75,13 +76,17 @@ const CentralOrderFormPage = () => {
   });
   const [receivedItems, setReceivedItems] = useState([]);
   
-  const totalOrderValue = useMemo(() => {
+  const totalItemsValue = useMemo(() => {
     return orderItems.reduce((sum, item) => {
       const qty = parseFloat(item.qty) || 0;
       const price = parseFloat(item.price) || 0;
       return sum + (qty * price);
     }, 0);
   }, [orderItems]);
+
+  const totalOrderValue = useMemo(() => {
+    return totalItemsValue + (parseFloat(transactionDetails.admin_fee) || 0);
+  }, [totalItemsValue, transactionDetails.admin_fee]);
 
   const totalPaid = useMemo(() => {
     return payments.reduce((sum, p) => sum + p.amount, 0);
@@ -122,11 +127,11 @@ const CentralOrderFormPage = () => {
   const fetchProductsAndPrices = async () => {
     if (!companyId) return;
 
-    // Ambil purchase_price dari tabel products
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('id, name, stock, purchase_price')
+      .select('id, name, stock, purchase_price, sort_order')
       .eq('company_id', companyId)
+      .order('sort_order', { ascending: true }) // <--- Perubahan di sini
       .order('name', { ascending: true });
     
     if (productsError) {
@@ -136,7 +141,6 @@ const CentralOrderFormPage = () => {
     }
     setProducts(productsData);
 
-    // Siapkan map untuk harga beli
     const purchasePricesMap = productsData.reduce((acc, p) => {
       acc[p.id] = p.purchase_price;
       return acc;
@@ -189,7 +193,7 @@ const CentralOrderFormPage = () => {
       ...item,
       product_name: item.products.name,
       current_stock: item.products.stock,
-      price: item.products.purchase_price, // Gunakan purchase_price saat memuat data
+      price: item.products.purchase_price,
     })));
     setReceivedItems(orderData.items.map(item => ({
       product_id: item.product_id,
@@ -203,6 +207,7 @@ const CentralOrderFormPage = () => {
       driver_tip: orderData.driver_tip ?? '',
       notes: orderData.notes ?? '',
       attachments: orderData.attachments || [],
+      admin_fee: orderData.admin_fee || 0,
     });
     setDeliveryDetails({
       arrival_date: orderData.arrival_date ?? '',
@@ -373,7 +378,7 @@ const CentralOrderFormPage = () => {
       const { error } = await supabase
         .from('central_orders')
         .update({
-          total_transaction: totalOrderValue || null,
+          total_transaction: totalOrderValue, // Menggunakan totalOrderValue
           driver_tip: transactionDetails.driver_tip || null,
           notes: transactionDetails.notes || '',
         })
@@ -679,9 +684,25 @@ const CentralOrderFormPage = () => {
                   <Label className="text-xl font-semibold flex items-center gap-2 mb-2">
                       <DollarSign className="h-5 w-5" /> Pembayaran
                   </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Total Harga Barang</Label>
+                      <p className="text-lg font-bold">{formatCurrency(totalItemsValue)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-fee">Biaya Admin</Label>
+                      <Input
+                        id="admin-fee"
+                        type="number"
+                        placeholder="Masukkan biaya admin"
+                        value={transactionDetails.admin_fee}
+                        onChange={(e) => setTransactionDetails({...transactionDetails, admin_fee: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label>Total Transaksi</Label>
-                    <p className="text-2xl font-bold">{formatCurrency(totalOrderValue)}</p>
+                    <Label>Total Tagihan</Label>
+                    <p className="text-2xl font-bold text-[#10182b]">{formatCurrency(totalOrderValue)}</p>
                   </div>
                   <div className="space-y-2">
                     <Label>Total Dibayar</Label>

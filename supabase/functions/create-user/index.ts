@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { email, password, role, companyName, companyId, full_name, rekening, logoUrl, googleSheetsLink } = await req.json() // Menerima googleSheetsLink
+    const { email, password, role, companyName, companyId, full_name, rekening, googleSheetsLink } = await req.json()
     
     // Inisialisasi Supabase dengan service_role key
     const supabase = createClient(
@@ -42,7 +42,7 @@ serve(async (req) => {
       }
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
-        .insert([{ name: companyName, logo_url: logoUrl, google_sheets_link: googleSheetsLink }]) // Simpan link ke tabel companies
+        .insert([{ name: companyName, google_sheets_link: googleSheetsLink }])
         .select()
         .single()
       
@@ -59,7 +59,6 @@ serve(async (req) => {
       email,
       password,
       email_confirm: true,
-      // Menambahkan 'full_name' dan 'rekening' ke user metadata
       user_metadata: { full_name, rekening }
     })
 
@@ -69,7 +68,6 @@ serve(async (req) => {
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert(
-        // Menambahkan 'full_name' dan 'rekening' ke upsert payload
         { id: user.id, role, company_id: profile_company_id, full_name, rekening },
         { onConflict: 'id' }
       )

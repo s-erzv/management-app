@@ -455,7 +455,6 @@ const handleCompleteDelivery = async (e) => {
 
             {hasReturnableItems && (
               <>
-                <p className="text-sm text-muted-foreground">Pesanan ini dikirim {deliveredQty} galon yang dapat dikembalikan.</p>
                 <div className="grid gap-2">
                   <Label htmlFor="returnedQty">Jumlah Galon Kembali</Label>
                   <Input

@@ -56,6 +56,7 @@ serve(async (req) => {
       transport_cost,
       purchased_empty_qty,
       grand_total,
+      proof_public_url, // Menambahkan ini untuk bukti pengiriman
     } = orderData;
     
     // Membuat PDF
@@ -184,6 +185,37 @@ serve(async (req) => {
         font: helveticaBoldFont,
         color: rgb(0.06, 0.09, 0.17),
     });
+
+    // --- Bukti Pengiriman (di bagian bawah) ---
+    if (proof_public_url) {
+        y -= 40;
+        page.drawText('Bukti Pengiriman:', { x: margin, y: y, size: 12, font: helveticaBoldFont, color: rgb(0, 0, 0) });
+        y -= 160; // Ruang untuk gambar
+        
+        try {
+            const imageBytes = await fetchImage(proof_public_url);
+            const image = await pdfDoc.embedJpg(imageBytes); // Asumsi gambar JPG
+            const imageDims = image.scale(0.2); // Sesuaikan skala gambar
+            
+            page.drawImage(image, {
+                x: margin,
+                y: y,
+                width: imageDims.width,
+                height: imageDims.height,
+            });
+            y -= imageDims.height;
+        } catch (imageError) {
+            console.error('Failed to embed delivery proof image:', imageError);
+            page.drawText('Gagal memuat gambar bukti pengiriman.', {
+                x: margin,
+                y: y + 80, // Sesuaikan posisi pesan error
+                size: 10,
+                font: helveticaFont,
+                color: rgb(1, 0, 0),
+            });
+        }
+    }
+
 
     const pdfBytes = await pdfDoc.save();
     

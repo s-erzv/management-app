@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,6 +18,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const ReportsPage = () => {
   const { companyId } = useAuth();
@@ -28,23 +36,53 @@ const ReportsPage = () => {
     demand: [],
     reconciliations: [],
   });
+  
+  const [categories, setCategories] = useState([]);
+  const [subCategories, setSubCategories] = useState([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('all');
 
   useEffect(() => {
     if (companyId) {
+      fetchCategories();
       fetchAllReportsData();
     }
-  }, [companyId]);
+  }, [companyId, selectedCategoryId, selectedSubCategoryId]);
+
+  const fetchCategories = async () => {
+    if (!companyId) return;
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*, subcategories(*)');
+    if (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Gagal memuat kategori.');
+    } else {
+      setCategories(data);
+    }
+  };
 
   const fetchAllReportsData = async () => {
     setLoading(true);
+    if (!companyId) return;
 
     try {
-      const { data: productsData, error: productError } = await supabase
+      let productsQuery = supabase
         .from("products")
         .select("id, name, stock, is_returnable")
-        .eq("company_id", companyId)
-        .order("name", { ascending: true });
+        .eq("company_id", companyId);
+
+      if (selectedCategoryId !== 'all') {
+        productsQuery = productsQuery.eq('category_id', selectedCategoryId);
+      }
+      if (selectedSubCategoryId !== 'all') {
+        productsQuery = productsQuery.eq('subcategory_id', selectedSubCategoryId);
+      }
+
+      const { data: productsData, error: productError } = await productsQuery;
       if (productError) throw productError;
+      
+      const productIds = productsData.map(p => p.id);
 
       const { data: reconciliationsData, error: reconciliationsError } = await supabase
         .from('stock_reconciliations')
@@ -65,7 +103,8 @@ const ReportsPage = () => {
       const { data: demandItems, error: demandItemsError } = await supabase
         .from("order_items")
         .select(`product_id, qty`)
-        .in("order_id", filteredOrderIds);
+        .in("order_id", filteredOrderIds)
+        .in("product_id", productIds); // Filter demand items by selected products
       if (demandItemsError) throw demandItemsError;
 
       const demandByProduct = demandItems.reduce((acc, item) => {
@@ -107,6 +146,18 @@ const ReportsPage = () => {
     }
   };
 
+  const handleCategoryChange = (value) => {
+    setSelectedCategoryId(value);
+    const selectedCategory = categories.find(cat => cat.id === value);
+    setSubCategories(selectedCategory ? selectedCategory.subcategories : []);
+    setSelectedSubCategoryId('all');
+  };
+
+  const handleSubCategoryChange = (value) => {
+    setSelectedSubCategoryId(value);
+  };
+
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-white">
@@ -134,6 +185,40 @@ const ReportsPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="space-y-2">
+              <Label htmlFor="category-filter">Filter Kategori</Label>
+              <Select value={selectedCategoryId} onValueChange={handleCategoryChange}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Semua Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kategori</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcategory-filter">Filter Subkategori</Label>
+              <Select value={selectedSubCategoryId} onValueChange={handleSubCategoryChange} disabled={selectedCategoryId === 'all'}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Semua Subkategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Subkategori</SelectItem>
+                  {subCategories.map((sub) => (
+                    <SelectItem key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           {reportData.chartData && reportData.chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={reportData.chartData}>

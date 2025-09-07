@@ -19,19 +19,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Clock, TruckIcon, PackageCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-const getStatusVariant = (status) => {
+const getStatusBadge = (status) => {
   switch (status) {
     case 'draft':
-      return 'outline';
+      return <Badge className="bg-gray-200 text-[#10182b] flex items-center gap-1"><Clock className="h-3 w-3" /> Draft</Badge>;
     case 'paid':
-      return 'secondary';
+      return <Badge className="bg-blue-500 text-white flex items-center gap-1"><TruckIcon className="h-3 w-3" /> Dibayar</Badge>;
     case 'received':
-      return 'default';
+      return <Badge className="bg-green-500 text-white flex items-center gap-1"><PackageCheck className="h-3 w-3" /> Diterima</Badge>;
     default:
-      return 'outline';
+      return <Badge className="bg-gray-200 text-[#10182b] flex items-center gap-1">Tidak Dikenal</Badge>;
   }
 };
 
@@ -74,6 +74,14 @@ const CentralOrderPage = () => {
     setLoading(false);
   };
   
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -121,11 +129,9 @@ const CentralOrderPage = () => {
                       <TableCell>{order.id.slice(0, 8)}</TableCell>
                       <TableCell>{order.order_date}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusVariant(order.status)}>
-                          {order.status}
-                        </Badge>
+                        {getStatusBadge(order.status)}
                       </TableCell>
-                      <TableCell>Rp{order.calculated_total}</TableCell>
+                      <TableCell>{formatCurrency(order.calculated_total)}</TableCell>
                       <TableCell>{order.user?.full_name ?? 'N/A'}</TableCell>
                       <TableCell>
                         <Button 
