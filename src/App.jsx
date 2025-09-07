@@ -23,6 +23,7 @@ import ExpenseReportsPage from './pages/ExpenseReportsPage';
 import FinancialReportPage from './pages/FinancialReportPage'; 
 import FinancialManagementPage from './pages/FinancialManagementPage';
 import DataExportPage from './pages/DataExportPage';
+import CalendarPage from './pages/CalendarPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -125,6 +126,10 @@ const App = () => {
             <Route
               path="/data-export"
               element={session && isAdminOrSuperAdmin ? <DataExportPage /> : <Navigate to="/dashboard" />}
+            />
+             <Route
+              path="/calendar"
+              element={session ? <CalendarPage /> : <Navigate to="/login" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
             {isSuperAdmin && (

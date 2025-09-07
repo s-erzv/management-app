@@ -1,5 +1,5 @@
 // src/components/dashboards/UserDashboard.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -33,7 +33,6 @@ import {
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
-// Tambahkan prop userId di sini
 const UserDashboard = ({ userId }) => {
   const navigate = useNavigate();
   const { session, userRole } = useAuth();
@@ -43,78 +42,58 @@ const UserDashboard = ({ userId }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('active');
 
+  const fetchData = useCallback(async (id) => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          customers (name, address, phone),
+          order_items (product_id, qty, price, item_type, products(name, is_returnable, company_id)),
+          payments (amount),
+          order_couriers(courier_id)
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (ordersError) {
+        throw ordersError;
+      }
+      
+      const courierTasks = ordersData.filter(order => 
+        order.order_couriers.some(oc => oc.courier_id === id)
+      );
+
+      const finalTasks = courierTasks.map(task => {
+        // Perbaikan: Ambil grand_total langsung dari objek task
+        const total = task.grand_total || 0;
+        const totalPaid = (task.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+        
+        return { 
+          ...task,
+          total,
+          total_paid: totalPaid,
+          remaining_due: total - totalPaid,
+        };
+      });
+      
+      setTasks(finalTasks);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Gagal memuat data tugas.');
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (userId) {
       fetchData(userId);
     }
-  }, [userId]);
+  }, [userId, fetchData]);
 
-  // Terima userId sebagai parameter
-  const fetchData = async (id) => {
-    setLoading(true);
-    try {
-      if (!id) return;
-
-      // Perbaikan: Gunakan tabel order_couriers untuk mengambil pesanan
-      const { data: orderCouriersData, error: ordersError } = await supabase
-        .from('order_couriers')
-        .select(`
-          order:orders (
-            *,
-            customers (name, address, phone),
-            order_items (product_id, qty, price, item_type, products(name, is_returnable, company_id))
-          )
-        `)
-        .eq('courier_id', id)
-        .order('created_at', { referencedTable: 'orders', ascending: true }); // Mengurutkan dari tabel orders
-        
-      if (ordersError) {
-        console.error('Error fetching data:', ordersError);
-        toast.error('Gagal memuat data tugas.');
-        setTasks([]);
-        return;
-      }
-      
-      const tasksData = (orderCouriersData || []).map(oc => oc.order).filter(order => order); // Ambil objek order dari hasil join
-      
-      const tasksWithTotals = tasksData.map(order => {
-        const total = (order.order_items || []).reduce(
-          (sum, item) => sum + (item.qty * item.price),
-          0
-        );
-        return { ...order, total };
-      });
-      
-      const orderIds = tasksWithTotals.map(t => t.id);
-      let paymentsByOrderId = {};
-      if (orderIds.length > 0) {
-        const { data: paymentsData, error: paymentsError } = await supabase
-          .from('payments')
-          .select('order_id, amount')
-          .in('order_id', orderIds);
-
-        if (paymentsError) {
-          console.error('Error fetching payments:', paymentsError);
-        } else {
-          paymentsByOrderId = (paymentsData || []).reduce((acc, curr) => {
-            acc[curr.order_id] = (acc[curr.order_id] || 0) + curr.amount;
-            return acc;
-          }, {});
-        }
-      }
-
-      const finalTasks = tasksWithTotals.map(task => ({
-        ...task,
-        total_paid: paymentsByOrderId[task.id] || 0,
-        remaining_due: task.total - (paymentsByOrderId[task.id] || 0)
-      }));
-
-      setTasks(finalTasks);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
   const updateOrderStatus = async (order, newStatus) => {
     if (order.status === 'completed') {
       toast.error('Pesanan sudah selesai dan tidak bisa diperbarui lagi.');

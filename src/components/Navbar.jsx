@@ -38,6 +38,7 @@ const navItems = [
   { path: '/financials', name: 'Keuangan', icon: <Wallet />, roles: ['super_admin', 'admin'] },
   { path: '/reports', name: 'Analisis', icon: <BarChart />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/data-export', name: 'Data Center', icon: <Database />, roles: ['super_admin-main', 'admin'] },
+   { path: '/calendar', name: 'Kalender Pesanan', icon: <Calendar />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/settings', name: 'Pengaturan', icon: <Settings />, roles: ['super_admin', 'admin'] },
   { path: '/users', name: 'Manajemen Pengguna', icon: <Users />, roles: ['super_admin', 'super_admin-main'] },
 ];

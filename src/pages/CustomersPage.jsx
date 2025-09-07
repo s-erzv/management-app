@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Users } from 'lucide-react';
+import { Loader2, Plus, Users, MessageSquareText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Select,
@@ -32,7 +32,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 const CustomersPage = () => {
-  const { session, companyId } = useAuth();
+  const { session, companyId, companyName } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [customerStatuses, setCustomerStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -168,6 +168,22 @@ const CustomersPage = () => {
     }
     setLoading(false);
   };
+  
+  const handleContactCustomer = (customerName, customerPhone) => {
+    const phone = (customerPhone || '').replace(/[^\d]/g, '');
+    const message = `Assalamualaikum Warahmatullahi Wabarakatuh, Yth. Bapak/Ibu Pelanggan Setia ${companyName}
+
+Semoga Bapak/Ibu senantiasa dalam lindungan Allah Ta’ala, diberi kesehatan, kelancaran rezeki, dan keberkahan dalam segala aktivitasnya.
+
+Kami mohon izin mengingatkan, barangkali persediaan Air Minum Dalam Kemasan di rumah/kantor sudah mulai menipis. InsyaaAllah, dengan senang hati kami siap membantu proses pemesanan ulang apabila diperlukan.
+
+Terima kasih atas kepercayaan Bapak/Ibu selama ini kepada ${companyName}. Semoga Allah Ta’ala membalas dengan kebaikan yang berlipat ganda.
+
+Jazaakumullahu khayran wa baarakallahu fiikum.`;
+
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   if (loading) {
     return (
@@ -276,7 +292,7 @@ const CustomersPage = () => {
                   <TableHead className="min-w-[150px] text-[#10182b]">Telepon</TableHead>
                   <TableHead className="min-w-[200px] text-[#10182b]">Alamat</TableHead>
                   <TableHead className="min-w-[120px] text-[#10182b]">Status</TableHead>
-                  <TableHead className="min-w-[180px] text-[#10182b]">Aksi</TableHead>
+                  <TableHead className="min-w-[200px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -289,6 +305,15 @@ const CustomersPage = () => {
                     <TableCell className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleEditClick(customer)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(customer.id)} className="bg-red-500 hover:bg-red-600">Hapus</Button>
+                      <Button 
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleContactCustomer(customer.name, customer.phone)}
+                        className="bg-green-500 hover:bg-green-600 text-white"
+                      >
+                        <MessageSquareText className="h-4 w-4 mr-2" />
+                        Hubungi
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
