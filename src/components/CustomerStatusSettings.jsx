@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'react-hot-toast';
-import { Loader2, PlusCircle, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, PlusCircle, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
@@ -45,7 +45,7 @@ const CustomerStatusSettings = () => {
       .from('customer_statuses')
       .select('*')
       .eq('company_id', userProfile.company_id)
-      .order('status_name', { ascending: true });
+      .order('sort_order', { ascending: true }); // Mengurutkan berdasarkan sort_order
     
     if (error) {
       console.error('Error fetching customer statuses:', error);
@@ -75,11 +75,15 @@ const CustomerStatusSettings = () => {
         if (error) throw error;
         toast.success('Status berhasil diperbarui.');
       } else {
+        // Dapatkan sort_order tertinggi yang ada
+        const maxSortOrder = statuses.reduce((max, s) => s.sort_order > max ? s.sort_order : max, 0);
+
         const { error } = await supabase
           .from('customer_statuses')
           .insert([{ 
             status_name: statusName,
-            company_id: userProfile.company_id
+            company_id: userProfile.company_id,
+            sort_order: maxSortOrder + 1, // Atur sort_order baru
           }]);
         if (error) throw error;
         toast.success('Status berhasil ditambahkan.');
@@ -93,6 +97,40 @@ const CustomerStatusSettings = () => {
       setLoading(false);
     }
   };
+  
+  const handleReorder = async (index, direction) => {
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === statuses.length - 1)) {
+        return;
+    }
+
+    setLoading(true);
+    const currentItem = statuses[index];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    const neighborItem = statuses[newIndex];
+    
+    const newSortOrder = neighborItem.sort_order;
+    const neighborSortOrder = currentItem.sort_order;
+
+    try {
+        await supabase
+            .from('customer_statuses')
+            .update({ sort_order: newSortOrder })
+            .eq('status_name', currentItem.status_name);
+
+        await supabase
+            .from('customer_statuses')
+            .update({ sort_order: neighborSortOrder })
+            .eq('status_name', neighborItem.status_name);
+        
+        toast.success('Urutan berhasil diubah!');
+        fetchStatuses();
+    } catch (error) {
+        console.error('Error reordering:', error);
+        toast.error('Gagal mengubah urutan.');
+    } finally {
+        setLoading(false);
+    }
+};
 
   const handleEditClick = (status) => {
     setCurrentStatus(status);
@@ -189,16 +227,32 @@ const CustomerStatusSettings = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">Nama Status</TableHead>
-                  <TableHead className="min-w-[100px]">Aksi</TableHead>
+                  <TableHead>Nama Status</TableHead>
+                  <TableHead>Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {statuses.map((status) => (
+                {statuses.map((status, index) => (
                   <TableRow key={status.status_name}>
                     <TableCell>{status.status_name}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleReorder(index, 'up')}
+                            disabled={index === 0}
+                        >
+                            <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleReorder(index, 'down')}
+                            disabled={index === statuses.length - 1}
+                        >
+                            <ArrowDown className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

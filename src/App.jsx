@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react'; // Tambahkan ini
 
 import Sidebar from './components/Navbar'; 
 import AuthPage from './pages/AuthPage';
@@ -24,6 +25,19 @@ import FinancialManagementPage from './pages/FinancialManagementPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
+  
+  // Tambahkan useEffect hook di sini
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').then(registration => {
+          console.log('Service Worker berhasil didaftarkan dengan ruang lingkup:', registration.scope);
+        }).catch(error => {
+          console.error('Pendaftaran Service Worker gagal:', error);
+        });
+      });
+    }
+  }, []); // Array kosong memastikan ini hanya berjalan sekali saat komponen di-mount.
   
   if (loading) {
     return (
@@ -58,7 +72,7 @@ const App = () => {
             />
             <Route
               path="/orders"
-              element={session && (isAdminOrSuperAdmin || isCourier) ? <OrdersPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrAdmin || isCourier) ? <OrdersPage /> : <Navigate to="/dashboard" />}
             />
            <Route
               path="/orders/add"
@@ -121,7 +135,6 @@ const App = () => {
       <Toaster />
     </BrowserRouter>
   );
-
 };
 
 export default App;

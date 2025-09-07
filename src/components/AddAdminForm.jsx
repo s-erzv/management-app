@@ -12,13 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 
 const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Tambahkan state untuk nama lengkap admin
   const [fullName, setFullName] = useState('');
+  const [logoFile, setLogoFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleAddAdmin = async (e) => {
@@ -33,6 +34,28 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
         throw new Error('User not authenticated');
       }
 
+      let logoUrl = null;
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const filePath = `company_logos/${crypto.randomUUID()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(filePath, logoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+        
+        if (uploadError) {
+          throw new Error('Gagal mengunggah logo: ' + uploadError.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('logos')
+          .getPublicUrl(filePath);
+        
+        logoUrl = publicUrlData.publicUrl;
+      }
+
       const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-user', {
         method: 'POST',
         headers: {
@@ -44,7 +67,8 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
           password, 
           role: 'admin', 
           companyName,
-          full_name: fullName, // Tambahkan fullName ke body
+          full_name: fullName,
+          logoUrl,
         }),
       });
 
@@ -55,7 +79,6 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
       }
       
       toast.success('Admin dan perusahaan berhasil ditambahkan!');
-      // Perbarui onUserAdded untuk menyertakan fullName
       onUserAdded({ id: data.userId, email, full_name: fullName, role: 'admin' });
       resetForm();
 
@@ -71,7 +94,8 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
     setCompanyName('');
     setEmail('');
     setPassword('');
-    setFullName(''); // Reset state nama lengkap
+    setFullName('');
+    setLogoFile(null);
     onOpenChange(false);
   };
 
@@ -123,6 +147,15 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+            />
+          </div>
+          <div>
+            <Label htmlFor="logo">Logo Perusahaan (Opsional)</Label>
+            <Input
+              id="logo"
+              type="file"
+              onChange={(e) => setLogoFile(e.target.files[0])}
+              accept="image/*"
             />
           </div>
           <Button type="submit" disabled={loading} className="w-full">

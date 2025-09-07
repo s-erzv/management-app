@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2 } from 'lucide-react';
+import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, MessageSquareText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Dialog,
@@ -51,7 +51,7 @@ const getStatusBadge = (status) => {
 
 const OrdersPage = () => {
   const navigate = useNavigate();
-  const { session, userRole, companyId } = useAuth();
+  const { session, userRole, companyId, companyName } = useAuth();
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -323,10 +323,36 @@ const OrdersPage = () => {
     }).format(amount);
   };
   
+  const handleConfirmOrder = (order) => {
+    const productsList = order.order_items
+      .map(item => `* ${item.products.name} (${item.qty})`)
+      .join('\n');
+    
+    const totalHarga = formatCurrency(calculateTotal(order.order_items));
+
+    const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.Yth. Bapak/Ibu ${order.customers.name},
+
+Dengan hormat, kami izin Mengonfirmasi Pesanan dengan rincian berikut:
+${productsList}
+
+Total Harga: ${totalHarga}
+*Belum termasuk biaya transportasi jika ada*
+
+Mohon diperika kembali untuk pesanannya
+Pembayaran dilakukan ketika barang sudah diterima. Terimakasih
+
+Hormat kami,
+${companyName}`;
+
+    const phone = (order.customers?.phone || '').replace(/[^\d]/g, '');
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const handleExportToExcel = () => {
     const header = [
       "ID Pesanan", "Nomor Invoice", "Nama Pelanggan", "Alamat Pelanggan", "Telepon Pelanggan",
-      "Tanggal Pengiriman", "Status Pengiriman", "Status Pembayaran", "Nama Kurir",
+      "Tanggal Order", "Status Pengiriman", "Status Pembayaran", "Nama Kurir",
       "Total Harga", "Pembayaran Diterima", "Sisa Tagihan", "Galon Dikembalikan", 
       "Galon Dipinjam", "Galon Kosong Dibeli", "Biaya Transportasi", "Detail Produk", 
       "Bukti Pengiriman", "Riwayat Pembayaran"
@@ -433,7 +459,7 @@ const OrdersPage = () => {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="planned_date">Tanggal Pengiriman</Label>
+              <Label htmlFor="planned_date">Tanggal Order</Label>
               <Input
                 type="date"
                 name="planned_date"
@@ -590,17 +616,17 @@ const OrdersPage = () => {
         </CardHeader>
         <CardContent className="p-0">
           <div className="rounded-md border-t overflow-x-auto">
-            <Table>
+            <Table className="table-auto min-w-max">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px] text-[#10182b]">No. Invoice</TableHead>
-                  <TableHead className="w-[150px] text-[#10182b]">Pelanggan</TableHead>
-                  <TableHead className="w-[150px] text-[#10182b]">Tgl. Pengiriman</TableHead>
+                  <TableHead className="text-[#10182b]">No. Invoice</TableHead>
+                  <TableHead className="text-[#10182b]">Pelanggan</TableHead>
+                  <TableHead className="text-[#10182b]">Tgl. Pengiriman</TableHead>
                   <TableHead className="text-[#10182b]">Produk</TableHead>
-                  <TableHead className="w-[100px] text-[#10182b]">Status</TableHead>
-                  <TableHead className="w-[120px] text-[#10182b]">Total Harga</TableHead>
-                  <TableHead className="w-[150px] text-[#10182b]">Kurir</TableHead>
-                  <TableHead className="w-[180px] text-[#10182b]">Aksi</TableHead>
+                  <TableHead className="text-[#10182b]">Status</TableHead>
+                  <TableHead className="text-[#10182b]">Total Harga</TableHead>
+                  <TableHead className="text-[#10182b]">Kurir</TableHead>
+                  <TableHead className="text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -613,13 +639,13 @@ const OrdersPage = () => {
                 ) : (
                 orders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.invoice_number}</TableCell>
-                    <TableCell>{order.customers?.name ?? 'N/A'}</TableCell>
-                    <TableCell>{order.planned_date}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">{order.invoice_number}</TableCell>
+                    <TableCell className="whitespace-nowrap">{order.customers?.name ?? 'N/A'}</TableCell>
+                    <TableCell className="whitespace-nowrap">{order.planned_date}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {order.order_items.map(item => (
-                          <Badge key={item.id} variant="secondary" className="text-[#10182b] ">
+                          <Badge key={item.id} variant="secondary" className="text-[#10182b]">
                             {item.products.name} ({item.qty})
                           </Badge>
                         ))}
@@ -644,6 +670,9 @@ const OrdersPage = () => {
                       <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Detail</Button>
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)} className="bg-red-500 hover:bg-red-600 text-white">Hapus</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleConfirmOrder(order)} className="text-[#10182b] hover:bg-gray-100">
+                        <MessageSquareText className="h-4 w-4 mr-2" /> Konfirmasi
+                      </Button>
                     </TableCell>
                   </TableRow>
                 )))}

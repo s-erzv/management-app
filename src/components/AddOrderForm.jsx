@@ -286,7 +286,7 @@ const AddOrderForm = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="planned_date">Tanggal Pengiriman</Label>
+                <Label htmlFor="planned_date">Tanggal Order</Label>
                 <Input
                   type="date"
                   name="planned_date"
@@ -298,11 +298,12 @@ const AddOrderForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Tugaskan Kurir (Opsional)</Label>
+              <Label>Tugaskan Kurir</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {couriers.map((courier) => (
                   <div key={courier.id} className="flex items-center space-x-2">
                     <Checkbox
+                      required
                       id={`courier-${courier.id}`}
                       checked={orderForm.courier_ids.includes(courier.id)}
                       onCheckedChange={(checked) => handleCourierCheckboxChange(courier.id, checked)}
@@ -357,7 +358,7 @@ const AddOrderForm = () => {
                     disabled={!newItem.product_id}
                   />
                   <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4 text-black rounded-full bg-gray-500" />
                   </Button>
                 </div>
               </div>
@@ -368,9 +369,9 @@ const AddOrderForm = () => {
 
               <div className="flex flex-wrap gap-2 mt-2">
                 {orderItems.map((item, index) => (
-                  <Badge key={index} variant="secondary">
+                  <Badge key={index} variant="secondary" className='p-2 rounded-xl bg-gray-200'>
                     {item.product_name} x{item.qty} (Rp{item.price.toLocaleString('id-ID')})
-                    <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => handleItemRemove(index)} />
+                    <X className="ml-2 h-3 w-3 rounded-full text-white bg-red-600 cursor-pointer" onClick={() => handleItemRemove(index)} />
                   </Badge>
                 ))}
               </div>

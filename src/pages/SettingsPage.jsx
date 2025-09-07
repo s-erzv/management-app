@@ -61,7 +61,7 @@ const SettingsPage = () => {
       </div>
 
       <Card className="p-4 md:p-6 bg-white border border-gray-200 shadow-sm">
-        <Tabs defaultValue="products" className="w-full">
+        <Tabs defaultValue="payment-methods" className="w-full">
           {/* TabsList dengan grid responsif */}
           <TabsList className="grid w-full justify-start grid-cols-1 gap-1 bg-transparent p-0 h-auto md:grid-cols-3">
             

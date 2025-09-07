@@ -27,26 +27,23 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 1. Ambil data invoice yang lengkap
-    
-  const { data: invoiceData, error: invoiceError } = await supabase
-    .from('invoices')
-    .select(`
-      *,
-      customers:customer_id (name, phone, address),
-      companies:company_id (name),
-      invoice_items(
+    // 1. Ambil data invoice yang lengkap, termasuk biaya transportasi dari tabel orders
+    const { data: invoiceData, error: invoiceError } = await supabase
+      .from('invoices')
+      .select(`
         *,
-        products:product_id(name)
-      )
-    `)
-    .eq('order_id', order_id)
-    .single();
+        customers:customer_id (name, phone, address),
+        companies:company_id (name),
+        invoice_items(
+          *,
+          products:product_id(name)
+        ),
+        orders:order_id(transport_cost)
+      `)
+      .eq('order_id', order_id)
+      .single();
 
-  if (invoiceError) throw invoiceError;
-
-  console.log("Invoice Data:", JSON.stringify(invoiceData, null, 2)); // Tambahkan baris ini
-
+    if (invoiceError) throw invoiceError;
 
     // 2. Logika pembuatan PDF
     const pdfDoc = await PDFDocument.create();
@@ -108,6 +105,17 @@ serve(async (req) => {
         y -= 20;
         totalAmount += itemTotal;
       }
+    }
+    
+    // Tambahkan biaya transportasi sebagai item baru
+    const transportCost = invoiceData.orders.transport_cost || 0;
+    if (transportCost > 0) {
+      page.drawText('Biaya Transportasi', { x: margin, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`1`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${transportCost.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${transportCost.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
+      y -= 20;
+      totalAmount += transportCost;
     }
     y -= 20;
 

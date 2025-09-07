@@ -8,7 +8,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { Loader2, Banknote, CreditCard, PiggyBank } from 'lucide-react';
+import { Loader2, Banknote, CreditCard, PiggyBank, TrendingUp, TrendingDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Separator } from '@/components/ui/separator';
 
@@ -17,7 +17,7 @@ const FinancialReportPage = () => {
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({
     totalBalance: 0,
-    balances: [],
+    balances: {},
   });
 
   useEffect(() => {
@@ -37,10 +37,21 @@ const FinancialReportPage = () => {
         .eq('company_id', companyId);
       if (methodsError) throw methodsError;
 
+      // Inisialisasi struktur data saldo per metode pembayaran
+      const initialBalances = paymentMethods.reduce((acc, method) => {
+        acc[method.id] = {
+          ...method,
+          income: 0,
+          expense: 0,
+          balance: 0,
+        };
+        return acc;
+      }, {});
+
       // 2. Ambil semua pembayaran masuk dari orders
       const { data: incomingPayments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, payment_method:payment_method_id(method_name)')
+        .select('amount, payment_method_id')
         .eq('company_id', companyId);
       if (paymentsError) throw paymentsError;
 
@@ -52,61 +63,53 @@ const FinancialReportPage = () => {
         .eq('status', 'paid');
       if (expensesError) throw expensesError;
 
-      // 4. Ambil semua pengeluaran manual dari financial_transactions
-      const { data: manualExpenses, error: manualExpensesError } = await supabase
-          .from('financial_transactions')
-          .select('amount, payment_method:payment_method_id(method_name)')
-          .eq('company_id', companyId)
-          .eq('type', 'expense');
-      if (manualExpensesError) throw manualExpensesError;
-      
-      // PERBAIKAN: 5. Ambil semua pemasukan manual dari financial_transactions
-      const { data: manualIncome, error: manualIncomeError } = await supabase
-          .from('financial_transactions')
-          .select('amount, payment_method:payment_method_id(method_name)')
-          .eq('company_id', companyId)
-          .eq('type', 'income');
-      if (manualIncomeError) throw manualIncomeError;
+      // 4. Ambil semua transaksi manual
+      const { data: manualTransactions, error: manualTransactionsError } = await supabase
+        .from('financial_transactions')
+        .select('amount, type, payment_method_id')
+        .eq('company_id', companyId);
+      if (manualTransactionsError) throw manualTransactionsError;
 
+      // Proses data transaksi dan hitung saldo
       let totalCompanyBalance = 0;
-      const balances = paymentMethods.map(method => {
-        // Gabungkan pemasukan dari orders dan pemasukan manual
-        const incomingFromOrders = incomingPayments
-          .filter(p => p.payment_method?.method_name === method.method_name)
-          .reduce((sum, p) => sum + p.amount, 0);
-          
-        const incomingFromManual = manualIncome
-            .filter(i => i.payment_method?.method_name === method.method_name)
-            .reduce((sum, i) => sum + i.amount, 0);
+      const balances = { ...initialBalances };
 
-        const incoming = incomingFromOrders + incomingFromManual;
+      // a. Proses pemasukan dari orders
+      for (const p of incomingPayments) {
+        if (balances[p.payment_method_id]) {
+          balances[p.payment_method_id].income += p.amount;
+        }
+      }
 
-        const outgoingFromReports = expenseReports
-          .filter(e => e.payment_method === method.method_name)
-          .reduce((sum, e) => sum + e.total_amount, 0);
+      // b. Proses transaksi manual (pemasukan & pengeluaran)
+      for (const t of manualTransactions) {
+        if (balances[t.payment_method_id]) {
+          if (t.type === 'income') {
+            balances[t.payment_method_id].income += t.amount;
+          } else {
+            balances[t.payment_method_id].expense += t.amount;
+          }
+        }
+      }
+      
+      // c. Proses pengeluaran dari laporan pengeluaran
+      for (const e of expenseReports) {
+        const matchingMethod = paymentMethods.find(m => m.method_name === e.payment_method);
+        if (matchingMethod) {
+          balances[matchingMethod.id].expense += e.total_amount;
+        }
+      }
 
-        const outgoingFromManual = manualExpenses
-          .filter(me => me.payment_method?.method_name === method.method_name)
-          .reduce((sum, me) => sum + me.amount, 0);
-        
-        const totalOutgoing = outgoingFromReports + outgoingFromManual;
-        
-        const balance = incoming - totalOutgoing;
+      // Hitung saldo akhir dan total saldo perusahaan
+      for (const id in balances) {
+        const balance = balances[id].income - balances[id].expense;
+        balances[id].balance = balance;
         totalCompanyBalance += balance;
-
-        return {
-          id: method.id,
-          method_name: method.method_name,
-          type: method.type,
-          account_name: method.account_name,
-          account_number: method.account_number,
-          balance: balance,
-        };
-      });
+      }
 
       setReportData({
         totalBalance: totalCompanyBalance,
-        balances: balances,
+        balances: Object.values(balances),
       });
 
     } catch (error) {
@@ -175,14 +178,13 @@ const FinancialReportPage = () => {
               <div className="text-2xl font-bold text-[#10182b]">
                 {formatCurrency(item.balance)}
               </div>
+              <div className="text-sm text-muted-foreground mt-2 flex justify-between items-center">
+                <span>Pemasukan: <span className="font-semibold text-green-600">{formatCurrency(item.income)}</span></span>
+                <span>Pengeluaran: <span className="font-semibold text-red-600">{formatCurrency(item.expense)}</span></span>
+              </div>
               {item.type === 'transfer' && (
                 <p className="text-xs text-muted-foreground mt-2">
                   {item.account_name} ({item.account_number})
-                </p>
-              )}
-               {item.type === 'cash' && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  {item.account_name}
                 </p>
               )}
             </CardContent>

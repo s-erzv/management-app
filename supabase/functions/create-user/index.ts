@@ -14,8 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    // Tambahkan 'rekening' ke dalam destructuring
-    const { email, password, role, companyName, companyId, full_name, rekening } = await req.json()
+    const { email, password, role, companyName, companyId, full_name, rekening, logoUrl } = await req.json()
     
     // Inisialisasi Supabase dengan service_role key
     const supabase = createClient(
@@ -43,7 +42,7 @@ serve(async (req) => {
       }
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
-        .insert([{ name: companyName }])
+        .insert([{ name: companyName, logo_url: logoUrl }])
         .select()
         .single()
       

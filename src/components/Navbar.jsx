@@ -1,3 +1,4 @@
+// src/components/Navbar.jsx
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -37,7 +38,7 @@ const navItems = [
 ];
 
 const Sidebar = () => {
-  const { session, userRole, companyName } = useAuth();
+  const { session, userRole, companyName, companyLogo } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -66,7 +67,11 @@ const Sidebar = () => {
         onClick={onLinkClick}
       >
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-          {companyName ? companyName[0].toUpperCase() : 'A'}
+          {companyLogo ? (
+            <img src={companyLogo} alt="Company Logo" className="h-full w-full rounded-md object-contain" />
+          ) : (
+            companyName ? companyName[0].toUpperCase() : 'A'
+          )}
         </div>
         <span className={`${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} text-sm font-semibold transition-opacity duration-300 whitespace-nowrap`}>
           {companyName || 'Nama Perusahaan'}

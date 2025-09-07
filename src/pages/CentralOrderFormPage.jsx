@@ -42,7 +42,7 @@ const CentralOrderFormPage = () => {
   const { userProfile, loading: authLoading, companyId } = useAuth();
   
   const [products, setProducts] = useState([]);
-  const [productPrices, setProductPrices] = useState({});
+  const [purchasePrices, setPurchasePrices] = useState({}); // Mengubah nama state agar lebih spesifik
   const [loading, setLoading] = useState(true);
   const [isNewOrder, setIsNewOrder] = useState(true);
   
@@ -122,9 +122,10 @@ const CentralOrderFormPage = () => {
   const fetchProductsAndPrices = async () => {
     if (!companyId) return;
 
+    // Ambil purchase_price dari tabel products
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('id, name, stock')
+      .select('id, name, stock, purchase_price')
       .eq('company_id', companyId)
       .order('name', { ascending: true });
     
@@ -135,22 +136,12 @@ const CentralOrderFormPage = () => {
     }
     setProducts(productsData);
 
-    const { data: pricesData, error: pricesError } = await supabase
-      .from('central_order_prices')
-      .select('product_id, price')
-      .eq('company_id', companyId)
-      .in('product_id', productsData.map(p => p.id))
-      .order('order_date', { ascending: false });
-      
-    if (!pricesError) {
-      const latestPrices = {};
-      pricesData.forEach(p => {
-        if (!latestPrices[p.product_id]) {
-          latestPrices[p.product_id] = p.price;
-        }
-      });
-      setProductPrices(latestPrices);
-    }
+    // Siapkan map untuk harga beli
+    const purchasePricesMap = productsData.reduce((acc, p) => {
+      acc[p.id] = p.purchase_price;
+      return acc;
+    }, {});
+    setPurchasePrices(purchasePricesMap);
   };
   
   const fetchPaymentMethods = async () => {
@@ -171,7 +162,7 @@ const CentralOrderFormPage = () => {
       .from('central_orders')
       .select(`
         *,
-        items:central_order_items (product_id, qty, price, received_qty, products(name, stock))
+        items:central_order_items (product_id, qty, price, received_qty, products(name, stock, purchase_price))
       `)
       .eq('id', orderId)
       .eq('company_id', companyId)
@@ -198,6 +189,7 @@ const CentralOrderFormPage = () => {
       ...item,
       product_name: item.products.name,
       current_stock: item.products.stock,
+      price: item.products.purchase_price, // Gunakan purchase_price saat memuat data
     })));
     setReceivedItems(orderData.items.map(item => ({
       product_id: item.product_id,
@@ -226,8 +218,9 @@ const CentralOrderFormPage = () => {
     const newItems = [...orderItems];
     newItems[index][field] = value;
     
-    if (field === 'product_id' && productPrices[value]) {
-        newItems[index].price = productPrices[value];
+    // Mengisi harga secara otomatis dari purchasePrices
+    if (field === 'product_id' && purchasePrices[value]) {
+        newItems[index].price = purchasePrices[value];
     }
     
     setOrderItems(newItems);
@@ -614,6 +607,8 @@ const CentralOrderFormPage = () => {
                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                         placeholder="Harga"
                         min="0"
+                        readOnly // Membuat input read-only
+                        className="bg-gray-100 cursor-not-allowed"
                       />
                     </div>
                     <Button

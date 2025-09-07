@@ -26,7 +26,7 @@ import { Loader2, ArrowLeft, PackageCheck, TruckIcon } from 'lucide-react';
 const CompleteDeliveryPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -157,8 +157,10 @@ const handleCompleteDelivery = async (e) => {
     toast.error('ID pesanan atau bukti pengiriman tidak ada.');
     return;
   }
-   const selectedPaymentMethod = paymentMethods.find(m => m.id === paymentMethod);
-   const isTransfer = paymentMethod === 'hybrid' || selectedPaymentMethod?.type === 'transfer';
+  const selectedPaymentMethod = paymentMethods.find(m => m.id === paymentMethod);
+  const isTransfer = paymentMethod === 'hybrid' || selectedPaymentMethod?.type === 'transfer';
+  const isCashPayment = selectedPaymentMethod?.type === 'cash' || paymentMethod === 'hybrid';
+
   if (isTransfer && !transferProofFile) {
     toast.error('Mohon unggah bukti transfer.');
     return;
@@ -169,7 +171,7 @@ const handleCompleteDelivery = async (e) => {
     return;
   }
   
-  if (paymentMethod !== 'pending' && !receivedByName) {
+  if (isCashPayment && !receivedByName) {
     toast.error('Nama penerima harus diisi.');
     return;
   }
@@ -210,25 +212,21 @@ const handleCompleteDelivery = async (e) => {
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
 
-      const pmToSend = paymentMethod === "hybrid"
-          ? transferMethod
-          : paymentMethod;
-       const pmName = pmToSend === 'pending' || pmToSend === 'hybrid'
-          ? pmToSend
-          : (paymentMethods.find(m => m.id === pmToSend)?.method_name ?? pmToSend);
-       
+    const pmToSend = paymentMethod === "hybrid"
+      ? transferMethod
+      : paymentMethod;
+
     const payload = {
       orderId,
       paymentAmount: finalPaymentAmount,
-      paymentMethod: pmToSend,
-     paymentMethodName: pmName, 
+      paymentMethodId: pmToSend,
       returnedQty: parseInt(formState.returnedQty, 10) || 0,
       borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
       purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
       transportCost: parseFloat(formState.transportCost) || 0,
       proofFileUrl: deliveryFilePath,
       transferProofUrl,
-      receivedByName,
+      receivedByUserId: user?.id || null, // Menggunakan user.id untuk kolom received_by
     };
 
     const response = await fetch(
@@ -269,7 +267,6 @@ const handleCompleteDelivery = async (e) => {
     );
   }
   
-  // Combine all payment methods for the dropdown
   const combinedPaymentMethods = [
     { id: 'pending', method_name: 'Pending', type: 'pending' },
     { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' },
@@ -327,7 +324,7 @@ const handleCompleteDelivery = async (e) => {
               <Label className="font-medium text-[#10182b]">Detail Barang</Label>
               {order.order_items.map((item, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">{item.products?.name} ({item.item_type})</span>
+                  <span className="text-muted-foreground">{item.products?.name}</span>
                   <span className="text-[#10182b]">{item.qty} x {formatCurrency(item.price)}</span>
                 </div>
               ))}
@@ -352,8 +349,9 @@ const handleCompleteDelivery = async (e) => {
                     <SelectContent>
                        {combinedPaymentMethods.map(method => (
                          <SelectItem key={method.id} value={method.id}>
-                           {method.method_name}
-                         </SelectItem>
+                         {method.method_name}
+                          {method.type === 'transfer' && method.account_name && ` (${method.account_name})`}
+                        </SelectItem>
                        ))}
                     </SelectContent>
                   </Select>

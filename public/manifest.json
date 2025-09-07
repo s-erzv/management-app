@@ -1,0 +1,16 @@
+{
+  "name": "Management App",
+  "short_name": "ManagementApp",
+  "description": "A management application for handling orders and users.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10182b",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

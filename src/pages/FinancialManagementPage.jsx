@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash, Eye, FileText, PiggyBank, TrendingUp, TrendingDown } from 'lucide-react';
+import { Loader2, Plus, Trash, Eye, FileText, PiggyBank, TrendingUp, TrendingDown, Download, ListOrdered, ReceiptText } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -55,29 +55,93 @@ const FinancialManagementPage = () => {
   const fetchData = async () => {
     setLoading(true);
 
-    const { data: transactionsData, error: transactionsError } = await supabase
-      .from('financial_transactions')
-      .select(`
-        *,
-        payment_method:payment_method_id (method_name)
-      `)
-      .eq('company_id', companyId)
-      .order('transaction_date', { ascending: false });
-    
-    if (transactionsError) {
-      console.error('Error fetching transactions:', transactionsError);
-      toast.error('Gagal memuat riwayat transaksi.');
-    } else {
-      setTransactions(transactionsData);
-    }
+    // Ambil data dari semua tabel keuangan
+    const [
+      { data: manualTransactions, error: manualTransactionsError },
+      { data: orderPayments, error: orderPaymentsError },
+      { data: expenseReports, error: expenseReportsError },
+      { data: allPaymentMethods, error: methodsError },
+    ] = await Promise.all([
+      supabase.from('financial_transactions')
+        .select(`*, payment_method:payment_method_id (method_name, account_name, type)`)
+        .eq('company_id', companyId)
+        .order('transaction_date', { ascending: false }),
+      supabase.from('payments')
+        .select(`*, payment_method:payment_method_id (method_name, account_name, type), orders:order_id(invoice_number, customers(name))`)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false }),
+      supabase.from('expense_reports')
+        .select(`*, user:user_id(full_name)`)
+        .eq('company_id', companyId)
+        .eq('status', 'paid') // Hanya yang sudah dibayar dianggap transaksi final
+        .order('report_date', { ascending: false }),
+      supabase.from('payment_methods')
+        .select('id, method_name, account_name, type')
+        .eq('company_id', companyId),
+    ]);
 
-    const { data: methodsData, error: methodsError } = await supabase
-        .from('payment_methods')
-        .select('id, method_name')
-        .eq('company_id', companyId);
-    
-    if (!methodsError) {
-        setPaymentMethods(methodsData);
+    if (manualTransactionsError || orderPaymentsError || expenseReportsError || methodsError) {
+      console.error('Error fetching all financial data:', { manualTransactionsError, orderPaymentsError, expenseReportsError, methodsError });
+      toast.error('Gagal memuat riwayat transaksi keuangan.');
+    } else {
+      setPaymentMethods(allPaymentMethods);
+
+      // Normalisasi dan gabungkan semua data transaksi
+      const combinedTransactions = [];
+
+      // Manual Transactions
+      manualTransactions.forEach(t => {
+        combinedTransactions.push({
+          id: t.id,
+          date: t.transaction_date,
+          type: t.type,
+          amount: t.amount,
+          description: t.description,
+          method: t.payment_method?.method_name || '-',
+          methodType: t.payment_method?.type || '-',
+          account: t.payment_method?.account_name || '-',
+          source: t.source_table === 'manual_transaction' ? 'Manual' : 'Biaya Transportasi',
+          proofUrl: t.proof_url,
+        });
+      });
+
+      // Order Payments (Income)
+      orderPayments.forEach(p => {
+        combinedTransactions.push({
+          id: p.id,
+          date: p.paid_at,
+          type: 'income',
+          amount: p.amount,
+          description: `Pembayaran pesanan #${p.orders?.invoice_number}`,
+          method: p.payment_method?.method_name || '-',
+          methodType: p.payment_method?.type || '-',
+          account: p.payment_method?.account_name || '-',
+          source: `Order #${p.orders?.invoice_number}`,
+          proofUrl: p.proof_url,
+        });
+      });
+
+      // Expense Reports (Expense)
+      expenseReports.forEach(e => {
+        // Cari metode pembayaran berdasarkan nama, karena di expense_reports hanya ada namanya
+        const method = allPaymentMethods.find(m => m.method_name === e.payment_method);
+        combinedTransactions.push({
+          id: e.id,
+          date: e.report_date,
+          type: 'expense',
+          amount: e.total_amount,
+          description: `Reimbursement untuk ${e.user?.full_name}`,
+          method: method?.method_name || e.payment_method,
+          methodType: method?.type || '-',
+          account: method?.account_name || '-',
+          source: 'Laporan Pengeluaran',
+          proofUrl: null, // Laporan pengeluaran tidak memiliki kolom proof_url
+        });
+      });
+
+      // Urutkan semua transaksi berdasarkan tanggal
+      combinedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setTransactions(combinedTransactions);
     }
     
     setLoading(false);
@@ -259,7 +323,7 @@ const FinancialManagementPage = () => {
       </Card>
 
       <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
+          <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
               <CardTitle className="text-xl text-[#10182b] flex items-center gap-2">
                 <FileText className="h-6 w-6" />
                 Riwayat Transaksi Keuangan
@@ -275,13 +339,14 @@ const FinancialManagementPage = () => {
                               <TableHead className="min-w-[150px]">Jumlah</TableHead>
                               <TableHead className="min-w-[200px]">Deskripsi</TableHead>
                               <TableHead className="min-w-[150px]">Metode</TableHead>
+                              <TableHead className="min-w-[150px]">Sumber</TableHead>
                               <TableHead className="min-w-[150px]">Bukti</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
                           {transactions.map((t) => (
                               <TableRow key={t.id}>
-                                  <TableCell>{new Date(t.transaction_date).toLocaleDateString('id-ID')}</TableCell>
+                                  <TableCell>{new Date(t.date).toLocaleDateString('id-ID')}</TableCell>
                                   <TableCell>
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${t.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                         {t.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
@@ -289,10 +354,11 @@ const FinancialManagementPage = () => {
                                   </TableCell>
                                   <TableCell>Rp{t.amount.toLocaleString('id-ID')}</TableCell>
                                   <TableCell>{t.description}</TableCell>
-                                  <TableCell>{t.payment_method?.method_name || '-'}</TableCell>
+                                  <TableCell>{`${t.method}${t.account && t.methodType === 'transfer' ? ` (${t.account})` : ''}`}</TableCell>
+                                  <TableCell>{t.source}</TableCell>
                                   <TableCell>
-                                    {t.proof_url ? (
-                                      <a href={t.proof_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                    {t.proofUrl ? (
+                                      <a href={t.proofUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                                         Lihat Bukti
                                       </a>
                                     ) : (
@@ -303,7 +369,7 @@ const FinancialManagementPage = () => {
                           ))}
                           {transactions.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                 Belum ada riwayat transaksi.
                               </TableCell>
                             </TableRow>

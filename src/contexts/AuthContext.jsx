@@ -1,172 +1,153 @@
-// src/contexts/AuthContext.jsx
+// SAFE MODE: minimal, anti-hang, no timeouts, no aggressive listeners
+// Goal: memastikan login/logout & balik tab tidak bikin loading menggantung.
 
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
-import { toast } from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { Loader2 } from 'lucide-react'
 
-const AuthContext = createContext();
+const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
-  const [session, setSession] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [session, setSession] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(false)
+
+  const mountedRef = useRef(true)
+  const profilePromiseRef = useRef(null)
 
   useEffect(() => {
-    let isMounted = true;
-    let profileLoadPromise = null;
+    mountedRef.current = true
 
-    const loadUserProfile = async (userId) => {
-      // Prevent multiple simultaneous profile loads
-      if (profileLoadPromise) {
-        return profileLoadPromise;
-      }
+    const safeSet = (fn) => mountedRef.current && fn()
 
-      profileLoadPromise = supabase
-        .from('profiles')
-        .select(`
-          id, 
-          role, 
-          company_id, 
-          full_name,
-          companies(name) // Fetch company name
-        `)
-        .eq('id', userId)
-        .single();
+    const applySession = async (nextSession) => {
+      safeSet(() => setSession(nextSession))
+      // NOTE: profile will be loaded by a dedicated effect below when userId changes
+      if (!nextSession?.user?.id) safeSet(() => setUserProfile(null))
+    }
 
+    const initialize = async () => {
+      setAuthLoading(true)
       try {
-        const { data: profile, error } = await profileLoadPromise;
-        
-        if (!isMounted) return null;
-
-        if (error) {
-          console.error('Error fetching user profile:', error);
-          toast.error('Gagal memuat profil pengguna.');
-          return null;
-        }
-        
-        return profile;
-      } catch (error) {
-        console.error('Error in loadUserProfile:', error);
-        if (isMounted) {
-          toast.error('Terjadi kesalahan saat memuat profil.');
-        }
-        return null;
+        const { data, error } = await supabase.auth.getSession()
+        if (error) throw error
+        await applySession(data?.session ?? null)
+      } catch (e) {
+        console.error('[Auth] init getSession failed:', e)
+        try { await supabase.auth.signOut() } catch {}
+        safeSet(() => setSession(null))
+        safeSet(() => setUserProfile(null))
       } finally {
-        profileLoadPromise = null;
+        if (mountedRef.current) setAuthLoading(false)
       }
-    };
+    }
 
-    const handleAuthChange = async (newSession, skipProfileLoad = false) => {
-      if (!isMounted) return;
+    initialize()
 
-      // Check if session actually changed
-      const sessionChanged = JSON.stringify(session) !== JSON.stringify(newSession);
-      
-      if (!sessionChanged && isInitialized && !skipProfileLoad) {
-        return; // No change, skip update
-      }
-
-      if (newSession) {
-        setSession(newSession);
-        
-        if (!skipProfileLoad) {
-          const profile = await loadUserProfile(newSession.user.id);
-          if (isMounted) {
-            setUserProfile(profile);
-          }
-        }
-      } else {
-        setSession(null);
-        setUserProfile(null);
-      }
-    };
-
-    const initializeAuth = async () => {
-      if (!isMounted) return;
-      
-      setLoading(true);
-      
-      try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting initial session:', error);
-          toast.error('Gagal mendapatkan sesi awal.');
-          return;
-        }
-        
-        await handleAuthChange(currentSession);
-        
-        if (isMounted) {
-          setIsInitialized(true);
-        }
-      } catch (error) {
-        console.error('Error in initializeAuth:', error);
-        toast.error('Gagal menginisialisasi otentikasi.');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        if (!isMounted || !isInitialized) return;
-        
-        console.log('Auth state changed:', event, !!newSession);
-        
-        // Only handle auth changes after initialization
-        await handleAuthChange(newSession);
-        
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    );
+    // Listen basic auth changes only
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      await applySession(newSession)
+    })
 
     return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []); // Empty dependency array
+      mountedRef.current = false
+      listener?.subscription?.unsubscribe?.()
+    }
+  }, [])
 
-  // Memoize the context value to prevent unnecessary re-renders
+  // Dedicated effect: load profile whenever userId changes.
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+
+    if (profilePromiseRef.current) return // guard
+
+    let cancelled = false
+    profilePromiseRef.current = (async () => {
+      try {
+        setProfileLoading(true)
+        const { data, error } = await supabase
+          .from('profiles')
+          .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
+          .eq('id', userId)
+          .single()
+        if (error) throw error
+        if (!cancelled) setUserProfile(data)
+      } catch (err) {
+        console.warn('[Auth] profile load failed, will retry on next auth change/focus:', err)
+      } finally {
+        profilePromiseRef.current = null
+        if (!cancelled) setProfileLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  // Light re-check when tab becomes visible: only if we have a session but no profile yet.
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return
+      if (!session?.user?.id) return
+      if (userProfile || profilePromiseRef.current) return
+      // Re-try profile fetch quietly
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
+        .eq('id', session.user.id)
+        .single()
+      if (!error) setUserProfile(data)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [session?.user?.id, userProfile])
+
   const contextValue = useMemo(() => ({
     session,
     userProfile,
-    loading,
-    userRole: userProfile?.role,
-    companyId: userProfile?.company_id,
-    companyName: userProfile?.companies?.name, // Extract company name
+    loading: authLoading || profileLoading,
+    authLoading,
+    profileLoading,
     isAuthenticated: !!session,
-    userId: session?.user?.id,
-  }), [session, userProfile, loading]);
+    userId: session?.user?.id ?? null,
+    userRole: userProfile?.role ?? null,
+    companyId: userProfile?.company_id ?? null,
+    companyName: userProfile?.companies?.name ?? null,
+    companyLogo: userProfile?.companies?.logo_url ?? null,
+    refreshProfile: async () => {
+      if (!session?.user?.id) return null
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
+        .eq('id', session.user.id)
+        .single()
+      if (!error) setUserProfile(data)
+      return data ?? null
+    },
+    signOut: async () => {
+      const { error } = await supabase.auth.signOut()
+      if (error) console.warn('[Auth] signOut error', error)
+    },
+  }), [session, userProfile, authLoading, profileLoading])
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
       </div>
-    );
+    )
   }
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
+}
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider')
   }
-  return context;
-};
+  return context
+}
+
+export default AuthContext;

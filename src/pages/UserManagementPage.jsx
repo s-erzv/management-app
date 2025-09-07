@@ -263,14 +263,6 @@ const UserManagementPage = () => {
                             >
                               <Pencil className="h-4 w-4 text-blue-500" />
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="icon"
-                              onClick={() => handleDeleteUser(user.id)}
-                              disabled={user.id === session.user.id}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
                         </div>
                       </TableCell>
                     </TableRow>

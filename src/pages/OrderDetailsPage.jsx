@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import ProofOfDeliveryForm from '@/components/ProofOfDeliveryForm';
 
 // Badge status pengiriman
 const getDeliveryStatusBadge = (status) => {
@@ -65,7 +64,6 @@ const OrderDetailsPage = () => {
 
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
-  const [isProofFormOpen, setIsProofFormOpen] = useState(false);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
 
   // Refs untuk cleanup dan prevent race conditions
@@ -265,6 +263,8 @@ const OrderDetailsPage = () => {
       id: m.id,
       method_name: m.method_name,
       type: m.type, // 'cash' | 'transfer' | ...
+      account_name: m.account_name || null,
+      account_number: m.account_number || null,
     })),
     [paymentMethods]
   );
@@ -395,34 +395,7 @@ const OrderDetailsPage = () => {
       setOpLoading(false);
     }
   };
-
-  const handleCompleteDelivery = async (payload) => {
-    if (!order) return;
-    setOpLoading(true);
-    try {
-      const { error: updErr } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          proof_of_delivery_url: payload?.path || null,
-        })
-        .eq('id', order.id);
-      if (updErr) throw updErr;
-
-      toast.success('Pengiriman diselesaikan.');
-      setIsProofFormOpen(false);
-      handleDataUpdate();
-    } catch (err) {
-      if (!isAbortErr(err)) {
-        console.error('complete-delivery error', err);
-        toast.error(err.message || 'Gagal menyelesaikan pengiriman.');
-      }
-    } finally {
-      setOpLoading(false);
-    }
-  };
-
+  
   const handleSendInvoice = async () => {
     if (!order) return;
     setIsSendingInvoice(true);
@@ -441,8 +414,19 @@ const OrderDetailsPage = () => {
         throw new Error(errorText || 'Gagal membuat invoice PDF.');
       }
       const { pdfUrl } = await response.json();
-      // Sesuaikan template WA-mu sendiri
-      const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.\n\nBerikut tagihan Anda.\n${pdfUrl}\n\nTerima kasih.`;
+      const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.Yth. Bapak/Ibu ${order.customers.name},
+
+Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
+Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculateOrderTotal(order.order_items))}.
+Tautan invoice: ${pdfUrl}.
+
+Metode Pembayaran: Silahkan pilih metode pembayaran yang tersedia di bawah ini.
+
+Jazaakumullaahu khairan atas perhatian dan kerja samanya.
+Wassalamualaikum warahmatullahi wabarakatuh.
+
+Hormat kami,
+nama company kita;`;
       const phone = (order.customers?.phone || '').replace(/[^\d]/g, '');
       const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`;
       window.open(whatsappUrl, '_blank');
@@ -454,6 +438,7 @@ const OrderDetailsPage = () => {
       setIsSendingInvoice(false);
     }
   };
+
 
   // --- render guards ---
   if (loading) {
@@ -514,11 +499,8 @@ const OrderDetailsPage = () => {
           Detail Pesanan
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => fetchData(false)} className="text-[#10182b] hover:bg-gray-100">
+          <Button variant="outline" onClick={() => fetchData(true)} className="text-[#10182b] hover:bg-gray-100">
             <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
-          </Button>
-          <Button onClick={() => setIsProofFormOpen(true)} className="bg-[#10182b] text-white hover:bg-[#20283b]">
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Selesaikan Pengiriman
           </Button>
           <Button variant="outline" onClick={handleSendInvoice} disabled={isSendingInvoice} className="text-[#10182b] hover:bg-gray-100">
             {isSendingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ReceiptText className="mr-2 h-4 w-4" />}
@@ -724,13 +706,6 @@ const OrderDetailsPage = () => {
           </CardContent>
         </Card>
       </div>
-
-      <ProofOfDeliveryForm
-        isOpen={isProofFormOpen}
-        onOpenChange={setIsProofFormOpen}
-        order={order}
-        onCompleteDelivery={handleCompleteDelivery}
-      />
     </div>
   );
 };

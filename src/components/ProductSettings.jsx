@@ -31,6 +31,7 @@ const ProductSettings = () => {
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     stock: '',
+    purchase_price: '', // Field baru
     is_returnable: false,
   });
 
@@ -55,7 +56,7 @@ const ProductSettings = () => {
       .from('customer_statuses')
       .select('status_name')
       .eq('company_id', userProfile.company_id)
-      .order('status_name', { ascending: true });
+      .order('sort_order', { ascending: true }); // Mengubah urutan agar sesuai dengan yang ada di database
 
     if (productsError || statusError) {
       console.error('Error fetching data:', productsError || statusError);
@@ -106,6 +107,7 @@ const ProductSettings = () => {
           .insert({ 
             name: newProductForm.name,
             stock: parseInt(newProductForm.stock),
+            purchase_price: parseFloat(newProductForm.purchase_price) || 0, // Simpan harga beli
             is_returnable: newProductForm.is_returnable,
             company_id: userProfile.company_id,
           })
@@ -119,6 +121,7 @@ const ProductSettings = () => {
           .update({
             name: currentProduct.name,
             stock: parseInt(currentProduct.stock),
+            purchase_price: parseFloat(currentProduct.purchase_price) || 0, // Update harga beli
             is_returnable: currentProduct.is_returnable
           })
           .eq('id', productId);
@@ -177,14 +180,24 @@ const ProductSettings = () => {
   
   const resetForm = () => {
     setCurrentProduct(null);
-    setNewProductForm({ name: '', stock: '', is_returnable: false });
+    setNewProductForm({ name: '', stock: '', purchase_price: '', is_returnable: false });
     setProductPrices([]);
     setIsModalOpen(false);
   };
   
-  const allPricesSet = productPrices.every(p => p.price && p.price > 0);
-  const isFormValid = newProductForm.name && newProductForm.stock && allPricesSet;
-  const isEditFormValid = currentProduct?.name && currentProduct?.stock && allPricesSet;
+  const allPricesSet = productPrices.every(p => p.price !== '' && p.price >= 0);
+  const isFormValid =
+    newProductForm.name &&
+    newProductForm.stock &&
+    newProductForm.purchase_price !== '' &&
+    allPricesSet;
+
+  const isEditFormValid =
+    currentProduct?.name &&
+    currentProduct?.stock &&
+    currentProduct?.purchase_price !== '' &&
+    allPricesSet;
+
   const canSubmit = currentProduct ? isEditFormValid : isFormValid;
 
 
@@ -244,6 +257,22 @@ const ProductSettings = () => {
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="purchase_price">Harga Beli dari Pusat</Label>
+                <Input
+                  id="purchase_price"
+                  name="purchase_price"
+                  type="number"
+                  step="0.01"
+                  placeholder="Harga beli dari pusat"
+                  value={currentProduct ? currentProduct.purchase_price : newProductForm.purchase_price}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    currentProduct ? setCurrentProduct({ ...currentProduct, [name]: value }) : setNewProductForm({ ...newProductForm, [name]: value });
+                  }}
+                  required
+                />
+              </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="is_returnable"
@@ -264,8 +293,8 @@ const ProductSettings = () => {
                     <Label className="w-full sm:w-1/3">{p.name}</Label>
                     <Input
                       type="number"
-                      step="0.01"
-                      placeholder="Harga"
+                      step="0.1"
+                      placeholder="0"
                       value={p.price}
                       onChange={(e) => handlePriceChange(p.customer_status, e.target.value)}
                       required
@@ -297,6 +326,7 @@ const ProductSettings = () => {
                 <TableRow>
                   <TableHead className="min-w-[150px]">Nama Produk</TableHead>
                   <TableHead className="min-w-[100px]">Stok</TableHead>
+                  <TableHead className="min-w-[150px]">Harga Beli</TableHead>
                   <TableHead className="min-w-[150px]">Dapat Dikembalikan</TableHead>
                   <TableHead className="min-w-[120px]">Aksi</TableHead>
                 </TableRow>
@@ -306,6 +336,7 @@ const ProductSettings = () => {
                   <TableRow key={product.id}>
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{product.stock}</TableCell>
+                    <TableCell>Rp{product.purchase_price ? parseFloat(product.purchase_price).toLocaleString('id-ID') : '-'}</TableCell>
                     <TableCell>{product.is_returnable ? 'Ya' : 'Tidak'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">

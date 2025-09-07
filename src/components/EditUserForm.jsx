@@ -15,8 +15,10 @@ import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
 const EditUserForm = ({ open, onOpenChange, userToEdit, onUserUpdated }) => {
+  const { userRole } = useAuth();
   const [fullName, setFullName] = useState('');
   const [rekening, setRekening] = useState('');
+  const [logoFile, setLogoFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,6 +46,34 @@ const EditUserForm = ({ open, onOpenChange, userToEdit, onUserUpdated }) => {
         .eq('id', userToEdit.id);
 
       if (error) throw error;
+      
+      // Jika role adalah admin, perbarui juga logo perusahaan jika ada file baru
+      if (userRole === 'super_admin' && userToEdit.role === 'admin' && logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const filePath = `company_logos/${crypto.randomUUID()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(filePath, logoFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+          
+        if (uploadError) {
+          throw new Error('Gagal mengunggah logo: ' + uploadError.message);
+        }
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('logos')
+          .getPublicUrl(filePath);
+          
+        const { error: companyUpdateError } = await supabase
+          .from('companies')
+          .update({ logo_url: publicUrlData.publicUrl })
+          .eq('id', userToEdit.company_id);
+          
+        if (companyUpdateError) throw companyUpdateError;
+      }
 
       toast.success('Pengguna berhasil diperbarui!');
       onUserUpdated({ ...userToEdit, full_name: fullName, rekening: rekening });
@@ -86,6 +116,17 @@ const EditUserForm = ({ open, onOpenChange, userToEdit, onUserUpdated }) => {
               onChange={(e) => setRekening(e.target.value)}
             />
           </div>
+          {userRole === 'super_admin' && userToEdit?.role === 'admin' && (
+            <div>
+              <Label htmlFor="logo">Logo Perusahaan (Opsional)</Label>
+              <Input
+                id="logo"
+                type="file"
+                onChange={(e) => setLogoFile(e.target.files[0])}
+                accept="image/*"
+              />
+            </div>
+          )}
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Perbarui Pengguna'}
           </Button>
