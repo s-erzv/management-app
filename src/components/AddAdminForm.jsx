@@ -20,6 +20,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [logoFile, setLogoFile] = useState(null);
+  const [googleSheetsLink, setGoogleSheetsLink] = useState(''); // State baru
   const [loading, setLoading] = useState(false);
 
   const handleAddAdmin = async (e) => {
@@ -69,6 +70,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
           companyName,
           full_name: fullName,
           logoUrl,
+          googleSheetsLink, // Kirim link ke Edge Function
         }),
       });
 
@@ -96,6 +98,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
     setPassword('');
     setFullName('');
     setLogoFile(null);
+    setGoogleSheetsLink('');
     onOpenChange(false);
   };
 
@@ -156,6 +159,17 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
               type="file"
               onChange={(e) => setLogoFile(e.target.files[0])}
               accept="image/*"
+            />
+          </div>
+          <div>
+            <Label htmlFor="google-sheets-link">Link Google Sheets</Label>
+            <Input
+              id="google-sheets-link"
+              type="url"
+              placeholder="https://docs.google.com/spreadsheets/d/..."
+              value={googleSheetsLink}
+              onChange={(e) => setGoogleSheetsLink(e.target.value)}
+              required
             />
           </div>
           <Button type="submit" disabled={loading} className="w-full">

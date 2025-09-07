@@ -17,7 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu, Lock, Building2 } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu, Lock, Building2, Database } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useEffect, useState } from 'react';
@@ -37,6 +37,7 @@ const navItems = [
   { path: '/financial-management', name: 'Manajemen Keuangan', icon: <PiggyBank />, roles: ['super_admin', 'admin'] },
   { path: '/financials', name: 'Keuangan', icon: <Wallet />, roles: ['super_admin', 'admin'] },
   { path: '/reports', name: 'Analisis', icon: <BarChart />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/data-export', name: 'Data Center', icon: <Database />, roles: ['super_admin-main', 'admin'] },
   { path: '/settings', name: 'Pengaturan', icon: <Settings />, roles: ['super_admin', 'admin'] },
   { path: '/users', name: 'Manajemen Pengguna', icon: <Users />, roles: ['super_admin', 'super_admin-main'] },
 ];

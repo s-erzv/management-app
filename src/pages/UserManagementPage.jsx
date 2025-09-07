@@ -1,3 +1,4 @@
+// src/pages/UserManagementPage.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,13 +68,13 @@ const UserManagementPage = () => {
     setLoadingCompanies(true);
     const { data, error } = await supabase
       .from('companies')
-      .select('id, name, created_at')
+      .select('id, name, created_at, google_sheets_link') // Ambil google_sheets_link
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching companies:', error);
       toast.error('Gagal mengambil data perusahaan.');
-      setCompanies([]);
+      setCompanies(data ?? []);
     } else {
       setCompanies(data ?? []);
     }
@@ -156,6 +157,16 @@ const UserManagementPage = () => {
     fetchUsers();
     if (userRole === 'super_admin') fetchCompanies();
   };
+  
+  const openGoogleSheets = (link, companyId) => {
+      // Tambahkan parameter company_id ke URL jika link tersedia
+      if (link) {
+        window.open(`${link}?company_id=${companyId}`, '_blank');
+      } else {
+        toast.error('Tautan Google Sheets tidak tersedia untuk perusahaan ini.');
+      }
+  };
+
 
   /* ------------------------- RENDER ------------------------- */
 
@@ -309,13 +320,22 @@ const UserManagementPage = () => {
                         <TableCell>{c.name}</TableCell>
                         <TableCell>{new Date(c.created_at).toLocaleString()}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            onClick={() => handleDeleteCompany(c.id, c.name)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openGoogleSheets(c.google_sheets_link, c.id)}
+                            >
+                              Lihat Spreadsheet
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => handleDeleteCompany(c.id, c.name)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

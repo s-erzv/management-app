@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react'; // Tambahkan ini
+import { useEffect } from 'react';
 
 import Sidebar from './components/Navbar'; 
 import AuthPage from './pages/AuthPage';
@@ -22,11 +22,11 @@ import UpdateStockPage from './pages/UpdateStockPage';
 import ExpenseReportsPage from './pages/ExpenseReportsPage';
 import FinancialReportPage from './pages/FinancialReportPage'; 
 import FinancialManagementPage from './pages/FinancialManagementPage';
+import DataExportPage from './pages/DataExportPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
   
-  // Tambahkan useEffect hook di sini
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -37,7 +37,7 @@ const App = () => {
         });
       });
     }
-  }, []); // Array kosong memastikan ini hanya berjalan sekali saat komponen di-mount.
+  }, []);
   
   if (loading) {
     return (
@@ -121,6 +121,10 @@ const App = () => {
             <Route
               path="/financial-management"
               element={session && isAdminOrSuperAdmin ? <FinancialManagementPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+              path="/data-export"
+              element={session && isAdminOrSuperAdmin ? <DataExportPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
             {isSuperAdmin && (

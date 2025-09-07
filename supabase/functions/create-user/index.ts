@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { email, password, role, companyName, companyId, full_name, rekening, logoUrl } = await req.json()
+    const { email, password, role, companyName, companyId, full_name, rekening, logoUrl, googleSheetsLink } = await req.json() // Menerima googleSheetsLink
     
     // Inisialisasi Supabase dengan service_role key
     const supabase = createClient(
@@ -42,7 +42,7 @@ serve(async (req) => {
       }
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
-        .insert([{ name: companyName, logo_url: logoUrl }])
+        .insert([{ name: companyName, logo_url: logoUrl, google_sheets_link: googleSheetsLink }]) // Simpan link ke tabel companies
         .select()
         .single()
       
