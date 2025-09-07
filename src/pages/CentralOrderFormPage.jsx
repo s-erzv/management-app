@@ -148,7 +148,7 @@ const CentralOrderFormPage = () => {
     if (!companyId) return;
     const { data, error } = await supabase
       .from('payment_methods')
-      .select('id, method_name')
+      .select('id, method_name, account_name')
       .eq('company_id', companyId);
     if (!error) {
       setPaymentMethods(data);
@@ -177,7 +177,7 @@ const CentralOrderFormPage = () => {
 
     const { data: paymentsData } = await supabase
       .from('financial_transactions')
-      .select('amount, transaction_date, proof_url, payment_method:payment_method_id(method_name)')
+      .select('amount, transaction_date, proof_url, payment_method:payment_method_id(method_name, account_name)')
       .eq('source_table', 'central_orders')
       .eq('source_id', orderId)
       .eq('type', 'expense');
@@ -723,7 +723,7 @@ const CentralOrderFormPage = () => {
                           <SelectContent>
                             {paymentMethods.map(method => (
                               <SelectItem key={method.id} value={method.id}>
-                                {method.method_name}
+                                {method.method_name} ({method.account_name})
                               </SelectItem>
                             ))}
                           </SelectContent>

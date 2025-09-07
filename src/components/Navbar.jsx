@@ -17,16 +17,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu, Lock } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu, Lock, Building2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 
 const navItems = [
-  { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard />, roles: ['super_admin', 'admin', 'user'] },
+  { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard />, roles: ['super_admin', 'super_admin-main', 'admin', 'user'] },
   { path: '/orders', name: 'Manajemen Pesanan', icon: <ListOrdered />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/customers', name: 'Customers', icon: <Users />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/stock', name: 'Manajemen Stok', icon: <Package />, roles: ['super_admin', 'admin', 'user'] },
@@ -37,17 +38,36 @@ const navItems = [
   { path: '/financials', name: 'Keuangan', icon: <Wallet />, roles: ['super_admin', 'admin'] },
   { path: '/reports', name: 'Analisis', icon: <BarChart />, roles: ['super_admin', 'admin', 'user'] },
   { path: '/settings', name: 'Pengaturan', icon: <Settings />, roles: ['super_admin', 'admin'] },
-  { path: '/users', name: 'Manajemen Pengguna', icon: <Users />, roles: ['super_admin'] }, 
+  { path: '/users', name: 'Manajemen Pengguna', icon: <Users />, roles: ['super_admin', 'super_admin-main'] },
 ];
 
 const Sidebar = () => {
-  const { session, userRole, companyName, companyLogo } = useAuth();
+  const { session, userRole, companyName, companyLogo, setActiveCompany, companyId, userProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [loadingPasswordChange, setLoadingPasswordChange] = useState(false);
+  const [companies, setCompanies] = useState([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(userRole === 'super_admin');
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      if (userRole === 'super_admin') {
+        setLoadingCompanies(true);
+        const { data, error } = await supabase.from('companies').select('id, name');
+        if (error) {
+          console.error('Error fetching companies:', error);
+          toast.error('Gagal memuat daftar perusahaan.');
+        } else {
+          setCompanies(data || []);
+        }
+        setLoadingCompanies(false);
+      }
+    };
+    fetchCompanies();
+  }, [userRole]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -81,8 +101,12 @@ const Sidebar = () => {
     return null;
   }
   
-  const filteredItems = navItems.filter(item => item.roles.includes(userRole));
-
+  // Logika baru untuk menentukan peran yang sedang aktif
+  const currentRole = userRole === 'super_admin' && !companyId ? 'super_admin-main' : userRole;
+  
+  // Filter menu berdasarkan peran yang sedang aktif
+  const filteredItems = navItems.filter(item => item.roles.includes(currentRole));
+  
   const NavContent = ({ onLinkClick, isMobile = false }) => (
     <nav className="flex flex-col gap-2 px-3 py-4 h-full overflow-y-auto scrollbar-hide">
       <Link 
@@ -101,6 +125,49 @@ const Sidebar = () => {
           {companyName || 'Nama Perusahaan'}
         </span>
       </Link>
+      
+      {userRole === 'super_admin' && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="flex w-full items-center justify-start gap-2 h-10 px-3 py-2 cursor-pointer"
+              disabled={loadingCompanies}
+            >
+              <Building2 className="h-4 w-4" />
+              <span className="truncate">
+                {companyId ? companies.find(c => c.id === companyId)?.name : "Pilih Perusahaan"}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="start">
+            <DropdownMenuLabel>Pilih Perusahaan</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setActiveCompany(null);
+                navigate('/dashboard');
+              }}
+              className={!companyId ? 'bg-gray-100 font-medium cursor-pointer' : ''}
+            >
+              Kembali ke Dashboard Utama
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {companies.map((comp) => (
+              <DropdownMenuItem
+                key={comp.id}
+                onClick={() => {
+                  setActiveCompany(comp.id);
+                  navigate('/dashboard');
+                }}
+                className={comp.id === companyId ? 'bg-gray-100 font-medium' : ''}
+              >
+                {comp.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {filteredItems.map((item) => (
         <Link

@@ -29,7 +29,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { Loader2, Plus, Trash, Eye, FileText, Calendar, User, CreditCard, CheckCircle, Clock, Send } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 const ExpenseReportsPage = () => {
   const { companyId, userProfile, session } = useAuth();
@@ -40,13 +40,16 @@ const ExpenseReportsPage = () => {
     { type: 'bensin', description: '', amount: '' },
   ]);
   const [employees, setEmployees] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
   
   const [submitterId, setSubmitterId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentTo, setPaymentTo] = useState('');
   
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isMarkAsPaidModalOpen, setIsMarkAsPaidModalOpen] = useState(false); // State baru untuk modal
   const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedAdminPaymentMethodId, setSelectedAdminPaymentMethodId] = useState('');
 
   useEffect(() => {
     if (companyId) {
@@ -83,6 +86,15 @@ const ExpenseReportsPage = () => {
 
     if (!employeesError) {
         setEmployees(employeesData);
+    }
+    
+    const { data: methodsData, error: methodsError } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .eq('company_id', companyId);
+
+    if (!methodsError) {
+        setPaymentMethods(methodsData);
     }
     
     setLoading(false);
@@ -141,29 +153,59 @@ const handleTransferClick = (report) => {
   - Metode: ${metode}
   - Rekening: ${rekening}
 
-Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
+Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
 
   const whatsappUrl = `https://wa.me/6281911797724?text=${encodeURIComponent(message)}`;
   window.open(whatsappUrl, '_blank');
 };
 
 
-  const handleMarkAsPaid = async (reportId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menandai laporan ini sebagai LUNAS?')) return;
-    
-    setLoading(true);
-    const { error } = await supabase
-      .from('expense_reports')
-      .update({ status: 'paid' })
-      .eq('id', reportId);
-      
-    if (error) {
-      toast.error('Gagal memperbarui status.');
-    } else {
-      toast.success('Laporan berhasil ditandai sebagai LUNAS.');
-      fetchData();
-    }
-    setLoading(false);
+  const handleMarkAsPaid = (report) => {
+    setSelectedReport(report);
+    setIsMarkAsPaidModalOpen(true);
+  };
+  
+  const handleConfirmPayment = async () => {
+      if (!selectedAdminPaymentMethodId || !selectedReport) {
+          toast.error('Metode pembayaran dan laporan harus dipilih.');
+          return;
+      }
+      setLoading(true);
+      setIsMarkAsPaidModalOpen(false);
+
+      try {
+          // 1. Perbarui status laporan menjadi 'paid'
+          const { error: updateError } = await supabase
+              .from('expense_reports')
+              .update({ status: 'paid' })
+              .eq('id', selectedReport.id);
+          if (updateError) throw updateError;
+          
+          // 2. Tambahkan entri pengeluaran ke financial_transactions
+          const { error: insertError } = await supabase
+              .from('financial_transactions')
+              .insert({
+                  company_id: companyId,
+                  type: 'expense',
+                  amount: selectedReport.total_amount,
+                  description: `Reimbursement untuk ${selectedReport.user?.full_name || 'karyawan'}`,
+                  payment_method_id: selectedAdminPaymentMethodId,
+                  source_table: 'expense_reports',
+                  source_id: selectedReport.id,
+              });
+          if (insertError) throw insertError;
+
+          toast.success('Laporan berhasil ditandai sebagai LUNAS dan pengeluaran dicatat.');
+          fetchData();
+
+      } catch (error) {
+          console.error('Error during payment confirmation:', error);
+          toast.error('Gagal memproses pembayaran: ' + error.message);
+      } finally {
+          setLoading(false);
+          setSelectedReport(null);
+          setSelectedAdminPaymentMethodId('');
+      }
   };
 
   const handleSubmit = async (e) => {
@@ -236,7 +278,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
   const currentSubmitter = employees.find(emp => emp.id === submitterId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+    <div className="min-h-screen">
       <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
         {/* Header */}
         <div className="text-center mb-8">
@@ -389,9 +431,9 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                       <SelectValue placeholder="Pilih metode pembayaran" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">💵 Tunai (Cash)</SelectItem>
+                      <SelectItem value="cash">Tunai (Cash)</SelectItem>
                       <SelectItem value="transfer" disabled={!currentSubmitter?.rekening}>
-                        🏦 Transfer ({currentSubmitter?.rekening || 'Rekening tidak tersedia'})
+                        Transfer ({currentSubmitter?.rekening || 'Rekening tidak tersedia'})
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -660,7 +702,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                       <Button 
                         variant="outline" 
                         className="border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white flex-1"
-                        onClick={() => handleMarkAsPaid(selectedReport.id)}
+                        onClick={() => handleMarkAsPaid(selectedReport)}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Tandai Lunas
@@ -672,6 +714,49 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
             </div>
           </DialogContent>
         </Dialog>
+      )}
+      
+      {/* Modal Tandai Lunas */}
+      {selectedReport && (
+          <Dialog open={isMarkAsPaidModalOpen} onOpenChange={setIsMarkAsPaidModalOpen}>
+              <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                      <DialogTitle>Tandai Lunas Laporan</DialogTitle>
+                      <DialogDescription>
+                          Pilih metode pembayaran yang digunakan untuk melunasi reimbursement ini.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                          <Label htmlFor="admin-payment-method">Metode Pembayaran Perusahaan</Label>
+                          <Select
+                              value={selectedAdminPaymentMethodId}
+                              onValueChange={setSelectedAdminPaymentMethodId}
+                              required
+                          >
+                              <SelectTrigger>
+                                  <SelectValue placeholder="Pilih metode pembayaran" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {paymentMethods.map(method => (
+                                      <SelectItem key={method.id} value={method.id}>
+                                          {method.method_name} {method.type === 'transfer' && `(${method.account_name})`}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  </div>
+                  <DialogFooter>
+                      <Button 
+                          onClick={handleConfirmPayment}
+                          disabled={!selectedAdminPaymentMethodId || loading}
+                      >
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Konfirmasi Pembayaran'}
+                      </Button>
+                  </DialogFooter>
+              </DialogContent>
+          </Dialog>
       )}
     </div>
   );

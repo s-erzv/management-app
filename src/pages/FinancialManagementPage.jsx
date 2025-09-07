@@ -45,6 +45,7 @@ const FinancialManagementPage = () => {
     description: '',
     payment_method_id: '',
     proof: null,
+    source_type: 'manual_transaction', // Tambahkan state baru untuk sumber transaksi
   });
   const [paymentMethods, setPaymentMethods] = useState([]);
 
@@ -63,11 +64,9 @@ const FinancialManagementPage = () => {
       { data: expenseReports, error: expenseReportsError },
       { data: allPaymentMethods, error: methodsError },
     ] = await Promise.all([
-      // Perubahan di sini: Kecualikan transaksi yang berasal dari 'orders'
       supabase.from('financial_transactions')
         .select(`*, payment_method:payment_method_id (method_name, account_name, type)`)
         .eq('company_id', companyId)
-        .neq('source_table', 'orders')
         .order('transaction_date', { ascending: false }),
       supabase.from('payments')
         .select(`*, payment_method:payment_method_id (method_name, account_name, type), orders:order_id(invoice_number, customers(name))`)
@@ -92,6 +91,17 @@ const FinancialManagementPage = () => {
       const combinedTransactions = [];
 
       manualTransactions.forEach(t => {
+        let sourceLabel = 'Lain-lain';
+        if (t.source_table === 'manual_transaction') {
+            sourceLabel = 'Manual';
+        } else if (t.source_table === 'transfer') {
+            sourceLabel = 'Transfer Dana';
+        } else if (t.source_table === 'orders') {
+             sourceLabel = 'Biaya Transportasi';
+        } else if (t.source_table === 'central_order_expense') {
+             sourceLabel = 'Order Pusat';
+        }
+        
         combinedTransactions.push({
           id: t.id,
           date: t.transaction_date,
@@ -101,7 +111,7 @@ const FinancialManagementPage = () => {
           method: t.payment_method?.method_name || '-',
           methodType: t.payment_method?.type || '-',
           account: t.payment_method?.account_name || '-',
-          source: t.source_table === 'manual_transaction' ? 'Manual' : 'Biaya Transportasi',
+          source: sourceLabel,
           proofUrl: t.proof_url,
         });
       });
@@ -129,9 +139,9 @@ const FinancialManagementPage = () => {
           type: 'expense',
           amount: e.total_amount,
           description: `Reimbursement untuk ${e.user?.full_name}`,
-          method: method?.method_name || e.payment_method,
-          methodType: method?.type || '-',
-          account: method?.account_name || '-',
+          method: matchingMethod?.method_name || e.payment_method,
+          methodType: matchingMethod?.type || '-',
+          account: matchingMethod?.account_name || '-',
           source: 'Laporan Pengeluaran',
           proofUrl: null, 
         });
@@ -160,6 +170,7 @@ const FinancialManagementPage = () => {
           description: '',
           payment_method_id: '',
           proof: null,
+          source_type: 'manual_transaction', // Reset sumber transaksi saat tab berubah
       });
   };
 
@@ -167,7 +178,7 @@ const FinancialManagementPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    const { type, amount, description, payment_method_id, proof } = newTransaction;
+    const { type, amount, description, payment_method_id, proof, source_type } = newTransaction;
 
     try {
       let proofUrl = null;
@@ -195,7 +206,7 @@ const FinancialManagementPage = () => {
           description: description,
           payment_method_id: payment_method_id,
           proof_url: proofUrl,
-          source_table: 'manual_transaction',
+          source_table: source_type, // Gunakan state source_type di sini
         });
         
       if (insertError) throw insertError;
@@ -207,6 +218,7 @@ const FinancialManagementPage = () => {
         description: '',
         payment_method_id: '',
         proof: null,
+        source_type: 'manual_transaction',
       });
       fetchData();
 
@@ -289,6 +301,25 @@ const FinancialManagementPage = () => {
                 </Select>
               </div>
             </div>
+            
+            {activeTab === 'expense' && (
+              <div className="space-y-2">
+                  <Label htmlFor="source_type">Sumber Transaksi</Label>
+                  <Select
+                      value={newTransaction.source_type}
+                      onValueChange={(value) => handleFormChange('source_type', value)}
+                      required
+                  >
+                      <SelectTrigger>
+                          <SelectValue placeholder="Pilih sumber transaksi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="manual_transaction">Manual</SelectItem>
+                          <SelectItem value="central_order_expense">Order Pusat</SelectItem>
+                      </SelectContent>
+                  </Select>
+              </div>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="description">Keperluan/Deskripsi</Label>

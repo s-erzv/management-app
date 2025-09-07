@@ -10,9 +10,20 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { Loader2, Banknote, CreditCard, PiggyBank, TrendingUp, TrendingDown } from 'lucide-react';
+import { Loader2, Banknote, CreditCard, PiggyBank, TrendingUp, TrendingDown, RefreshCcw, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const FinancialReportPage = () => {
   const { companyId } = useAuth();
@@ -20,6 +31,15 @@ const FinancialReportPage = () => {
   const [reportData, setReportData] = useState({
     totalBalance: 0,
     balances: {},
+  });
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    amount: '',
+    from_method_id: '',
+    to_method_id: '',
+    description: '',
   });
 
   useEffect(() => {
@@ -32,15 +52,14 @@ const FinancialReportPage = () => {
     setLoading(true);
 
     try {
-      // 1. Ambil semua metode pembayaran perusahaan
-      const { data: paymentMethods, error: methodsError } = await supabase
+      const { data: allPaymentMethods, error: methodsError } = await supabase
         .from('payment_methods')
         .select('*')
         .eq('company_id', companyId);
       if (methodsError) throw methodsError;
+      setPaymentMethods(allPaymentMethods);
 
-      // Inisialisasi struktur data saldo per metode pembayaran
-      const initialBalances = paymentMethods.reduce((acc, method) => {
+      const initialBalances = allPaymentMethods.reduce((acc, method) => {
         acc[method.id] = {
           ...method,
           income: 0,
@@ -50,43 +69,40 @@ const FinancialReportPage = () => {
         return acc;
       }, {});
 
-      // 2. Ambil semua pembayaran masuk dari orders
+      const { data: allTransactions, error: transactionsError } = await supabase
+        .from('financial_transactions')
+        .select('amount, type, payment_method_id, source_table')
+        .eq('company_id', companyId);
+      if (transactionsError) throw transactionsError;
+
       const { data: incomingPayments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount, payment_method_id')
         .eq('company_id', companyId);
       if (paymentsError) throw paymentsError;
 
-      // 3. Ambil semua pengeluaran dari laporan karyawan yang sudah paid
       const { data: expenseReports, error: expensesError } = await supabase
         .from('expense_reports')
         .select('total_amount, payment_method')
         .eq('company_id', companyId)
         .eq('status', 'paid');
       if (expensesError) throw expensesError;
-
-      // 4. Ambil semua transaksi manual, tapi **kecualikan** yang berasal dari 'orders'
-      const { data: manualTransactions, error: manualTransactionsError } = await supabase
-        .from('financial_transactions')
-        .select('amount, type, payment_method_id')
-        .eq('company_id', companyId)
-        .neq('source_table', 'orders'); // Perubahan di sini
-      if (manualTransactionsError) throw manualTransactionsError;
-
-      // Proses data transaksi dan hitung saldo
+      
       let totalCompanyBalance = 0;
       const balances = { ...initialBalances };
-
-      // a. Proses pemasukan dari orders
+      
+      // Proses transaksi dari orders
       for (const p of incomingPayments) {
         if (balances[p.payment_method_id]) {
           balances[p.payment_method_id].income += p.amount;
         }
       }
 
-      // b. Proses transaksi manual (pemasukan & pengeluaran)
-      for (const t of manualTransactions) {
-        if (balances[t.payment_method_id]) {
+      // Proses transaksi manual & biaya transport dari orders
+      for (const t of allTransactions) {
+        if (t.source_table === 'orders' && t.type === 'income' && balances[t.payment_method_id]) {
+             balances[t.payment_method_id].income += t.amount;
+        } else if (t.source_table !== 'orders' && balances[t.payment_method_id]) {
           if (t.type === 'income') {
             balances[t.payment_method_id].income += t.amount;
           } else {
@@ -94,16 +110,15 @@ const FinancialReportPage = () => {
           }
         }
       }
-      
-      // c. Proses pengeluaran dari laporan pengeluaran
+
+      // Proses pengeluaran dari laporan pengeluaran
       for (const e of expenseReports) {
-        const matchingMethod = paymentMethods.find(m => m.method_name === e.payment_method);
+        const matchingMethod = allPaymentMethods.find(m => m.method_name === e.payment_method);
         if (matchingMethod) {
           balances[matchingMethod.id].expense += e.total_amount;
         }
       }
 
-      // Hitung saldo akhir dan total saldo perusahaan
       for (const id in balances) {
         const balance = balances[id].income - balances[id].expense;
         balances[id].balance = balance;
@@ -123,6 +138,58 @@ const FinancialReportPage = () => {
     }
   };
 
+  const handleTransferSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    const { amount, from_method_id, to_method_id, description } = transferForm;
+    
+    if (from_method_id === to_method_id) {
+        toast.error('Metode sumber dan tujuan tidak boleh sama.');
+        setIsSubmitting(false);
+        return;
+    }
+
+    try {
+        // Transaksi pengeluaran dari metode sumber
+        const { error: expenseError } = await supabase
+            .from('financial_transactions')
+            .insert({
+                company_id: companyId,
+                type: 'expense',
+                amount: parseFloat(amount),
+                description: `Transfer keluar ke ${paymentMethods.find(m => m.id === to_method_id)?.method_name}. ${description}`,
+                payment_method_id: from_method_id,
+                source_table: 'transfer',
+            });
+        if (expenseError) throw expenseError;
+
+        // Transaksi pemasukan ke metode tujuan
+        const { error: incomeError } = await supabase
+            .from('financial_transactions')
+            .insert({
+                company_id: companyId,
+                type: 'income',
+                amount: parseFloat(amount),
+                description: `Transfer masuk dari ${paymentMethods.find(m => m.id === from_method_id)?.method_name}. ${description}`,
+                payment_method_id: to_method_id,
+                source_table: 'transfer',
+            });
+        if (incomeError) throw incomeError;
+
+        toast.success('Transfer dana berhasil dicatat!');
+        setIsTransferModalOpen(false);
+        setTransferForm({ amount: '', from_method_id: '', to_method_id: '', description: '' });
+        fetchFinancialData();
+
+    } catch (error) {
+        console.error('Error submitting transfer:', error);
+        toast.error('Gagal mencatat transfer dana: ' + error.message);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -132,7 +199,7 @@ const FinancialReportPage = () => {
   };
   
   const getIconForMethod = (type) => {
-      return type === 'cash' ? <Banknote className="h-6 w-6 text-white" /> : <CreditCard className="h-6 w-6 text-white" />;
+      return type === 'cash' ? <Banknote className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />;
   };
 
   if (loading) {
@@ -150,6 +217,14 @@ const FinancialReportPage = () => {
           <PiggyBank className="h-8 w-8" />
           Laporan Keuangan
         </h1>
+        <div className="flex flex-wrap gap-2">
+            <Button onClick={fetchFinancialData} variant="outline" className="text-[#10182b] hover:bg-gray-100">
+                <RefreshCcw className="h-4 w-4 mr-2" /> Refresh Data
+            </Button>
+            <Button onClick={() => setIsTransferModalOpen(true)} className="bg-[#10182b] text-white hover:bg-[#1a2542]">
+                <ArrowRightLeft className="h-4 w-4 mr-2" /> Transfer Dana
+            </Button>
+        </div>
       </div>
 
       <Card className="mb-6 border-0 shadow-lg bg-[#10182b] text-white">
@@ -194,6 +269,83 @@ const FinancialReportPage = () => {
           </Card>
         ))}
       </div>
+
+      {/* Transfer Dana Modal */}
+      <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle>Transfer Dana</DialogTitle>
+                <DialogDescription>
+                    Pindahkan dana antar metode pembayaran.
+                </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleTransferSubmit} className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="from_method_id">Dari Metode</Label>
+                    <Select
+                        value={transferForm.from_method_id}
+                        onValueChange={(value) => setTransferForm(prev => ({ ...prev, from_method_id: value }))}
+                        required
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Pilih metode sumber" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {paymentMethods.map(method => (
+                                <SelectItem key={method.id} value={method.id}>
+                                    {method.method_name} ({method.account_name})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="to_method_id">Ke Metode</Label>
+                    <Select
+                        value={transferForm.to_method_id}
+                        onValueChange={(value) => setTransferForm(prev => ({ ...prev, to_method_id: value }))}
+                        required
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Pilih metode tujuan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {paymentMethods.map(method => (
+                                <SelectItem key={method.id} value={method.id}>
+                                     {method.method_name} ({method.account_name})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="amount">Nominal</Label>
+                    <Input
+                        id="amount"
+                        type="number"
+                        placeholder="Jumlah yang akan ditransfer"
+                        value={transferForm.amount}
+                        onChange={(e) => setTransferForm(prev => ({ ...prev, amount: e.target.value }))}
+                        required
+                    />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="description">Deskripsi</Label>
+                    <Input
+                        id="description"
+                        placeholder="Contoh: Setor uang tunai ke bank"
+                        value={transferForm.description}
+                        onChange={(e) => setTransferForm(prev => ({ ...prev, description: e.target.value }))}
+                    />
+                </div>
+                <DialogFooter className="mt-4">
+                    <Button type="submit" disabled={isSubmitting || !transferForm.amount || !transferForm.from_method_id || !transferForm.to_method_id}>
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Catat Transfer'}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

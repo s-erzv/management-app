@@ -1,6 +1,3 @@
-// SAFE MODE: minimal, anti-hang, no timeouts, no aggressive listeners
-// Goal: memastikan login/logout & balik tab tidak bikin loading menggantung.
-
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Loader2 } from 'lucide-react'
@@ -12,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [activeCompanyId, setActiveCompanyId] = useState(null);
 
   const mountedRef = useRef(true)
   const profilePromiseRef = useRef(null)
@@ -73,7 +71,10 @@ export const AuthProvider = ({ children }) => {
           .eq('id', userId)
           .single()
         if (error) throw error
-        if (!cancelled) setUserProfile(data)
+        if (!cancelled) {
+          setUserProfile(data);
+          setActiveCompanyId(data.company_id); // Inisialisasi activeCompanyId
+        }
       } catch (err) {
         console.warn('[Auth] profile load failed, will retry on next auth change/focus:', err)
       } finally {
@@ -97,11 +98,20 @@ export const AuthProvider = ({ children }) => {
         .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
         .eq('id', session.user.id)
         .single()
-      if (!error) setUserProfile(data)
+      if (!error) {
+        setUserProfile(data);
+        setActiveCompanyId(data.company_id); // Inisialisasi activeCompanyId
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [session?.user?.id, userProfile])
+  
+  const handleSetActiveCompany = (companyId) => {
+    if (userProfile?.role === 'super_admin') {
+      setActiveCompanyId(companyId);
+    }
+  };
 
   const contextValue = useMemo(() => ({
     session,
@@ -112,7 +122,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!session,
     userId: session?.user?.id ?? null,
     userRole: userProfile?.role ?? null,
-    companyId: userProfile?.company_id ?? null,
+    companyId: activeCompanyId ?? userProfile?.company_id ?? null,
     companyName: userProfile?.companies?.name ?? null,
     companyLogo: userProfile?.companies?.logo_url ?? null,
     refreshProfile: async () => {
@@ -122,14 +132,18 @@ export const AuthProvider = ({ children }) => {
         .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
         .eq('id', session.user.id)
         .single()
-      if (!error) setUserProfile(data)
+      if (!error) {
+        setUserProfile(data);
+        setActiveCompanyId(data.company_id);
+      }
       return data ?? null
     },
+    setActiveCompany: handleSetActiveCompany,
     signOut: async () => {
       const { error } = await supabase.auth.signOut()
       if (error) console.warn('[Auth] signOut error', error)
     },
-  }), [session, userProfile, authLoading, profileLoading])
+  }), [session, userProfile, authLoading, profileLoading, activeCompanyId])
 
   if (authLoading) {
     return (
