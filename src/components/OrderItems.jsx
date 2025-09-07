@@ -150,7 +150,7 @@ const OrderItems = ({ orderId, isEditable, onItemsUpdated }) => {
             value={newItem.price}
             onChange={(e) => setNewItem({ ...newItem, price: e.target.value })}
             required
-            min="0"
+            
           />
 
           <Button type="submit" disabled={loading} className="w-1/4">

@@ -1,3 +1,5 @@
+// supabase/functions/complete-delivery/index.ts
+
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -16,14 +18,15 @@ serve(async (req) => {
     const {
       orderId,
       paymentAmount,
-      paymentMethodId, // Ini adalah ID dari metode pembayaran yang dipilih
+      paymentMethodId,
       returnedQty,
       borrowedQty,
+      purchasedEmptyQty,
+      totalPurchaseCost, 
       transportCost,
       proofFileUrl,
       transferProofUrl,
-      purchasedEmptyQty,
-      receivedByUserId, // Ini adalah ID pengguna yang menerima pembayaran
+      receivedByUserId,
     } = await req.json()
 
     const supabase = createClient(
@@ -47,26 +50,55 @@ serve(async (req) => {
     if (orderError) throw orderError;
     const company_id = order.company_id;
 
+    // Perhitungan total tagihan baru sesuai dengan permintaan Anda
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0);
+    const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + (parseFloat(totalPurchaseCost) || 0);
 
-    // 1. Tambah pembayaran jika ada
     if (paymentAmount > 0) {
       const { error: paymentInsertError } = await supabase
         .from('payments')
         .insert({
           order_id: orderId,
           amount: paymentAmount,
-          payment_method_id: paymentMethodId, // Gunakan ID yang benar
+          payment_method_id: paymentMethodId,
           paid_at: new Date().toISOString(),
           company_id: company_id,
           proof_url: transferProofUrl,
-          received_by: receivedByUserId, // Gunakan ID pengguna yang benar
+          received_by: receivedByUserId,
         });
       if (paymentInsertError) throw paymentInsertError;
     }
 
-    // 2. Catat pergerakan stok (logika ini tetap sama)
+    if (transportCost > 0) {
+      const { error: financialTransactionError } = await supabase
+        .from('financial_transactions')
+        .insert({
+          company_id: company_id,
+          type: 'income',
+          amount: transportCost,
+          description: `Pemasukan dari biaya transportasi pesanan #${orderId.slice(0, 8)}`,
+          payment_method_id: paymentMethodId,
+          source_table: 'orders',
+          source_id: orderId,
+        });
+      if (financialTransactionError) throw financialTransactionError;
+    }
+
+    if (totalPurchaseCost > 0) {
+       const { error: emptyBottlePurchaseError } = await supabase
+        .from('financial_transactions')
+        .insert({
+          company_id: company_id,
+          type: 'income',
+          amount: totalPurchaseCost,
+          description: `Pemasukan dari pembelian galon kosong dari pelanggan pesanan #${orderId.slice(0, 8)}`,
+          payment_method_id: paymentMethodId,
+          source_table: 'orders',
+          source_id: orderId,
+        });
+      if (emptyBottlePurchaseError) throw emptyBottlePurchaseError;
+    }
+
     const returnableItem = order.order_items.find(item => item.products?.is_returnable);
     if (returnableItem) {
       const productId = returnableItem.product_id;
@@ -126,23 +158,6 @@ serve(async (req) => {
       }
     }
 
-    // 3. Catat biaya transportasi ke tabel financial_transactions
-    if (transportCost > 0) {
-      const { error: financialTransactionError } = await supabase
-        .from('financial_transactions')
-        .insert({
-          company_id: company_id,
-          type: 'income',
-          amount: transportCost,
-          description: `Pemasukan dari biaya transportasi pesanan #${orderId.slice(0, 8)}`,
-          payment_method_id: paymentMethodId,
-          source_table: 'orders',
-          source_id: orderId,
-        });
-      if (financialTransactionError) throw financialTransactionError;
-    }
-
-    // Hitung total pembayaran setelah pembayaran baru ditambahkan
     const { data: currentPaymentsData, error: paymentsError } = await supabase
       .from('payments')
       .select('amount')
@@ -158,7 +173,6 @@ serve(async (req) => {
       newPaymentStatus = 'partial';
     }
 
-    // 4. Update tabel orders dan invoices
     const { error: updateOrderError } = await supabase
       .from('orders')
       .update({

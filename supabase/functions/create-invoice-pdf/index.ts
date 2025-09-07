@@ -14,38 +14,42 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id } = await req.json();
-    if (!order_id) {
-        return new Response(JSON.stringify({ error: 'Order ID is required' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
-        });
+    const { order_id, orderData } = await req.json();
+
+    if (!order_id || !orderData) {
+      return new Response(JSON.stringify({ error: 'Order ID and data are required' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      });
     }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // 1. Ambil data invoice yang lengkap, termasuk biaya transportasi dari tabel orders
-    const { data: invoiceData, error: invoiceError } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        customers:customer_id (name, phone, address),
-        companies:company_id (name),
-        invoice_items(
-          *,
-          products:product_id(name)
-        ),
-        orders:order_id(transport_cost)
-      `)
-      .eq('order_id', order_id)
+    
+    // Ambil nama perusahaan dari database
+    const { data: companyData, error: companyError } = await supabase
+      .from('companies')
+      .select('name')
+      .eq('id', orderData.company_id)
       .single();
+        
+    if (companyError) throw companyError;
+    const companyName = companyData.name;
 
-    if (invoiceError) throw invoiceError;
-
-    // 2. Logika pembuatan PDF
+    // Gunakan 'orderData' yang dikirim dari frontend
+    const {
+      customers,
+      invoice_number,
+      updated_at,
+      order_items,
+      transport_cost,
+      purchased_empty_qty,
+      grand_total,
+    } = orderData;
+    
+    // Membuat PDF
     const pdfDoc = await PDFDocument.create();
     const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     const page = pdfDoc.addPage([600, 800]);
@@ -63,16 +67,16 @@ serve(async (req) => {
       color: rgb(0, 0, 0),
     });
     y -= 30;
-    page.drawText(`Nomor Invoice: ${invoiceData.invoice_number}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
+    page.drawText(`Nomor Invoice: ${invoice_number}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
     y -= 20;
-    page.drawText(`Tanggal: ${new Date(invoiceData.created_at).toLocaleDateString()}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
+    page.drawText(`Tanggal: ${new Date(updated_at).toLocaleDateString()}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
     y -= 40;
 
-    page.drawText(`Kepada: ${invoiceData.customers.name}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
+    page.drawText(`Kepada: ${customers.name}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
     y -= 20;
-    page.drawText(`Alamat: ${invoiceData.customers.address}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
+    page.drawText(`Alamat: ${customers.address}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
     y -= 20;
-    page.drawText(`Telepon: ${invoiceData.customers.phone}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
+    page.drawText(`Telepon: ${customers.phone}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
     y -= 40;
     
     // Header Tabel
@@ -89,34 +93,40 @@ serve(async (req) => {
     });
     y -= 20;
 
-    let totalAmount = 0;
-    // Tambahkan pengecekan apakah invoice_items ada dan merupakan array
-    if (invoiceData.invoice_items && Array.isArray(invoiceData.invoice_items)) {
-      for (const item of invoiceData.invoice_items) {
-        // Perbaiki: Gunakan 'quantity' dan 'unit_price' sesuai log
-        const qty = item.quantity || 0;
-        const price = item.unit_price || 0;
-        
+    // Masukkan item dari order_items
+    if (order_items && Array.isArray(order_items)) {
+      for (const item of order_items) {
+        const qty = item.qty || 0;
+        const price = item.price || 0;
         const itemTotal = qty * price;
+        
         page.drawText(`${item.products.name}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
         page.drawText(`${qty}`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
         page.drawText(`Rp${price.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
         page.drawText(`Rp${itemTotal.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
         y -= 20;
-        totalAmount += itemTotal;
       }
     }
     
-    // Tambahkan biaya transportasi sebagai item baru
-    const transportCost = invoiceData.orders.transport_cost || 0;
-    if (transportCost > 0) {
+    // Tambahkan biaya transportasi
+    if (transport_cost > 0) {
       page.drawText('Biaya Transportasi', { x: margin, y: y, size: fontSize, font: timesRomanFont });
       page.drawText(`1`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${transportCost.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${transportCost.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
       y -= 20;
-      totalAmount += transportCost;
     }
+    
+    // Tambahkan pembelian galon kosong
+    const emptyBottlePrice = order_items.find(item => item.products?.is_returnable)?.products?.empty_bottle_price || 0;
+    if (purchased_empty_qty > 0) {
+      page.drawText('Beli Galon Kosong', { x: margin, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`${purchased_empty_qty}`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${emptyBottlePrice.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
+      page.drawText(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
+      y -= 20;
+    }
+
     y -= 20;
 
     page.drawLine({
@@ -127,13 +137,57 @@ serve(async (req) => {
     });
     y -= 20;
 
-    // Tambahkan pengecekan nullish coalescing untuk toLocaleString
-    page.drawText(`TOTAL: Rp${totalAmount?.toLocaleString('id-ID') ?? '0'}`, { x: margin + 380, y: y, size: 14, font: timesRomanFont, color: rgb(0, 0, 0) });
+    page.drawText(`TOTAL: Rp${grand_total?.toLocaleString('id-ID') ?? '0'}`, { x: margin + 380, y: y, size: 14, font: timesRomanFont, color: rgb(0, 0, 0) });
 
     const pdfBytes = await pdfDoc.save();
     
-    // 3. Unggah PDF ke Supabase Storage
-    const fileName = `invoice-${invoiceData.invoice_number}.pdf`;
+    // 1. Cek apakah invoice sudah ada
+    const { data: existingInvoice } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('order_id', order_id)
+      .single();
+
+    let invData;
+    let invErr;
+
+    if (existingInvoice) {
+      // 2. Jika sudah ada, lakukan UPDATE
+      const { data, error } = await supabase
+        .from('invoices')
+        .update({
+          // data yang ingin di-update
+          customer_id: customers.id,
+          invoice_number: invoice_number,
+          grand_total: grand_total,
+          company_id: orderData.company_id
+        })
+        .eq('id', existingInvoice.id)
+        .select()
+        .single();
+      invData = data;
+      invErr = error;
+    } else {
+      // 3. Jika belum ada, lakukan INSERT
+      const { data, error } = await supabase
+        .from('invoices')
+        .insert({
+          order_id: order_id,
+          customer_id: customers.id,
+          invoice_number: invoice_number,
+          grand_total: grand_total,
+          company_id: orderData.company_id
+        })
+        .select()
+        .single();
+      invData = data;
+      invErr = error;
+    }
+
+    if (invErr) throw invErr;
+
+    // Unggah PDF ke Supabase Storage
+    const fileName = `invoice-${invoice_number}.pdf`;
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('invoices')
       .upload(fileName, pdfBytes, {
@@ -143,16 +197,16 @@ serve(async (req) => {
     
     if (uploadError) throw uploadError;
 
-    // 4. Dapatkan URL publik dari PDF
+    // Dapatkan URL publik dari PDF
     const { data: publicUrlData } = supabase.storage
       .from('invoices')
       .getPublicUrl(fileName);
     
-    // 5. Perbarui URL publik di tabel invoices
-    await supabase.from('invoices').update({ public_link: publicUrlData.publicUrl }).eq('id', invoiceData.id);
+    // Perbarui URL publik di tabel invoices
+    await supabase.from('invoices').update({ public_link: publicUrlData.publicUrl }).eq('id', invData.id);
 
-    // 6. Kembalikan URL publik
-    return new Response(JSON.stringify({ pdfUrl: publicUrlData.publicUrl, invoiceNumber: invoiceData.invoice_number, amount: totalAmount, companyName: invoiceData.companies.name }), {
+    // Kembalikan URL publik
+    return new Response(JSON.stringify({ pdfUrl: publicUrlData.publicUrl, invoiceNumber: invoice_number, amount: grand_total, companyName: companyName }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

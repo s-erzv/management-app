@@ -307,7 +307,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                                 value={item.amount}
                                 onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
                                 className="bg-white border-gray-300 focus:border-[#10182b]"
-                                min="0"
+                                
                                 required
                               />
                               {expenseItems.length > 1 && (

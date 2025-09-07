@@ -329,7 +329,7 @@ const StockAndGalonPage = () => {
                           className="text-3xl font-bold text-purple-600 hover:underline"
                           onClick={() => fetchDetail('dibeli')}
                         >
-                          {movements.filter(m => m.notes?.includes('dibeli galon kosong')).reduce((sum, m) => sum + m.qty, 0)}
+                          {movements.filter(m => m.type === 'galon_dibeli').reduce((sum, m) => sum + m.qty, 0)}
                         </button>
                       </div>
                       <div className="p-4 rounded-lg border bg-gray-50">

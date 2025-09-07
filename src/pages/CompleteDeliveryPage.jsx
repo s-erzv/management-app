@@ -26,7 +26,7 @@ import { Loader2, ArrowLeft, PackageCheck, TruckIcon } from 'lucide-react';
 const CompleteDeliveryPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const { session, user } = useAuth();
+  const { session, user, companyId } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +62,7 @@ const CompleteDeliveryPage = () => {
       .select(`
         *,
         customers (name, address, phone),
-        order_items (product_id, qty, price, item_type, products(name, is_returnable, company_id))
+        order_items (product_id, qty, price, item_type, products(name, is_returnable, empty_bottle_price))
       `)
       .eq('id', orderId)
       .single();
@@ -92,20 +92,16 @@ const CompleteDeliveryPage = () => {
       total_paid,
       remaining_due: total - total_paid,
     };
-     const companyIdFromOrder = orderData.company_id ?? null;
-     const companyIdFromProduct =
-       orderData.order_items?.find(i => i?.products?.company_id)?.products?.company_id ?? null;
-     const effectiveCompanyId = companyIdFromOrder ?? companyIdFromProduct;
     
-     let pmQuery = supabase.from('payment_methods').select('*').eq('is_active', true);
-     if (effectiveCompanyId) pmQuery = pmQuery.eq('company_id', effectiveCompanyId);
-     const { data: methodsData, error: methodsError } = await pmQuery;
+    let pmQuery = supabase.from('payment_methods').select('*').eq('is_active', true);
+    if (companyId) pmQuery = pmQuery.eq('company_id', companyId);
+    
+    const { data: methodsData, error: methodsError } = await pmQuery;
 
     if (methodsError) {
         console.error('Error fetching payment methods:', methodsError);
     } else {
         setPaymentMethods(methodsData || []);
-        // Set default payment method to 'pending'
         setPaymentMethod('pending');
     }
 
@@ -116,26 +112,6 @@ const CompleteDeliveryPage = () => {
     });
     setLoading(false);
   };
-  
-  useEffect(() => {
-    if (!order) return;
-    const remaining = order?.remaining_due || 0;
-    const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
-
-    if (paymentMethod === 'hybrid') {
-      const remainingForTransfer = remaining - (parseFloat(cashAmount) || 0);
-      setTransferAmount(remainingForTransfer > 0 ? remainingForTransfer.toString() : '0');
-    } else if (selectedMethod?.type === 'cash') {
-      setCashAmount(remaining.toString());
-      setTransferAmount('0');
-    } else if (selectedMethod?.type === 'transfer') {
-      setTransferAmount(remaining.toString());
-      setCashAmount('0');
-    } else { // Handles pending or other cases
-      setCashAmount('0');
-      setTransferAmount('0');
-    }
-  }, [paymentMethod, order, cashAmount, paymentMethods]);
 
   const handleFormChange = (e) => {
     const { id, value } = e.target;
@@ -151,6 +127,40 @@ const CompleteDeliveryPage = () => {
     setTransferMethod('');
   }
   
+  // Pindahkan semua perhitungan ke sini
+  const returnableItem = order?.order_items.find(item => item.products?.is_returnable);
+  const emptyBottlePrice = returnableItem?.products?.empty_bottle_price || 0;
+  const purchasedEmptyQty = parseFloat(formState.purchasedEmptyQty) || 0;
+  const totalPurchaseCost = purchasedEmptyQty * emptyBottlePrice;
+
+  const orderItemsTotal = order?.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0) || 0;
+  const transportCost = parseFloat(formState.transportCost) || 0;
+  
+  // Perhitungan total tagihan baru yang benar
+  const newGrandTotal = orderItemsTotal + transportCost + totalPurchaseCost;
+  
+  // Perhitungan sisa tagihan yang benar
+  const remainingDue = newGrandTotal - (order?.total_paid || 0);
+
+  useEffect(() => {
+    if (!order) return;
+    const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
+
+    if (paymentMethod === 'hybrid') {
+      const remainingForTransfer = remainingDue - (parseFloat(cashAmount) || 0);
+      setTransferAmount(remainingForTransfer > 0 ? remainingForTransfer.toString() : '0');
+    } else if (selectedMethod?.type === 'cash') {
+      setCashAmount(remainingDue.toString());
+      setTransferAmount('0');
+    } else if (selectedMethod?.type === 'transfer') {
+      setTransferAmount(remainingDue.toString());
+      setCashAmount('0');
+    } else {
+      setCashAmount('0');
+      setTransferAmount('0');
+    }
+  }, [paymentMethod, remainingDue, cashAmount, paymentMethods]);
+
 const handleCompleteDelivery = async (e) => {
   e.preventDefault();
   if (!order?.id || !file) {
@@ -208,6 +218,9 @@ const handleCompleteDelivery = async (e) => {
       }
       transferProofUrl = transferUploadData.path;
     }
+    
+    // Hitung total harga galon kosong yang dibeli
+    const totalPurchaseCost = (parseFloat(formState.purchasedEmptyQty) || 0) * emptyBottlePrice;
 
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
@@ -223,10 +236,11 @@ const handleCompleteDelivery = async (e) => {
       returnedQty: parseInt(formState.returnedQty, 10) || 0,
       borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
       purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
+      totalPurchaseCost, 
       transportCost: parseFloat(formState.transportCost) || 0,
       proofFileUrl: deliveryFilePath,
       transferProofUrl,
-      receivedByUserId: user?.id || null, // Menggunakan user.id untuk kolom received_by
+      receivedByUserId: user?.id || null,
     };
 
     const response = await fetch(
@@ -234,8 +248,8 @@ const handleCompleteDelivery = async (e) => {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(payload),
       }
@@ -275,7 +289,7 @@ const handleCompleteDelivery = async (e) => {
 
   const hasReturnableItems = order.order_items.some(item => item.products?.is_returnable);
   const deliveredQty = order.order_items.reduce((sum, item) => sum + (item.qty || 0), 0);
-  const showPaymentFields = order.payment_status !== 'paid' && order.remaining_due > 0;
+  const showPaymentFields = order.payment_status !== 'paid' && remainingDue > 0;
 
   const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
   const transferMethods = paymentMethods.filter(m => m.type === 'transfer');
@@ -316,8 +330,12 @@ const handleCompleteDelivery = async (e) => {
               <p className="text-[#10182b]">{order.customers?.address}</p>
             </div>
             <div>
+              <Label className="text-muted-foreground">Total Tagihan Baru</Label>
+              <p className="font-bold text-lg text-green-600">{formatCurrency(newGrandTotal)}</p>
+            </div>
+            <div>
               <Label className="text-muted-foreground">Sisa Tagihan</Label>
-              <p className="font-bold text-red-600 text-lg">{formatCurrency(order.remaining_due)}</p>
+              <p className="font-bold text-red-600 text-lg">{formatCurrency(remainingDue)}</p>
             </div>
             <Separator />
             <div className="space-y-2">
@@ -446,7 +464,7 @@ const handleCompleteDelivery = async (e) => {
                     placeholder="Jumlah Galon Kembali"
                     value={formState.returnedQty}
                     onChange={handleFormChange}
-                    min="0"
+                    
                   />
                 </div>
                 <div className="grid gap-2">
@@ -457,7 +475,7 @@ const handleCompleteDelivery = async (e) => {
                     placeholder="Jumlah Galon Dipinjam"
                     value={formState.borrowedQty}
                     onChange={handleFormChange}
-                    min="0"
+                    
                   />
                 </div>
                 <div className="grid gap-2">
@@ -468,7 +486,7 @@ const handleCompleteDelivery = async (e) => {
                     placeholder="Jumlah Galon Kosong Dibeli"
                     value={formState.purchasedEmptyQty}
                     onChange={handleFormChange}
-                    min="0"
+                    
                   />
                 </div>
               </>
@@ -482,7 +500,7 @@ const handleCompleteDelivery = async (e) => {
                 placeholder="Biaya Transportasi"
                 value={formState.transportCost}
                 onChange={handleFormChange}
-                min="0"
+                
               />
             </div>
             

@@ -1,3 +1,5 @@
+// src/pages/FinancialReportPage.jsx
+
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -63,11 +65,12 @@ const FinancialReportPage = () => {
         .eq('status', 'paid');
       if (expensesError) throw expensesError;
 
-      // 4. Ambil semua transaksi manual
+      // 4. Ambil semua transaksi manual, tapi **kecualikan** yang berasal dari 'orders'
       const { data: manualTransactions, error: manualTransactionsError } = await supabase
         .from('financial_transactions')
         .select('amount, type, payment_method_id')
-        .eq('company_id', companyId);
+        .eq('company_id', companyId)
+        .neq('source_table', 'orders'); // Perubahan di sini
       if (manualTransactionsError) throw manualTransactionsError;
 
       // Proses data transaksi dan hitung saldo

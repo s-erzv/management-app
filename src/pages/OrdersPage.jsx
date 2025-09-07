@@ -522,7 +522,7 @@ ${companyName}`;
                     name="qty"
                     value={newEditItem.qty}
                     onChange={handleNewEditItemChange}
-                    min="0"
+                    
                     disabled={!newEditItem.product_id}
                   />
                   <Button type="button" onClick={handleEditItemAdd} disabled={!newEditItem.product_id || newEditItem.qty <= 0} size="icon" className="bg-[#10182b] text-white hover:bg-[#20283b]">
@@ -654,9 +654,9 @@ ${companyName}`;
                     <TableCell>
                       {getStatusBadge(order.status)}
                     </TableCell>
-                    <TableCell>
-                      {formatCurrency(calculateTotal(order.order_items))}
-                    </TableCell>
+                   <TableCell>
+                    {formatCurrency(order.grand_total || 0)}
+                  </TableCell>
                     <TableCell>
                         {order.order_couriers && order.order_couriers.length > 0 ? (
                             <div className="flex flex-col space-y-1">

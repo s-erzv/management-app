@@ -1,4 +1,5 @@
-// src/pages/OrderDetailsPage.jsx (Optimized + Abort-safe + PaymentStatus Fixed)
+// src/pages/OrderDetailsPage.jsx
+
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -95,11 +96,8 @@ const OrderDetailsPage = () => {
       minimumFractionDigits: 0
     }).format(amount ?? 0);
   };
-
-  const calculateOrderTotal = useCallback((items) => {
-    if (!Array.isArray(items)) return 0;
-    return items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0), 0);
-  }, []);
+  
+  // Hapus fungsi calculateOrderTotal
 
   const calculatePaymentsTotal = useCallback((rows) => {
     if (!Array.isArray(rows)) return 0;
@@ -107,13 +105,11 @@ const OrderDetailsPage = () => {
   }, []);
 
   const fetchData = useCallback(async (showLoading = true) => {
-    // Guard clauses - early return
     if (!id || !isAuthenticated) {
       if (mountedRef.current) setLoading(false);
       return;
     }
 
-    // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -129,13 +125,14 @@ const OrderDetailsPage = () => {
 
     try {
       // 1) Load order first
+      // Perbarui query untuk mengambil empty_bottle_price
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select(`
           *,
           customers (name, phone, address),
           courier_profile:profiles!orders_courier_id_fkey1(full_name),
-          order_items (id, qty, price, item_type, products(name, is_returnable))
+          order_items (id, qty, price, item_type, products(name, is_returnable, empty_bottle_price))
         `)
         .eq('id', id)
         .abortSignal(abortControllerRef.current.signal)
@@ -144,7 +141,6 @@ const OrderDetailsPage = () => {
       if (orderError) throw orderError;
       if (!orderData) throw new Error('Pesanan tidak ditemukan.');
 
-      // Build proof URL if exists
       let proofPublicUrl;
       if (orderData.proof_of_delivery_url) {
         const { data: p } = supabase.storage
@@ -153,11 +149,9 @@ const OrderDetailsPage = () => {
         proofPublicUrl = p?.publicUrl;
       }
 
-      // 2) Fetch related data in parallel
       const [paymentsRes, methodsRes] = await Promise.all([
         supabase
           .from('payments')
-          // Catatan: sesuaikan alias relasi ini dengan nama FK di proyekmu
           .select(`*, received_by:profiles(full_name), payment_method:payment_methods(method_name, type)`)
           .eq('order_id', orderData.id)
           .order('created_at', { ascending: false })
@@ -169,7 +163,6 @@ const OrderDetailsPage = () => {
           .abortSignal(abortControllerRef.current.signal),
       ]);
 
-      // Handle partial errors (ignore aborts)
       if (paymentsRes.error && !isAbortErr(paymentsRes.error)) {
         console.warn('Payments fetch error:', paymentsRes.error);
         toast.error('Gagal memuat riwayat pembayaran.');
@@ -179,7 +172,6 @@ const OrderDetailsPage = () => {
         toast.error('Gagal memuat metode pembayaran.');
       }
 
-      // Process payments with proof URLs
       let paymentsWithUrls = paymentsRes.data || [];
       if (paymentsWithUrls.length > 0) {
         paymentsWithUrls = await Promise.all(
@@ -205,7 +197,6 @@ const OrderDetailsPage = () => {
       }
     } catch (err) {
       if (isAbortErr(err)) {
-        // expected on cleanup/race
         return;
       }
 
@@ -218,9 +209,8 @@ const OrderDetailsPage = () => {
         setLoading(false);
       }
     }
-  }, [id, isAuthenticated, calculateOrderTotal, calculatePaymentsTotal]);
+  }, [id, isAuthenticated]);
 
-  // Initial data fetch with stable dependencies + debounce
   useEffect(() => {
     let timeoutId;
     if (id && isAuthenticated) {
@@ -233,24 +223,21 @@ const OrderDetailsPage = () => {
     };
   }, [id, isAuthenticated, fetchData]);
 
-  const orderTotal = useMemo(() => {
-    if (!order) return 0;
-    return calculateOrderTotal(order.order_items || []);
-  }, [order, calculateOrderTotal]);
-
   const totalPaid = useMemo(() => calculatePaymentsTotal(payments), [payments, calculatePaymentsTotal]);
-  const remainingDue = Math.max(0, (Number(order?.grand_total) || orderTotal) - totalPaid);
+  
+  // Gunakan grand_total yang sudah disimpan di database
+  const grandTotal = order?.grand_total || 0;
+  const remainingDue = Math.max(0, grandTotal - totalPaid);
   const isPaid = remainingDue <= 0.0001;
 
   // Status pembayaran turunan (UI anti-stale)
   const derivedPaymentStatus = useMemo(() => {
-    const gt = Number(order?.grand_total ?? orderTotal) || 0;
+    const gt = Number(order?.grand_total) || 0;
     if (totalPaid <= 0) return 'unpaid';
     if (totalPaid >= gt - 0.0001) return 'paid';
     return 'partial';
-  }, [order?.grand_total, orderTotal, totalPaid]);
+  }, [order?.grand_total, totalPaid]);
 
-  // Map untuk badge (gunakan derived)
   const paymentStatusMap = {
     paid: { variant: 'default', label: 'LUNAS', icon: <CheckCircle2 className="h-3 w-3" /> },
     unpaid: { variant: 'destructive', label: 'BELUM LUNAS', icon: <AlertCircle className="h-3 w-3" /> },
@@ -262,7 +249,7 @@ const OrderDetailsPage = () => {
     () => (paymentMethods || []).map(m => ({
       id: m.id,
       method_name: m.method_name,
-      type: m.type, // 'cash' | 'transfer' | ...
+      type: m.type,
       account_name: m.account_name || null,
       account_number: m.account_number || null,
     })),
@@ -279,7 +266,6 @@ const OrderDetailsPage = () => {
     [normalizedMethods]
   );
 
-  // Set default payment method only once (fallback ke index 0)
   const effectivePaymentMethodId = paymentMethodId || (normalizedMethods[0]?.id ?? '');
   const selectedMethod = useMemo(
     () => normalizedMethods.find(m => String(m.id) === String(effectivePaymentMethodId)),
@@ -289,9 +275,8 @@ const OrderDetailsPage = () => {
   const paymentFormIsValid = paymentAmount && parseFloat(paymentAmount) > 0 && effectivePaymentMethodId;
   const isPaymentFormDisabled = isPaid || remainingDue <= 0;
 
-  // --- helpers actions ---
   const handleDataUpdate = useCallback(() => {
-    fetchData(false); // Refresh tanpa main loading
+    fetchData(false);
   }, [fetchData]);
 
   const statusFromTotals = useCallback((paid, grand) => {
@@ -320,7 +305,6 @@ const OrderDetailsPage = () => {
     if (updErr) throw updErr;
   }, [order?.grand_total, statusFromTotals]);
 
-  // --- actions ---
   const handleAddPayment = async (e) => {
     e.preventDefault();
     if (!paymentFormIsValid) {
@@ -346,7 +330,7 @@ const OrderDetailsPage = () => {
       if (insertError) throw insertError;
 
       const newTotalPaid = totalPaid + amountNum;
-      const gt = Number(order?.grand_total ?? orderTotal) || 0;
+      const gt = Number(order?.grand_total) || 0;
       const newStatus = statusFromTotals(newTotalPaid, gt);
 
       const { error: updErr } = await supabase
@@ -381,8 +365,7 @@ const OrderDetailsPage = () => {
 
       if (delErr) throw delErr;
 
-      // Recompute status di DB agar konsisten walau perubahan dari luar UI
-      await recomputeAndUpdateOrderStatus(order.id, orderTotal);
+      await recomputeAndUpdateOrderStatus(order.id, grandTotal);
 
       toast.success('Pembayaran dihapus.');
       handleDataUpdate();
@@ -401,13 +384,24 @@ const OrderDetailsPage = () => {
     setIsSendingInvoice(true);
     toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
     try {
+      // Mengambil data terbaru dari state untuk dikirim ke fungsi
+      const payload = {
+        order_id: order.id,
+        orderData: {
+          ...order,
+          payments: payments,
+          grand_total: grandTotal,
+          remaining_due: remainingDue,
+        }
+      };
+
       const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/create-invoice-pdf', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ order_id: order.id }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -417,7 +411,7 @@ const OrderDetailsPage = () => {
       const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.Yth. Bapak/Ibu ${order.customers.name},
 
 Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
-Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculateOrderTotal(order.order_items))}.
+Invoice No. ${order.invoice_number} senilai ${formatCurrency(grandTotal)}.
 Tautan invoice: ${pdfUrl}.
 
 Metode Pembayaran: Silahkan pilih metode pembayaran yang tersedia di bawah ini.
@@ -488,8 +482,30 @@ nama company kita;`;
     );
   }
 
-  // Derived values
+  // Siapkan semua item yang akan ditampilkan, termasuk biaya tambahan
   const items = order.order_items || [];
+  const allItems = [...items];
+
+  if (order.transport_cost > 0) {
+    allItems.push({
+      id: 'transport-cost',
+      products: { name: 'Biaya Transportasi' },
+      qty: 1,
+      price: order.transport_cost,
+      item_type: 'biaya'
+    });
+  }
+
+  const purchasedEmptyPrice = order.order_items.find(item => item.products?.is_returnable)?.products?.empty_bottle_price || 0;
+  if (order.purchased_empty_qty > 0) {
+      allItems.push({
+          id: 'purchased-empty',
+          products: { name: 'Beli Galon Kosong' },
+          qty: order.purchased_empty_qty,
+          price: purchasedEmptyPrice,
+          item_type: 'pembelian'
+      });
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
@@ -533,7 +549,7 @@ nama company kita;`;
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-500">Total</p>
-            <p className="font-bold text-lg text-[#10182b]">{formatCurrency(order.grand_total ?? orderTotal)}</p>
+            <p className="font-bold text-lg text-[#10182b]">{formatCurrency(grandTotal)}</p>
           </div>
         </CardContent>
       </Card>
@@ -545,13 +561,14 @@ nama company kita;`;
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              {items.length === 0 && <p className="text-sm text-gray-500">Tidak ada item.</p>}
-              {items.map((it) => (
-                <div key={it.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-2 last:border-b-0 last:pb-0">
+              {allItems.length === 0 && <p className="text-sm text-gray-500">Tidak ada item.</p>}
+              {allItems.map((it, index) => (
+                <div key={it.id || index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-2 last:border-b-0 last:pb-0">
                   <div className="space-y-0.5">
                     <p className="font-medium text-[#10182b]">{it.products?.name || 'Produk'}</p>
                     <p className="text-xs text-gray-500">
-                      {Number(it.qty)} × {formatCurrency(Number(it.price))} {it.item_type ? `• ${it.item_type}` : ''}
+                      {it.item_type !== 'biaya' && it.item_type !== 'pembelian' && `${Number(it.qty)} × `}
+                      {formatCurrency(Number(it.price))} {it.item_type ? `• ${it.item_type}` : ''}
                     </p>
                   </div>
                   <div className="font-semibold mt-2 sm:mt-0 text-[#10182b]">
@@ -631,7 +648,6 @@ nama company kita;`;
           </Card>
         )}
 
-        {/* Form Pembayaran */}
         <Card className={`border border-gray-200 shadow-sm transition-all hover:shadow-md ${isPaymentFormDisabled ? 'opacity-60' : ''}`}>
           <CardHeader>
             <CardTitle className="text-[#10182b]">Tambah Pembayaran</CardTitle>
@@ -643,7 +659,6 @@ nama company kita;`;
                 placeholder="Nominal"
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
-                min="0"
                 step="1000"
                 className="w-full md:w-1/2"
                 disabled={isPaymentFormDisabled}
@@ -685,7 +700,6 @@ nama company kita;`;
                       <Separator className="my-1" />
                     </>
                   )}
-                  {/* tampilkan metode lain jika ada selain cash/transfer */}
                   {normalizedMethods.filter(m => !['cash', 'transfer'].includes(m.type)).map((method) => (
                     <SelectItem key={method.id} value={String(method.id)}>
                       <div className="flex items-center gap-2">

@@ -31,8 +31,9 @@ const ProductSettings = () => {
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     stock: '',
-    purchase_price: '', // Field baru
+    purchase_price: '',
     is_returnable: false,
+    empty_bottle_price: '', // Tambahkan state ini
   });
 
   const [productPrices, setProductPrices] = useState([]);
@@ -46,9 +47,10 @@ const ProductSettings = () => {
   const fetchData = async () => {
     setLoading(true);
     
+    // Perbarui query untuk mengambil empty_bottle_price
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('*, product_prices(*)')
+      .select('*, product_prices(*), empty_bottle_price')
       .eq('company_id', userProfile.company_id)
       .order('name', { ascending: true });
 
@@ -56,7 +58,7 @@ const ProductSettings = () => {
       .from('customer_statuses')
       .select('status_name')
       .eq('company_id', userProfile.company_id)
-      .order('sort_order', { ascending: true }); // Mengubah urutan agar sesuai dengan yang ada di database
+      .order('sort_order', { ascending: true });
 
     if (productsError || statusError) {
       console.error('Error fetching data:', productsError || statusError);
@@ -107,8 +109,9 @@ const ProductSettings = () => {
           .insert({ 
             name: newProductForm.name,
             stock: parseInt(newProductForm.stock),
-            purchase_price: parseFloat(newProductForm.purchase_price) || 0, // Simpan harga beli
+            purchase_price: parseFloat(newProductForm.purchase_price) || 0,
             is_returnable: newProductForm.is_returnable,
+            empty_bottle_price: newProductForm.is_returnable ? parseFloat(newProductForm.empty_bottle_price) || 0 : null, // Simpan harga galon kosong
             company_id: userProfile.company_id,
           })
           .select('id')
@@ -121,8 +124,9 @@ const ProductSettings = () => {
           .update({
             name: currentProduct.name,
             stock: parseInt(currentProduct.stock),
-            purchase_price: parseFloat(currentProduct.purchase_price) || 0, // Update harga beli
-            is_returnable: currentProduct.is_returnable
+            purchase_price: parseFloat(currentProduct.purchase_price) || 0,
+            is_returnable: currentProduct.is_returnable,
+            empty_bottle_price: currentProduct.is_returnable ? parseFloat(currentProduct.empty_bottle_price) || 0 : null, // Update harga galon kosong
           })
           .eq('id', productId);
         if (error) throw error;
@@ -180,7 +184,7 @@ const ProductSettings = () => {
   
   const resetForm = () => {
     setCurrentProduct(null);
-    setNewProductForm({ name: '', stock: '', purchase_price: '', is_returnable: false });
+    setNewProductForm({ name: '', stock: '', purchase_price: '', is_returnable: false, empty_bottle_price: '' });
     setProductPrices([]);
     setIsModalOpen(false);
   };
@@ -284,6 +288,25 @@ const ProductSettings = () => {
                 />
                 <Label htmlFor="is_returnable">Produk ini dapat dikembalikan (misal: galon)</Label>
               </div>
+
+              {(currentProduct?.is_returnable || newProductForm.is_returnable) && (
+                <div className="space-y-2">
+                  <Label htmlFor="empty_bottle_price">Harga Galon Kosong</Label>
+                  <Input
+                    id="empty_bottle_price"
+                    name="empty_bottle_price"
+                    type="number"
+                    step="0.01"
+                    placeholder="Harga jual galon kosong"
+                    value={currentProduct ? currentProduct.empty_bottle_price : newProductForm.empty_bottle_price}
+                    onChange={(e) => {
+                      const { name, value } = e.target;
+                      currentProduct ? setCurrentProduct({ ...currentProduct, [name]: value }) : setNewProductForm({ ...newProductForm, [name]: value });
+                    }}
+                    required
+                  />
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label className="font-medium">Harga per Status Pelanggan</Label>
@@ -327,6 +350,7 @@ const ProductSettings = () => {
                   <TableHead className="min-w-[150px]">Nama Produk</TableHead>
                   <TableHead className="min-w-[100px]">Stok</TableHead>
                   <TableHead className="min-w-[150px]">Harga Beli</TableHead>
+                  <TableHead className="min-w-[150px]">Harga Galon Kosong</TableHead>
                   <TableHead className="min-w-[150px]">Dapat Dikembalikan</TableHead>
                   <TableHead className="min-w-[120px]">Aksi</TableHead>
                 </TableRow>
@@ -337,6 +361,7 @@ const ProductSettings = () => {
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{product.stock}</TableCell>
                     <TableCell>Rp{product.purchase_price ? parseFloat(product.purchase_price).toLocaleString('id-ID') : '-'}</TableCell>
+                    <TableCell>Rp{product.empty_bottle_price ? parseFloat(product.empty_bottle_price).toLocaleString('id-ID') : '-'}</TableCell>
                     <TableCell>{product.is_returnable ? 'Ya' : 'Tidak'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">

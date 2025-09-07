@@ -168,12 +168,12 @@ const UpdateStockPage = () => {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-auto min-w-max">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[150px]">Metrik</TableHead>
                     {products.map(product => (
-                      <TableHead key={product.id}>{product.name}</TableHead>
+                      <TableHead className="min-w-[150px]" key={product.id}>{product.name}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -193,7 +193,7 @@ const UpdateStockPage = () => {
                           placeholder="Jumlah"
                           value={manualCounts[product.id]}
                           onChange={(e) => handleManualCountChange(product.id, e.target.value)}
-                          min="0"
+                          
                           className="max-w-[100px]"
                           required
                         />
@@ -235,13 +235,13 @@ const UpdateStockPage = () => {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-auto min-w-max">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[150px]">Tanggal</TableHead>
                     <TableHead className="min-w-[150px]">Dibuat Oleh</TableHead>
                     {products.map(product => (
-                      <TableHead key={product.id}>{product.name}</TableHead>
+                      <TableHead className="min-w-[150px]" key={product.id}>{product.name}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>

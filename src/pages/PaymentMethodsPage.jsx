@@ -62,15 +62,21 @@ const PaymentMethodsPage = () => {
 
   const fetchPaymentMethods = async () => {
     setLoading(true);
+    console.log('Fetching payments for companyId:', companyId); 
     const { data, error } = await supabase
       .from('payment_methods')
       .select('*')
       .eq('company_id', companyId)
       .order('type', { ascending: false });
 
+    // Tambahkan logging yang lebih detail di sini
+    console.log('API Response Data:', data);
+    console.log('API Response Error:', error);
+
     if (error) {
       console.error('Error fetching payment methods:', error);
       toast.error('Gagal memuat metode pembayaran.');
+      setMethods([]);
     } else {
       setMethods(data);
     }

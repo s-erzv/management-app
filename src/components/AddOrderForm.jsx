@@ -354,7 +354,7 @@ const AddOrderForm = () => {
                     name="qty"
                     value={newItem.qty}
                     onChange={handleNewItemChange}
-                    min="0"
+                    
                     disabled={!newItem.product_id}
                   />
                   <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">

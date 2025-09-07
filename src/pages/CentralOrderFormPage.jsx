@@ -606,7 +606,7 @@ const CentralOrderFormPage = () => {
                         value={item.price}
                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                         placeholder="Harga"
-                        min="0"
+                        
                         readOnly // Membuat input read-only
                         className="bg-gray-100 cursor-not-allowed"
                       />
@@ -704,7 +704,7 @@ const CentralOrderFormPage = () => {
                           placeholder="Jumlah Pembayaran"
                           value={newPayment.amount}
                           onChange={(e) => setNewPayment(prev => ({...prev, amount: e.target.value}))}
-                          min="0"
+                          
                           required
                           disabled={remainingDue <= 0}
                         />
@@ -885,7 +885,7 @@ const CentralOrderFormPage = () => {
                               type="number"
                               value={item.received_qty}
                               onChange={(e) => handleReceivedQtyChange(index, e.target.value)}
-                              min="0"
+                              
                             />
                           </TableCell>
                           <TableCell>

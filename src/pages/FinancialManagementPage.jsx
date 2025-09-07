@@ -1,3 +1,5 @@
+// src/pages/FinancialManagementPage.jsx
+
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -55,16 +57,17 @@ const FinancialManagementPage = () => {
   const fetchData = async () => {
     setLoading(true);
 
-    // Ambil data dari semua tabel keuangan
     const [
       { data: manualTransactions, error: manualTransactionsError },
       { data: orderPayments, error: orderPaymentsError },
       { data: expenseReports, error: expenseReportsError },
       { data: allPaymentMethods, error: methodsError },
     ] = await Promise.all([
+      // Perubahan di sini: Kecualikan transaksi yang berasal dari 'orders'
       supabase.from('financial_transactions')
         .select(`*, payment_method:payment_method_id (method_name, account_name, type)`)
         .eq('company_id', companyId)
+        .neq('source_table', 'orders')
         .order('transaction_date', { ascending: false }),
       supabase.from('payments')
         .select(`*, payment_method:payment_method_id (method_name, account_name, type), orders:order_id(invoice_number, customers(name))`)
@@ -73,7 +76,7 @@ const FinancialManagementPage = () => {
       supabase.from('expense_reports')
         .select(`*, user:user_id(full_name)`)
         .eq('company_id', companyId)
-        .eq('status', 'paid') // Hanya yang sudah dibayar dianggap transaksi final
+        .eq('status', 'paid') 
         .order('report_date', { ascending: false }),
       supabase.from('payment_methods')
         .select('id, method_name, account_name, type')
@@ -86,10 +89,8 @@ const FinancialManagementPage = () => {
     } else {
       setPaymentMethods(allPaymentMethods);
 
-      // Normalisasi dan gabungkan semua data transaksi
       const combinedTransactions = [];
 
-      // Manual Transactions
       manualTransactions.forEach(t => {
         combinedTransactions.push({
           id: t.id,
@@ -105,7 +106,6 @@ const FinancialManagementPage = () => {
         });
       });
 
-      // Order Payments (Income)
       orderPayments.forEach(p => {
         combinedTransactions.push({
           id: p.id,
@@ -121,10 +121,8 @@ const FinancialManagementPage = () => {
         });
       });
 
-      // Expense Reports (Expense)
       expenseReports.forEach(e => {
-        // Cari metode pembayaran berdasarkan nama, karena di expense_reports hanya ada namanya
-        const method = allPaymentMethods.find(m => m.method_name === e.payment_method);
+        const matchingMethod = allPaymentMethods.find(m => m.method_name === e.payment_method);
         combinedTransactions.push({
           id: e.id,
           date: e.report_date,
@@ -135,11 +133,10 @@ const FinancialManagementPage = () => {
           methodType: method?.type || '-',
           account: method?.account_name || '-',
           source: 'Laporan Pengeluaran',
-          proofUrl: null, // Laporan pengeluaran tidak memiliki kolom proof_url
+          proofUrl: null, 
         });
       });
 
-      // Urutkan semua transaksi berdasarkan tanggal
       combinedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
       setTransactions(combinedTransactions);
     }
@@ -268,7 +265,7 @@ const FinancialManagementPage = () => {
                   placeholder="Jumlah transaksi"
                   value={newTransaction.amount}
                   onChange={(e) => handleFormChange('amount', e.target.value)}
-                  min="0"
+                  
                   required
                 />
               </div>
