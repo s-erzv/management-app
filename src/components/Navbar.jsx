@@ -17,10 +17,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, ListOrdered, Users, Package, Calendar, BarChart, Settings, Truck, Files, ReceiptText, Wallet, PiggyBank, Menu, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const navItems = [
   { path: '/dashboard', name: 'Dashboard', icon: <LayoutDashboard />, roles: ['super_admin', 'admin', 'user'] },
@@ -42,6 +45,9 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [loadingPasswordChange, setLoadingPasswordChange] = useState(false);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -50,6 +56,24 @@ const Sidebar = () => {
       console.error('Error signing out:', error);
     } else {
       navigate('/login');
+    }
+  };
+  
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    if (!newPassword) {
+      toast.error('Kata sandi baru tidak boleh kosong.');
+      return;
+    }
+    setLoadingPasswordChange(true);
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoadingPasswordChange(false);
+    if (error) {
+      toast.error('Gagal memperbarui kata sandi: ' + error.message);
+    } else {
+      toast.success('Kata sandi berhasil diperbarui!');
+      setIsChangePasswordModalOpen(false);
+      setNewPassword('');
     }
   };
 
@@ -124,6 +148,10 @@ const Sidebar = () => {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setIsChangePasswordModalOpen(true)}>
+              <Lock className="mr-2 h-4 w-4" />
+              <span>Ganti Kata Sandi</span>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Keluar</span>
@@ -186,6 +214,10 @@ const Sidebar = () => {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsChangePasswordModalOpen(true)}>
+                <Lock className="mr-2 h-4 w-4" />
+                <span>Ganti Kata Sandi</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Keluar</span>
@@ -194,6 +226,33 @@ const Sidebar = () => {
           </DropdownMenu>
         </div>
       </header>
+      
+      {/* Change Password Modal */}
+      <Dialog open={isChangePasswordModalOpen} onOpenChange={setIsChangePasswordModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ganti Kata Sandi</DialogTitle>
+            <DialogDescription>
+              Masukkan kata sandi baru Anda.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChangeSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="newPassword">Kata Sandi Baru</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={loadingPasswordChange} className="w-full">
+              {loadingPasswordChange ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Simpan Kata Sandi'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

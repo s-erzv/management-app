@@ -1,16 +1,24 @@
 // @ts-nocheck
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'https://esm.sh/pdf-lib@1.17.1';
+import { stripHtml } from 'https://esm.sh/string-strip-html@1.3.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Helper function to fetch image as a Uint8Array
+async function fetchImage(url) {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
@@ -28,21 +36,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // Ambil nama perusahaan dari database
+    // Ambil nama dan logo perusahaan dari database
     const { data: companyData, error: companyError } = await supabase
       .from('companies')
-      .select('name')
+      .select('name, logo_url')
       .eq('id', orderData.company_id)
       .single();
         
     if (companyError) throw companyError;
     const companyName = companyData.name;
+    const companyLogoUrl = companyData.logo_url;
 
     // Gunakan 'orderData' yang dikirim dari frontend
     const {
       customers,
       invoice_number,
-      updated_at,
+      created_at,
       order_items,
       transport_cost,
       purchased_empty_qty,
@@ -51,97 +60,134 @@ serve(async (req) => {
     
     // Membuat PDF
     const pdfDoc = await PDFDocument.create();
-    const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-    const page = pdfDoc.addPage([600, 800]);
-
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
     const { width, height } = page.getSize();
-    const fontSize = 12;
-    let y = height - 50;
-    const margin = 50;
+    const margin = 30;
+    let y = height - margin;
 
-    page.drawText('INVOICE', {
-      x: margin,
-      y: y,
-      size: 24,
-      font: timesRomanFont,
-      color: rgb(0, 0, 0),
-    });
-    y -= 30;
-    page.drawText(`Nomor Invoice: ${invoice_number}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    y -= 20;
-    page.drawText(`Tanggal: ${new Date(updated_at).toLocaleDateString()}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    y -= 40;
-
-    page.drawText(`Kepada: ${customers.name}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    y -= 20;
-    page.drawText(`Alamat: ${customers.address}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    y -= 20;
-    page.drawText(`Telepon: ${customers.phone}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    y -= 40;
+    // Embed fonts
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // Header Tabel
-    page.drawText('Item', { x: margin, y: y, size: fontSize, font: timesRomanFont });
-    page.drawText('Kuantitas', { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
-    page.drawText('Harga Satuan', { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
-    page.drawText('Total', { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
-    y -= 10;
-    page.drawLine({
-      start: { x: margin, y: y },
-      end: { x: width - margin, y: y },
-      thickness: 1,
-      color: rgb(0, 0, 0),
-    });
-    y -= 20;
+    // --- Header ---
+    if (companyLogoUrl) {
+        const imageBytes = await fetchImage(companyLogoUrl);
+        const image = await pdfDoc.embedPng(imageBytes);
+        
+        const logoMaxWidth = 180; // Lebar maksimum logo
+        const logoMaxHeight = 100; // Tinggi maksimum logo
 
-    // Masukkan item dari order_items
-    if (order_items && Array.isArray(order_items)) {
-      for (const item of order_items) {
+        // Hitung skala untuk memastikan logo tidak melebihi lebar/tinggi maksimum
+        let scale = 1;
+        if (image.width > logoMaxWidth || image.height > logoMaxHeight) {
+            scale = Math.min(logoMaxWidth / image.width, logoMaxHeight / image.height);
+        }
+
+        const imageDims = image.scale(scale);
+
+        page.drawImage(image, {
+            x: margin,
+            y: y - imageDims.height / 2 - 20, // Pindahkan logo 20 poin ke bawah
+            width: imageDims.width,
+            height: imageDims.height,
+        });
+        y -= imageDims.height / 2 + 10; // Sesuaikan y setelah logo agar tidak terlalu dekat dengan teks di bawahnya
+    } else {
+        // Jika tidak ada logo, geser posisi y agar teks tidak terlalu ke bawah
+        y -= 20; 
+    }
+
+    // Invoice Title
+    page.drawText('INVOICE', {
+      x: width - margin - helveticaBoldFont.widthOfTextAtSize('INVOICE', 24),
+      y: y - 10,
+      size: 24,
+      font: helveticaBoldFont,
+      color: rgb(0.06, 0.09, 0.17),
+    });
+    
+    y -= 50; // Jarak setelah judul invoice
+
+    // Company and Invoice Info
+    page.drawText(`${companyName}`, { x: margin, y: y, size: 12, font: helveticaBoldFont });
+    page.drawText(`Invoice #${invoice_number}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Invoice #${invoice_number}`, 12), y: y, size: 12, font: helveticaFont });
+    y -= 15;
+    page.drawText(`Tanggal Pesanan: ${new Date(created_at).toLocaleDateString()}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Tanggal Pesanan: ${new Date(created_at).toLocaleDateString()}`, 12), y: y, size: 12, font: helveticaFont });
+    y -= 15;
+    
+    // Customer Info
+    y -= 30;
+    page.drawText('Tagihan Kepada:', { x: margin, y: y, size: 10, font: helveticaBoldFont });
+    y -= 15;
+    page.drawText(customers.name, { x: margin, y: y, size: 12, font: helveticaFont });
+    y -= 15;
+    page.drawText(customers.address, { x: margin, y: y, size: 12, font: helveticaFont });
+    y -= 15;
+    page.drawText(customers.phone, { x: margin, y: y, size: 12, font: helveticaFont });
+    y -= 30;
+
+    // --- Table Header ---
+    page.drawRectangle({ x: margin, y: y, width: width - 2 * margin, height: 20, color: rgb(0.06, 0.09, 0.17) });
+    page.drawText('Item', { x: margin + 5, y: y + 5, size: 12, font: helveticaBoldFont, color: rgb(1, 1, 1) });
+    page.drawText('Kuantitas', { x: margin + 200, y: y + 5, size: 12, font: helveticaBoldFont, color: rgb(1, 1, 1) });
+    page.drawText('Harga Satuan', { x: margin + 300, y: y + 5, size: 12, font: helveticaBoldFont, color: rgb(1, 1, 1) });
+    page.drawText('Total', { x: width - margin - helveticaBoldFont.widthOfTextAtSize('Total', 12) - 5, y: y + 5, size: 12, font: helveticaBoldFont, color: rgb(1, 1, 1) });
+    y -= 10;
+    
+    // --- Table Content ---
+    for (const item of order_items) {
+        y -= 25;
         const qty = item.qty || 0;
         const price = item.price || 0;
         const itemTotal = qty * price;
-        
-        page.drawText(`${item.products.name}`, { x: margin, y: y, size: fontSize, font: timesRomanFont });
-        page.drawText(`${qty}`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
-        page.drawText(`Rp${price.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
-        page.drawText(`Rp${itemTotal.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
-        y -= 20;
-      }
+        page.drawText(item.products.name, { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText(`${qty}`, { x: margin + 200, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${price.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${itemTotal.toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${itemTotal.toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });
     }
     
-    // Tambahkan biaya transportasi
+    // Tambahkan baris untuk biaya transportasi
     if (transport_cost > 0) {
-      page.drawText('Biaya Transportasi', { x: margin, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`1`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
-      y -= 20;
+        y -= 25;
+        page.drawText('Biaya Transportasi', { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText('1', { x: margin + 200, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${transport_cost.toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });
     }
     
-    // Tambahkan pembelian galon kosong
+    // Tambahkan baris untuk pembelian galon kosong
     const emptyBottlePrice = order_items.find(item => item.products?.is_returnable)?.products?.empty_bottle_price || 0;
     if (purchased_empty_qty > 0) {
-      page.drawText('Beli Galon Kosong', { x: margin, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`${purchased_empty_qty}`, { x: margin + 200, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${emptyBottlePrice.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: fontSize, font: timesRomanFont });
-      page.drawText(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, { x: margin + 450, y: y, size: fontSize, font: timesRomanFont });
-      y -= 20;
+        y -= 25;
+        page.drawText('Beli Galon Kosong', { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText(`${purchased_empty_qty}`, { x: margin + 200, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${emptyBottlePrice.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });
     }
-
+    
     y -= 20;
 
+    // --- Footer Summary ---
     page.drawLine({
-      start: { x: margin, y: y },
-      end: { x: width - margin, y: y },
-      thickness: 1,
-      color: rgb(0, 0, 0),
+        start: { x: margin, y: y },
+        end: { x: width - margin, y: y },
+        thickness: 1,
+        color: rgb(0, 0, 0),
     });
     y -= 20;
-
-    page.drawText(`TOTAL: Rp${grand_total?.toLocaleString('id-ID') ?? '0'}`, { x: margin + 380, y: y, size: 14, font: timesRomanFont, color: rgb(0, 0, 0) });
+    
+    const totalText = `TOTAL: Rp${grand_total?.toLocaleString('id-ID') ?? '0'}`;
+    page.drawText(totalText, {
+        x: width - margin - helveticaBoldFont.widthOfTextAtSize(totalText, 14),
+        y: y,
+        size: 14,
+        font: helveticaBoldFont,
+        color: rgb(0.06, 0.09, 0.17),
+    });
 
     const pdfBytes = await pdfDoc.save();
     
-    // 1. Cek apakah invoice sudah ada
+    // Cek apakah invoice sudah ada, jika tidak, insert. Jika ada, update.
     const { data: existingInvoice } = await supabase
       .from('invoices')
       .select('id')
@@ -152,11 +198,9 @@ serve(async (req) => {
     let invErr;
 
     if (existingInvoice) {
-      // 2. Jika sudah ada, lakukan UPDATE
-      const { data, error } = await supabase
+      ({ data: invData, error: invErr } = await supabase
         .from('invoices')
         .update({
-          // data yang ingin di-update
           customer_id: customers.id,
           invoice_number: invoice_number,
           grand_total: grand_total,
@@ -164,12 +208,9 @@ serve(async (req) => {
         })
         .eq('id', existingInvoice.id)
         .select()
-        .single();
-      invData = data;
-      invErr = error;
+        .single());
     } else {
-      // 3. Jika belum ada, lakukan INSERT
-      const { data, error } = await supabase
+      ({ data: invData, error: invErr } = await supabase
         .from('invoices')
         .insert({
           order_id: order_id,
@@ -179,9 +220,7 @@ serve(async (req) => {
           company_id: orderData.company_id
         })
         .select()
-        .single();
-      invData = data;
-      invErr = error;
+        .single());
     }
 
     if (invErr) throw invErr;
