@@ -72,7 +72,7 @@ const App = () => {
             />
             <Route
               path="/orders"
-              element={session && (isAdminOrAdmin || isCourier) ? <OrdersPage /> : <Navigate to="/dashboard" />}
+              element={session && (isAdminOrSuperAdmin || isCourier) ? <OrdersPage /> : <Navigate to="/dashboard" />}
             />
            <Route
               path="/orders/add"
