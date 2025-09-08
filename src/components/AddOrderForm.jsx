@@ -31,7 +31,8 @@ const AddOrderForm = () => {
   const [loading, setLoading] = useState(true);
 
   const [orderItems, setOrderItems] = useState([]);
-  const [newItem, setNewItem] = useState({ product_id: '', qty: 0, price: 0 });
+  // Perbaikan: Ubah nilai awal `qty` menjadi string kosong
+  const [newItem, setNewItem] = useState({ product_id: '', qty: '', price: 0 });
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
   // Helper function to get today's date in YYYY-MM-DD format
@@ -71,10 +72,13 @@ const AddOrderForm = () => {
       .from('customers')
       .select('id, name, customer_status')
       .eq('company_id', companyId);
+      
     const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*, is_returnable')
-      .eq('company_id', companyId);
+      .eq('company_id', companyId)
+      .order('sort_order', { ascending: true });
+
     const { data: couriersData, error: couriersError } = await supabase
       .from('profiles')
       .select('id, full_name')
@@ -120,7 +124,7 @@ const AddOrderForm = () => {
   const handleProductSelectChange = async (val) => {
     if (!selectedCustomerId) {
       toast.error('Pilih pelanggan terlebih dahulu.');
-      setNewItem({ product_id: '', qty: 0, price: 0 });
+      setNewItem({ product_id: '', qty: '', price: 0 });
       return;
     }
 
@@ -168,7 +172,8 @@ const AddOrderForm = () => {
     };
 
     setOrderItems([...orderItems, itemToAdd]);
-    setNewItem({ product_id: '', qty: 0, price: 0 });
+    // Perbaikan: Ubah nilai awal `qty` menjadi string kosong
+    setNewItem({ product_id: '', qty: '', price: 0 });
   };
 
   const handleItemRemove = (index) => {
@@ -195,7 +200,7 @@ const AddOrderForm = () => {
     const payload = {
       orderForm: {
         ...orderForm,
-        created_by: session.user.id,
+        created_by: userProfile.id,
         company_id: companyId,
         courier_ids: orderForm.courier_ids.length > 0 ? orderForm.courier_ids : null,
       },
@@ -217,8 +222,9 @@ const AddOrderForm = () => {
         throw new Error('Server returned an error: ' + errorText);
       }
 
+      const result = await response.json();
       toast.success('Pesanan berhasil dibuat!');
-      navigate('/orders'); 
+      navigate(`/orders/${result.orderId}`);
     } catch (error) {
       console.error('Error creating order:', error.message);
       toast.error('Gagal membuat pesanan: ' + error.message);
@@ -227,20 +233,17 @@ const AddOrderForm = () => {
     }
   };
 
-  const resetForm = () => {
-    setOrderForm({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
-    setSelectedCustomerId('');
-    setOrderItems([]);
-    setNewItem({ product_id: '', qty: 0, price: 0 });
+  const calculateTotal = () => {
+    return orderItems.reduce((total, item) => total + (item.qty * item.price), 0);
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-      </div>
-    );
-  }
+  
+  const handleCustomerAdded = (newCustomer) => {
+    setCustomers([...customers, newCustomer]);
+    setSelectedCustomerId(newCustomer.id);
+    setOrderForm({ ...orderForm, customer_id: newCustomer.id });
+    setIsCustomerModalOpen(false);
+    toast.success('Pelanggan baru berhasil ditambahkan dan dipilih.');
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-2xl">
@@ -303,7 +306,6 @@ const AddOrderForm = () => {
                 {couriers.map((courier) => (
                   <div key={courier.id} className="flex items-center space-x-2">
                     <Checkbox
-                      required
                       id={`courier-${courier.id}`}
                       checked={orderForm.courier_ids.includes(courier.id)}
                       onCheckedChange={(checked) => handleCourierCheckboxChange(courier.id, checked)}
@@ -353,7 +355,7 @@ const AddOrderForm = () => {
                     placeholder="Jumlah"
                     name="qty"
                     value={newItem.qty}
-                    onChange={handleNewItemChange}
+                    onChange={(e) => setNewItem({ ...newItem, qty: e.target.value })}
                     
                     disabled={!newItem.product_id}
                   />
@@ -387,13 +389,7 @@ const AddOrderForm = () => {
       <CustomerForm
         isOpen={isCustomerModalOpen}
         onOpenChange={setIsCustomerModalOpen}
-        onCustomerAdded={(newCustomer) => {
-          setCustomers([...customers, newCustomer]);
-          setSelectedCustomerId(newCustomer.id);
-          setOrderForm({ ...orderForm, customer_id: newCustomer.id });
-          setIsCustomerModalOpen(false);
-          toast.success('Pelanggan baru berhasil ditambahkan dan dipilih.');
-        }}
+        onCustomerAdded={handleCustomerAdded}
       />
     </div>
   );
