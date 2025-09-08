@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+// src/pages/CompleteDeliveryPage.jsx
+
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,15 +23,31 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'react-hot-toast';
-import { Loader2, ArrowLeft, PackageCheck, TruckIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, PackageCheck, TruckIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+const getPaymentStatusBadge = (status) => {
+  switch ((status || '').toLowerCase()) {
+    case 'paid':
+      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
+    case 'unpaid':
+      return <Badge className="bg-red-500 text-white gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
+    case 'partial':
+      return <Badge className="bg-yellow-400 text-black gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
+    default:
+      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
+  }
+};
 
 const CompleteDeliveryPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { session, user, companyId } = useAuth();
+  
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState('unpaid');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [transferMethod, setTransferMethod] = useState('');
   const [receivedByName, setReceivedByName] = useState('');
@@ -45,6 +63,7 @@ const CompleteDeliveryPage = () => {
   });
   
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [orderCouriers, setOrderCouriers] = useState([]);
 
   useEffect(() => {
     if (!orderId) {
@@ -54,6 +73,23 @@ const CompleteDeliveryPage = () => {
     }
     fetchData();
   }, [orderId, session]);
+
+  useEffect(() => {
+    if (!order || !order.order_items) return;
+    const returnableItems = order.order_items.filter(item => item.products?.is_returnable);
+    const totalReturnableQty = returnableItems.reduce((sum, item) => sum + (item.qty || 0), 0);
+    
+    const returnedQty = parseFloat(formState.returnedQty) || 0;
+    const purchasedEmptyQty = parseFloat(formState.purchasedEmptyQty) || 0;
+    
+    const calculatedBorrowedQty = totalReturnableQty - returnedQty - purchasedEmptyQty;
+
+    setFormState(prev => ({
+      ...prev,
+      borrowedQty: calculatedBorrowedQty > 0 ? calculatedBorrowedQty.toString() : '0',
+    }));
+
+  }, [order, formState.returnedQty, formState.purchasedEmptyQty]);
   
   const fetchData = async () => {
     setLoading(true);
@@ -62,7 +98,8 @@ const CompleteDeliveryPage = () => {
       .select(`
         *,
         customers (name, address, phone),
-        order_items (product_id, qty, price, item_type, products(name, is_returnable, empty_bottle_price))
+        order_items (product_id, qty, price, item_type, products(name, is_returnable, empty_bottle_price)),
+        order_couriers (courier:profiles(id, full_name))
       `)
       .eq('id', orderId)
       .single();
@@ -106,6 +143,7 @@ const CompleteDeliveryPage = () => {
     }
 
     setOrder(orderWithDetails);
+    setOrderCouriers(orderData.order_couriers.map(oc => oc.courier));
     setFormState({
       returnedQty: orderData.returned_qty > 0 ? orderData.returned_qty.toString() : '',
       borrowedQty: orderData.borrowed_qty > 0 ? orderData.borrowed_qty.toString() : '',
@@ -129,7 +167,6 @@ const CompleteDeliveryPage = () => {
     setTransferMethod('');
   }
   
-  // Pindahkan semua perhitungan ke sini
   const returnableItem = order?.order_items.find(item => item.products?.is_returnable);
   const emptyBottlePrice = returnableItem?.products?.empty_bottle_price || 0;
   const purchasedEmptyQty = parseFloat(formState.purchasedEmptyQty) || 0;
@@ -138,10 +175,8 @@ const CompleteDeliveryPage = () => {
   const orderItemsTotal = order?.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0) || 0;
   const transportCost = parseFloat(formState.transportCost) || 0;
   
-  // Perhitungan total tagihan baru yang benar
   const newGrandTotal = orderItemsTotal + transportCost + totalPurchaseCost;
   
-  // Perhitungan sisa tagihan yang benar
   const remainingDue = newGrandTotal - (order?.total_paid || 0);
 
   useEffect(() => {
@@ -163,119 +198,126 @@ const CompleteDeliveryPage = () => {
     }
   }, [paymentMethod, remainingDue, cashAmount, paymentMethods]);
 
-const handleCompleteDelivery = async (e) => {
-  e.preventDefault();
-  if (!order?.id || !file) {
-    toast.error('ID pesanan atau bukti pengiriman tidak ada.');
-    return;
-  }
-  const selectedPaymentMethod = paymentMethods.find(m => m.id === paymentMethod);
-  const isTransfer = paymentMethod === 'hybrid' || selectedPaymentMethod?.type === 'transfer';
-  const isCashPayment = selectedPaymentMethod?.type === 'cash' || paymentMethod === 'hybrid';
-
-  if (isTransfer && !transferProofFile) {
-    toast.error('Mohon unggah bukti transfer.');
-    return;
-  }
-  
-  if (paymentMethod === 'hybrid' && !transferMethod) {
-    toast.error('Mohon pilih metode transfer.');
-    return;
-  }
-  
-  if (isCashPayment && !receivedByName) {
-    toast.error('Nama penerima harus diisi.');
-    return;
-  }
-
-  setSubmitting(true);
-  let transferProofUrl = null;
-
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // 1. Unggah bukti pengiriman (proof of delivery)
-    const deliveryFileExt = file.name.split('.').pop();
-    const deliveryFilePath = `${order.id}/delivery_proofs/${Date.now()}.${deliveryFileExt}`;
-    const { error: deliveryUploadError } = await supabase.storage
-      .from("proofs")
-      .upload(deliveryFilePath, file, { upsert: false });
-    
-    if (deliveryUploadError) {
-      console.error('Upload error details (delivery):', deliveryUploadError);
-      throw new Error('Gagal mengunggah bukti pengiriman: ' + deliveryUploadError.message);
+  const handleCompleteDelivery = async (e) => {
+    e.preventDefault();
+    if (!order?.id || !file) {
+      toast.error('ID pesanan atau bukti pengiriman tidak ada.');
+      return;
     }
-    
-    // 2. Unggah bukti transfer jika ada
-    if (isTransfer && transferProofFile) {
-      const transferFileExt = transferProofFile.name.split('.').pop();
-      const transferFilePath = `${order.id}/transfer_proofs/${Date.now()}.${transferFileExt}`;
-      const { data: transferUploadData, error: transferUploadError } = await supabase.storage
+    const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);
+
+    if (paymentStatus !== 'unpaid') {
+      const isTransfer = selectedMethodObj?.type === 'transfer' || paymentMethod === 'hybrid';
+      const isCashPayment = selectedMethodObj?.type === 'cash' || paymentMethod === 'hybrid';
+
+      if (isTransfer && !transferProofFile) {
+        toast.error('Mohon unggah bukti transfer.');
+        return;
+      }
+      
+      if (paymentMethod === 'hybrid' && !transferMethod) {
+        toast.error('Mohon pilih metode transfer.');
+        return;
+      }
+      
+      if (isCashPayment && !receivedByName) {
+        toast.error('Nama penerima harus diisi.');
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    let transferProofUrl = null;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const deliveryFileExt = file.name.split('.').pop();
+      const deliveryFilePath = `${order.id}/delivery_proofs/${Date.now()}.${deliveryFileExt}`;
+      const { error: deliveryUploadError } = await supabase.storage
         .from("proofs")
-        .upload(transferFilePath, transferProofFile, { upsert: false });
-
-      if (transferUploadError) {
-        console.error('Upload error details (transfer):', transferUploadError);
-        throw new Error('Gagal mengunggah bukti transfer: ' + transferUploadError.message);
+        .upload(deliveryFilePath, file, { upsert: false });
+      
+      if (deliveryUploadError) {
+        console.error('Upload error details (delivery):', deliveryUploadError);
+        throw new Error('Gagal mengunggah bukti pengiriman: ' + deliveryUploadError.message);
       }
-      transferProofUrl = transferUploadData.path;
-    }
-    
-    // Hitung total harga galon kosong yang dibeli
-    const totalPurchaseCost = (parseFloat(formState.purchasedEmptyQty) || 0) * emptyBottlePrice;
+      
+      const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);
+      const isTransfer = selectedMethodObj?.type === 'transfer' || paymentMethod === 'hybrid';
 
-    const finalPaymentAmount =
-      (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
+      if (paymentStatus !== 'unpaid' && isTransfer && transferProofFile) {
+        const transferFileExt = transferProofFile.name.split('.').pop();
+        const transferFilePath = `${order.id}/transfer_proofs/${Date.now()}.${transferFileExt}`;
+        const { data: transferUploadData, error: transferUploadError } = await supabase.storage
+          .from("proofs")
+          .upload(transferFilePath, transferProofFile, { upsert: false });
 
-    const pmToSend = paymentMethod === "pending" || finalPaymentAmount <= 0
-      ? null
-      : paymentMethod === "hybrid"
-        ? transferMethod
-        : paymentMethod;
-
-    const payload = {
-      orderId,
-      paymentAmount: finalPaymentAmount,
-      paymentMethodId: pmToSend,
-      returnedQty: parseInt(formState.returnedQty, 10) || 0,
-      borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
-      purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
-      totalPurchaseCost, 
-      transportCost: parseFloat(formState.transportCost) || 0,
-      proofFileUrl: deliveryFilePath,
-      transferProofUrl,
-      receivedByUserId: user?.id || null,
-      receivedByName: receivedByName || null, // Perbaikan di sini
-    };
-
-    const response = await fetch(
-      "https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery",
-      {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(payload),
+        if (transferUploadError) {
+          console.error('Upload error details (transfer):', transferUploadError);
+          throw new Error('Gagal mengunggah bukti transfer: ' + transferUploadError.message);
+        }
+        transferProofUrl = transferUploadData.path;
       }
-    );
+      
+      const totalPurchaseCost = (parseFloat(formState.purchasedEmptyQty) || 0) * emptyBottlePrice;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Function error:', errorText);
-      throw new Error(errorText);
+      let finalPaymentAmount = 0;
+      if (paymentStatus !== 'unpaid') {
+        finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
+      }
+      
+      let pmToSend = null;
+      if (paymentStatus !== "unpaid") {
+          pmToSend = paymentMethod === "hybrid" ? transferMethod : paymentMethod;
+      } else if (paymentMethod && paymentMethod !== "pending") {
+          pmToSend = paymentMethod;
+      }
+
+      const payload = {
+        orderId,
+        paymentAmount: finalPaymentAmount,
+        paymentMethodId: pmToSend,
+        returnedQty: parseInt(formState.returnedQty, 10) || 0,
+        borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
+        purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
+        totalPurchaseCost, 
+        transportCost: parseFloat(formState.transportCost) || 0,
+        proofFileUrl: deliveryFilePath,
+        transferProofUrl,
+        receivedByUserId: user?.id || null,
+        receivedByName: receivedByName || null,
+        paymentStatus: paymentStatus,
+      };
+
+      const response = await fetch(
+        "https://wzmgcainyratlwxttdau.supabase.co/functions/v1/complete-delivery",
+        {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Function error:', errorText);
+        throw new Error(errorText);
+      }
+
+      toast.success("Pesanan berhasil diselesaikan!");
+      navigate("/dashboard");
+      
+    } catch (error) {
+      console.error("Error completing delivery:", error);
+      toast.error("Gagal menyelesaikan pesanan: " + error.message);
+    } finally {
+      setSubmitting(false);
     }
-
-    toast.success("Pesanan berhasil diselesaikan!");
-    navigate("/dashboard");
-    
-  } catch (error) {
-    console.error("Error completing delivery:", error);
-    toast.error("Gagal menyelesaikan pesanan: " + error.message);
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   if (loading || !order) {
     return (
@@ -287,20 +329,19 @@ const handleCompleteDelivery = async (e) => {
   }
   
   const combinedPaymentMethods = [
-    { id: 'pending', method_name: 'Pending', type: 'pending' },
-    { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' },
-    ...paymentMethods
+    ...paymentMethods,
+    { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' }
   ];
 
   const hasReturnableItems = order.order_items.some(item => item.products?.is_returnable);
-  const deliveredQty = order.order_items.reduce((sum, item) => sum + (item.qty || 0), 0);
-  const showPaymentFields = order.payment_status !== 'paid' && remainingDue > 0;
-
-  const selectedMethod = paymentMethods.find(m => m.id === paymentMethod);
+  
+  const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);
+  const selectedMethodType = selectedMethodObj?.type;
   const transferMethods = paymentMethods.filter(m => m.type === 'transfer');
 
-  const showCashFields = showPaymentFields && (selectedMethod?.type === 'cash' || paymentMethod === 'hybrid');
-  const showTransferFields = showPaymentFields && (selectedMethod?.type === 'transfer' || paymentMethod === 'hybrid');
+  const showPaymentDetailsFields = paymentStatus === 'paid' || paymentStatus === 'partial';
+  const showCashFields = showPaymentDetailsFields && (selectedMethodType === 'cash' || paymentMethod === 'hybrid');
+  const showTransferFields = showPaymentDetailsFields && (selectedMethodType === 'transfer' || paymentMethod === 'hybrid');
   
   const formatCurrency = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
@@ -335,6 +376,10 @@ const handleCompleteDelivery = async (e) => {
               <p className="text-[#10182b]">{order.customers?.address}</p>
             </div>
             <div>
+              <Label className="text-muted-foreground">Status Pembayaran</Label>
+              {getPaymentStatusBadge(order.payment_status)}
+            </div>
+            <div>
               <Label className="text-muted-foreground">Total Tagihan Baru</Label>
               <p className="font-bold text-lg text-green-600">{formatCurrency(newGrandTotal)}</p>
             </div>
@@ -361,25 +406,39 @@ const handleCompleteDelivery = async (e) => {
             <CardDescription>Masukkan detail pembayaran, pengembalian, dan biaya.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            {showPaymentFields && (
+            <div className="grid gap-2">
+              <Label htmlFor="paymentStatus">Status Pembayaran</Label>
+              <Select value={paymentStatus} onValueChange={setPaymentStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Status Pembayaran" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">Lunas</SelectItem>
+                  <SelectItem value="partial">Sebagian</SelectItem>
+                  <SelectItem value="unpaid">Belum Lunas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
+              <Select value={paymentMethod} onValueChange={handlePaymentMethodChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih metode pembayaran" />
+                </SelectTrigger>
+                <SelectContent>
+                   {combinedPaymentMethods.map(method => (
+                     <SelectItem key={method.id} value={method.id}>
+                     {method.method_name}
+                      {method.type === 'transfer' && method.account_name && ` (${method.account_name})`}
+                    </SelectItem>
+                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {showPaymentDetailsFields && (
               <>
-                <div className="grid gap-2">
-                  <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
-                  <Select value={paymentMethod} onValueChange={handlePaymentMethodChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih metode pembayaran" />
-                    </SelectTrigger>
-                    <SelectContent>
-                       {combinedPaymentMethods.map(method => (
-                         <SelectItem key={method.id} value={method.id}>
-                         {method.method_name}
-                          {method.type === 'transfer' && method.account_name && ` (${method.account_name})`}
-                        </SelectItem>
-                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
                 {paymentMethod === 'hybrid' && (
                   <div className="grid gap-2">
                     <Label htmlFor="transferMethod">Pilih Metode Transfer</Label>
@@ -406,13 +465,18 @@ const handleCompleteDelivery = async (e) => {
                   <>
                     <div className="grid gap-2">
                       <Label htmlFor="receivedByName">Nama Penerima</Label>
-                      <Input
-                        id="receivedByName"
-                        placeholder="Masukkan nama penerima"
-                        value={receivedByName}
-                        onChange={(e) => setReceivedByName(e.target.value)}
-                        required
-                      />
+                       <Select value={receivedByName} onValueChange={setReceivedByName}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kurir penerima" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {orderCouriers.map(courier => (
+                            <SelectItem key={courier.id} value={courier.full_name}>
+                              {courier.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="cashAmount">Jumlah Pembayaran Tunai</Label>
@@ -421,7 +485,7 @@ const handleCompleteDelivery = async (e) => {
                         type="number"
                         placeholder="Jumlah Pembayaran Tunai"
                         value={cashAmount}
-                        onChange={(e) => handleAmountChange(e, setCashAmount)}
+                        onChange={(e) => setCashAmount(e.target.value)}
                         required
                       />
                     </div>
@@ -437,7 +501,7 @@ const handleCompleteDelivery = async (e) => {
                         type="number"
                         placeholder="Jumlah Pembayaran Transfer"
                         value={transferAmount}
-                        onChange={(e) => handleAmountChange(e, setTransferAmount)}
+                        onChange={(e) => setTransferAmount(e.target.value)}
                         readOnly={paymentMethod === 'hybrid'}
                         className={paymentMethod === 'hybrid' ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}
                         required
@@ -478,8 +542,8 @@ const handleCompleteDelivery = async (e) => {
                     type="number"
                     placeholder="Jumlah Galon Dipinjam"
                     value={formState.borrowedQty}
-                    onChange={handleFormChange}
-                    
+                    readOnly 
+                    className="bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -522,7 +586,7 @@ const handleCompleteDelivery = async (e) => {
         </Card>
         
         <div className="mt-4">
-          <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={submitting || (showTransferFields && !transferProofFile)}>
+          <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={submitting || ((paymentMethod === 'transfer' || paymentMethod === 'hybrid') && (paymentStatus === 'paid' || paymentStatus === 'partial') && !transferProofFile)}>
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (

@@ -14,7 +14,6 @@ serve(async (req) => {
 
   try {
     const { orderForm, orderItems } = await req.json()
-    console.log('Data yang diterima:', orderForm, orderItems);
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
     if (!orderForm || !orderItems || orderItems.length === 0) {
@@ -40,7 +39,6 @@ serve(async (req) => {
     let subtotal = 0;
     const itemsToInsert = [];
     const invoiceItemsToInsert = [];
-    const stockMovements = [];
     
     for (const item of orderItems) {
         // Fetch the correct price from the database for server-side validation
@@ -71,19 +69,9 @@ serve(async (req) => {
         invoiceItemsToInsert.push({
             invoice_id: null,
             product_id: item.product_id,
-            description: item.product_name,
-            quantity: validatedPrice,
+            quantity: item.qty, // Perbaikan di sini
             unit_price: validatedPrice,
             line_total: item.qty * validatedPrice,
-        });
-        
-        stockMovements.push({
-            order_id: null,
-            product_id: item.product_id,
-            qty: item.qty,
-            type: 'keluar',
-            notes: `Galon keluar untuk pesanan (dibeli)`,
-            company_id: orderForm.company_id,
         });
     }
 
@@ -105,6 +93,7 @@ serve(async (req) => {
         status: 'draft',
         payment_status: 'unpaid',
         invoice_number: nextInvoiceNumber,
+        grand_total: grand_total,
       }])
       .select('id')
       .single();
@@ -144,7 +133,6 @@ serve(async (req) => {
 
     const finalItemsToInsert = itemsToInsert.map(item => ({...item, order_id: orderId}));
     const finalInvoiceItemsToInsert = invoiceItemsToInsert.map(item => ({...item, invoice_id: invoiceId}));
-    const finalStockMovements = stockMovements.map(item => ({...item, order_id: orderId}));
 
     const { error: itemsError } = await supabase
       .from('order_items')
@@ -155,14 +143,7 @@ serve(async (req) => {
       .from('invoice_items')
       .insert(finalInvoiceItemsToInsert);
     if (invoiceItemsError) throw invoiceItemsError;
-
-    if (finalStockMovements.length > 0) {
-        const { error: movementError } = await supabase
-            .from('stock_movements')
-            .insert(finalStockMovements);
-        if (movementError) throw movementError;
-    }
-
+    
     return new Response(JSON.stringify({ message: 'Order created successfully', orderId, invoiceId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

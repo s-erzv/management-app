@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, MessageSquareText, AlertCircle } from 'lucide-react';
+import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Dialog,
@@ -357,31 +357,6 @@ const OrdersPage = () => {
     }).format(amount);
   };
   
-  const handleConfirmOrder = (order) => {
-    const productsList = order.order_items
-      .map(item => `* ${item.products.name} (${item.qty})`)
-      .join('\n');
-    
-    const totalHarga = formatCurrency(calculateTotal(order.order_items));
-
-    const whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.Yth. Bapak/Ibu ${order.customers.name},
-
-Dengan hormat, kami izin Mengonfirmasi Pesanan dengan rincian berikut:
-${productsList}
-
-Total Harga: ${totalHarga}
-*Belum termasuk biaya transportasi jika ada*
-
-Mohon diperika kembali untuk pesanannya
-Pembayaran dilakukan ketika barang sudah diterima. Terimakasih
-
-Hormat kami,
-${companyName}`;
-
-    const phone = (order.customers?.phone || '').replace(/[^\d]/g, '');
-    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`;
-    window.open(whatsappUrl, '_blank');
-  };
 
   const handleExportToExcel = () => {
     const header = [
@@ -735,9 +710,6 @@ ${companyName}`;
                       <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Detail</Button>
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)} className="bg-red-500 hover:bg-red-600 text-white">Hapus</Button>
-                      <Button variant="outline" size="sm" onClick={() => handleConfirmOrder(order)} className="text-[#10182b] hover:bg-gray-100">
-                        <MessageSquareText className="h-4 w-4 mr-2" /> Konfirmasi
-                      </Button>
                     </TableCell>
                   </TableRow>
                 )))}

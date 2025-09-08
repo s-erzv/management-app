@@ -105,34 +105,45 @@ const UserDashboard = ({ userId }) => {
     
     try {
       if (newStatus === 'sent') {
-        const soldItems = (order.order_items || []).filter(item => item.item_type === 'beli');
-        if (soldItems.length > 0) {
+        const soldItems = (order.order_items || []).filter((item) => item.item_type === 'beli');
+ 
+        const { data: existingMoves, error: existingErr } = await supabase
+          .from('stock_movements')
+          .select('id')
+          .eq('order_id', order.id)
+          .eq('type', 'keluar');
+
+        if (existingErr) {
+          toast.error('Gagal mengecek pergerakan stok.');
+          setLoading(false);
+          return;
+        }
+
+        if (existingMoves && existingMoves.length > 0) {
+          // Sudah ada pergerakan stok keluar → jangan insert lagi
+          console.log(`Stok untuk order ${order.id} sudah pernah dicatat, skip insert.`);
+        } else {
+          // Belum ada → lakukan insert stok keluar
           for (const item of soldItems) {
-            if (!item.products) {
-              console.error('Data produk tidak ditemukan untuk item:', item);
-              toast.error('Gagal mencatat pergerakan stok: Data produk tidak lengkap.');
-              return;
-            }
-            const company_id = item.products.company_id;
-            const { error } = await supabase
+            const { error: insertError } = await supabase
               .from('stock_movements')
               .insert({
                 type: 'keluar',
                 qty: item.qty,
-                notes: `Galon keluar untuk pesanan #${String(order.id).slice(0, 8)} (dibeli)`,
+                notes: `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
                 order_id: order.id,
                 user_id: userId,
                 product_id: item.product_id,
-                company_id: company_id
+                company_id: item.products.company_id,
               });
-            if (error) {
-              console.error('Error recording stock movement:', error);
-              toast.error('Gagal mencatat pergerakan stok.');
-              return;
+
+            if (insertError) {
+              throw insertError;
             }
           }
         }
       }
+
 
       const { error } = await supabase
         .from('orders')
@@ -288,7 +299,7 @@ const UserDashboard = ({ userId }) => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium flex items-center gap-1 text-[#10182b]">
-              <Banknote className="h-4 w-4 text-[#10182b]" />
+              <Banknote className="h-4 w-4" />
               Sisa Tagihan
             </span>
             <span className={`font-bold text-lg ${task.remaining_due > 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -352,43 +363,45 @@ const UserDashboard = ({ userId }) => {
       {/* Stats Cards */}
       {/* Bagian ini hanya ditampilkan jika user adalah kurir yang sedang login */}
       {currentUserId && userId === currentUserId && !loading && incompleteTasks.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="border-0 shadow-sm bg-white">
+        // === BAGIAN YANG DIUBAH UNTUK TAMPILAN MOBILE ===
+        <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:overflow-x-hidden md:pb-0 mb-6">
+          <Card className="border-0 shadow-sm bg-white min-w-[180px] md:min-w-0">
             <CardHeader className="pb-2">
               <CardDescription className="text-muted-foreground">Tugas Hari Ini</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
-                <Package className="h-6 w-6 text-[#10182b]" />
+              <div className="text-xl md:text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Package className="h-5 w-5 md:h-6 md:w-6 text-[#10182b]" />
                 {todayTasks.length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="border-0 shadow-sm bg-white">
+          <Card className="border-0 shadow-sm bg-white min-w-[180px] md:min-w-0">
             <CardHeader className="pb-2">
               <CardDescription className="text-muted-foreground">Total Aktif</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
-                <Clock className="h-6 w-6 text-[#10182b]" />
+              <div className="text-xl md:text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Clock className="h-5 w-5 md:h-6 md:w-6 text-[#10182b]" />
                 {incompleteTasks.length}
               </div>
             </CardContent>
           </Card>
           
-          <Card className="border-0 shadow-sm bg-white">
+          <Card className="border-0 shadow-sm bg-white min-w-[180px] md:min-w-0">
             <CardHeader className="pb-2">
               <CardDescription className="text-muted-foreground">Barang Perlu Dikirim</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
-                <Box className="h-6 w-6 text-[#10182b]" />
+              <div className="text-xl md:text-2xl font-bold text-[#10182b] flex items-center gap-2">
+                <Box className="h-5 w-5 md:h-6 md:w-6 text-[#10182b]" />
                 {totalItemsToDeliver}
               </div>
             </CardContent>
           </Card>
         </div>
+        // ===============================================
       )}
 
       {loading ? (

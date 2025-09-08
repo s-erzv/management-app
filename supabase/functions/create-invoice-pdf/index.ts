@@ -55,8 +55,10 @@ serve(async (req) => {
       order_items,
       transport_cost,
       purchased_empty_qty,
+      returned_qty, // Menambahkan ini
+      borrowed_qty, // Menambahkan ini
       grand_total,
-      proof_public_url, // Menambahkan ini untuk bukti pengiriman
+      proof_public_url,
     } = orderData;
     
     // Membuat PDF
@@ -75,10 +77,9 @@ serve(async (req) => {
         const imageBytes = await fetchImage(companyLogoUrl);
         const image = await pdfDoc.embedPng(imageBytes);
         
-        const logoMaxWidth = 180; // Lebar maksimum logo
-        const logoMaxHeight = 100; // Tinggi maksimum logo
+        const logoMaxWidth = 180;
+        const logoMaxHeight = 100;
 
-        // Hitung skala untuk memastikan logo tidak melebihi lebar/tinggi maksimum
         let scale = 1;
         if (image.width > logoMaxWidth || image.height > logoMaxHeight) {
             scale = Math.min(logoMaxWidth / image.width, logoMaxHeight / image.height);
@@ -88,13 +89,12 @@ serve(async (req) => {
 
         page.drawImage(image, {
             x: margin,
-            y: y - imageDims.height / 2 - 20, // Pindahkan logo 20 poin ke bawah
+            y: y - imageDims.height / 2 - 20,
             width: imageDims.width,
             height: imageDims.height,
         });
-        y -= imageDims.height / 2 + 10; // Sesuaikan y setelah logo agar tidak terlalu dekat dengan teks di bawahnya
+        y -= imageDims.height / 2 + 10;
     } else {
-        // Jika tidak ada logo, geser posisi y agar teks tidak terlalu ke bawah
         y -= 20; 
     }
 
@@ -107,7 +107,7 @@ serve(async (req) => {
       color: rgb(0.06, 0.09, 0.17),
     });
     
-    y -= 50; // Jarak setelah judul invoice
+    y -= 50;
 
     // Company and Invoice Info
     page.drawText(`${companyName}`, { x: margin, y: y, size: 12, font: helveticaBoldFont });
@@ -166,6 +166,23 @@ serve(async (req) => {
         page.drawText(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });
     }
     
+    // Tambahkan baris untuk galon kembali dan dipinjam
+    if (returned_qty > 0) {
+        y -= 25;
+        page.drawText('Galon Kembali', { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText(`${returned_qty}`, { x: margin + 200, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp0`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp0`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp0`, 12) - 5, y: y, size: 12, font: helveticaFont });
+    }
+
+    if (borrowed_qty > 0) {
+        y -= 25;
+        page.drawText('Galon Dipinjam', { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText(`${borrowed_qty}`, { x: margin + 200, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp0`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
+        page.drawText(`Rp0`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp0`, 12) - 5, y: y, size: 12, font: helveticaFont });
+    }
+    
     y -= 20;
 
     // --- Footer Summary ---
@@ -190,12 +207,12 @@ serve(async (req) => {
     if (proof_public_url) {
         y -= 40;
         page.drawText('Bukti Pengiriman:', { x: margin, y: y, size: 12, font: helveticaBoldFont, color: rgb(0, 0, 0) });
-        y -= 160; // Ruang untuk gambar
+        y -= 160;
         
         try {
             const imageBytes = await fetchImage(proof_public_url);
-            const image = await pdfDoc.embedJpg(imageBytes); // Asumsi gambar JPG
-            const imageDims = image.scale(0.2); // Sesuaikan skala gambar
+            const image = await pdfDoc.embedJpg(imageBytes);
+            const imageDims = image.scale(0.2);
             
             page.drawImage(image, {
                 x: margin,
@@ -208,7 +225,7 @@ serve(async (req) => {
             console.error('Failed to embed delivery proof image:', imageError);
             page.drawText('Gagal memuat gambar bukti pengiriman.', {
                 x: margin,
-                y: y + 80, // Sesuaikan posisi pesan error
+                y: y + 80,
                 size: 10,
                 font: helveticaFont,
                 color: rgb(1, 0, 0),

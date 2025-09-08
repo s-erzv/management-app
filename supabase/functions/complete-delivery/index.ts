@@ -25,7 +25,7 @@ serve(async (req) => {
       proofFileUrl,
       transferProofUrl,
       receivedByUserId,
-      receivedByName, // Perbaikan: Menerima nama penerima dari frontend
+      receivedByName,
     } = await req.json()
 
     const supabase = createClient(
@@ -49,12 +49,11 @@ serve(async (req) => {
     if (orderError) throw orderError;
     const company_id = order.company_id;
 
-    // Perhitungan total tagihan baru sesuai dengan permintaan Anda
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
     const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + (parseFloat(totalPurchaseCost) || 0);
 
-    // Perbaikan: Pastikan paymentMethodId ada sebelum mencatat pembayaran
-    if (paymentAmount > 0 && paymentMethodId) {
+    // Perubahan: Menghilangkan kondisi 'paymentAmount > 0'
+    if (paymentMethodId) {
       const { error: paymentInsertError } = await supabase
         .from('payments')
         .insert({
@@ -65,7 +64,7 @@ serve(async (req) => {
           company_id: company_id,
           proof_url: transferProofUrl,
           received_by: receivedByUserId,
-          received_by_name: receivedByName, // Perbaikan: Menggunakan nama yang diinputkan
+          received_by_name: receivedByName,
         });
       if (paymentInsertError) throw paymentInsertError;
     }

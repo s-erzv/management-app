@@ -323,7 +323,7 @@ const EditProductPage = () => {
                                 id="purchase_price"
                                 name="purchase_price"
                                 type="number"
-                                step="0.01"
+                                
                                 placeholder="Harga beli dari pusat"
                                 value={productForm.purchase_price}
                                 onChange={handleProductFormChange}
@@ -347,7 +347,7 @@ const EditProductPage = () => {
                                     id="empty_bottle_price"
                                     name="empty_bottle_price"
                                     type="number"
-                                    step="0.01"
+                                    
                                     placeholder="Harga jual galon kosong"
                                     value={productForm.empty_bottle_price}
                                     onChange={handleProductFormChange}
@@ -364,7 +364,7 @@ const EditProductPage = () => {
                                 <Label className="w-full sm:w-1/3">{p.name}</Label>
                                 <Input
                                 type="number"
-                                step="0.1"
+                                
                                 placeholder="0"
                                 value={p.price}
                                 onChange={(e) => handlePriceChange(p.customer_status, e.target.value)}
