@@ -1,15 +1,15 @@
 // @ts-nocheck
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
@@ -17,32 +17,30 @@ serve(async (req) => {
       orderId,
       paymentAmount,
       paymentMethodId,
-      returnedQty,
-      borrowedQty,
-      purchasedEmptyQty,
-      totalPurchaseCost, 
+      returnableItems, 
       transportCost,
       proofFileUrl,
       transferProofUrl,
       receivedByUserId,
       receivedByName,
-    } = await req.json()
+      paymentStatus,
+    } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    );
 
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'Order ID is required' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
-      })
+      });
     }
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('*, order_items(product_id, qty, price, item_type, products(is_returnable, company_id))')
+      .select('*, order_items(product_id, qty, price, item_type, products(is_returnable, company_id, empty_bottle_price))')
       .eq('id', orderId)
       .single();
 
@@ -50,10 +48,61 @@ serve(async (req) => {
     const company_id = order.company_id;
 
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + (parseFloat(totalPurchaseCost) || 0);
+    let totalPurchaseCost = 0;
 
-    // Perubahan: Menghilangkan kondisi 'paymentAmount > 0'
-    if (paymentMethodId) {
+    for (const item of returnableItems) {
+        totalPurchaseCost += (parseFloat(item.purchasedEmptyQty) || 0) * (item.empty_bottle_price || 0);
+
+        await supabase.from('order_galon_items').delete().eq('order_id', orderId).eq('product_id', item.product_id);
+        
+        await supabase.from('order_galon_items').insert({
+            order_id: orderId,
+            product_id: item.product_id,
+            returned_qty: parseFloat(item.returnedQty) || 0,
+            borrowed_qty: parseFloat(item.borrowedQty) || 0,
+            purchased_empty_qty: parseFloat(item.purchasedEmptyQty) || 0,
+        });
+
+        const diff_returned = parseFloat(item.returnedQty) || 0;
+        if (diff_returned > 0) {
+          await supabase.from('stock_movements').insert({
+            type: 'pengembalian',
+            qty: diff_returned,
+            order_id: orderId,
+            product_id: item.product_id,
+            notes: 'Pengembalian galon kosong dari pelanggan.',
+            company_id: company_id,
+          });
+        }
+
+        const diff_purchased = parseFloat(item.purchasedEmptyQty) || 0;
+        if (diff_purchased > 0) {
+          await supabase.from('stock_movements').insert({
+            type: 'galon_dibeli',
+            qty: diff_purchased,
+            order_id: orderId,
+            product_id: item.product_id,
+            notes: 'Galon kosong dibeli oleh perusahaan.',
+            company_id: company_id,
+          });
+        }
+
+        const diff_borrowed = parseFloat(item.borrowedQty) || 0;
+        if (diff_borrowed > 0) {
+          await supabase.from('stock_movements').insert({
+            type: 'pinjam_kembali',
+            qty: diff_borrowed,
+            order_id: orderId,
+            product_id: item.product_id,
+            notes: 'Galon dipinjam kembali oleh pelanggan.',
+            company_id: company_id,
+          });
+        }
+    }
+
+    const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + totalPurchaseCost;
+
+    if (paymentStatus === 'paid' || paymentStatus === 'partial') {
       const { error: paymentInsertError } = await supabase
         .from('payments')
         .insert({
@@ -69,6 +118,7 @@ serve(async (req) => {
       if (paymentInsertError) throw paymentInsertError;
     }
 
+    // TAMBAHKAN LOGIKA PENCATATAN TRANSAKSI FINANSIAL DI SINI
     if (transportCost > 0) {
       const { error: financialTransactionError } = await supabase
         .from('financial_transactions')
@@ -98,66 +148,11 @@ serve(async (req) => {
         });
       if (emptyBottlePurchaseError) throw emptyBottlePurchaseError;
     }
-
-    const returnableItem = order.order_items.find(item => item.products?.is_returnable);
-    if (returnableItem) {
-      const productId = returnableItem.product_id;
-
-      const deliveredQty = order.order_items.reduce((sum, item) => {
-        return item.products?.is_returnable ? sum + item.qty : sum;
-      }, 0);
-
-      const actualReturnedQty = Math.min(returnedQty, deliveredQty);
-      const leftoverGalons = returnedQty > deliveredQty ? returnedQty - deliveredQty : 0;
-
-      if (actualReturnedQty > 0) {
-        const { error: returnMovementError } = await supabase.from('stock_movements').insert({
-          type: 'pengembalian',
-          qty: actualReturnedQty,
-          order_id: orderId,
-          product_id: productId,
-          notes: 'Pengembalian galon kosong dari pelanggan.',
-          company_id: company_id,
-        });
-        if (returnMovementError) throw returnMovementError;
-      }
-
-      if (leftoverGalons > 0) {
-        const { error: debtPaymentError } = await supabase.from('stock_movements').insert({
-          type: 'pelunasan_utang',
-          qty: leftoverGalons,
-          order_id: orderId,
-          product_id: productId,
-          notes: `Galon kosong (${leftoverGalons}) dikembalikan untuk melunasi utang galon dari pesanan sebelumnya.`,
-          company_id: company_id,
-        });
-        if (debtPaymentError) throw debtPaymentError;
-      }
-
-      if (borrowedQty > 0) {
-        const { error: borrowedMovementError } = await supabase.from('stock_movements').insert({
-          type: 'pinjam_kembali',
-          qty: borrowedQty,
-          order_id: orderId,
-          product_id: productId,
-          notes: 'Galon dipinjam kembali oleh pelanggan.',
-          company_id: company_id,
-        });
-        if (borrowedMovementError) throw borrowedMovementError;
-      }
-      if (purchasedEmptyQty > 0) {
-        const { error: purchasedEmptyMovementError } = await supabase.from('stock_movements').insert({
-          type: 'galon_dibeli',
-          qty: purchasedEmptyQty,
-          order_id: orderId,
-          product_id: productId,
-          notes: 'Galon kosong dibeli oleh perusahaan.',
-          company_id: company_id,
-        });
-        if (purchasedEmptyMovementError) throw purchasedEmptyMovementError;
-      }
-    }
-
+    
+    const totalReturnedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.returnedQty) || 0), 0);
+    const totalBorrowedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.borrowedQty) || 0), 0);
+    const totalPurchasedEmptyQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.purchasedEmptyQty) || 0), 0);
+    
     const { data: currentPaymentsData, error: paymentsError } = await supabase
       .from('payments')
       .select('amount')
@@ -181,9 +176,9 @@ serve(async (req) => {
         proof_of_delivery_url: proofFileUrl,
         transport_cost: transportCost,
         delivered_at: new Date().toISOString(),
-        returned_qty: returnedQty,
-        borrowed_qty: borrowedQty,
-        purchased_empty_qty: purchasedEmptyQty,
+        returned_qty: totalReturnedQty,
+        borrowed_qty: totalBorrowedQty,
+        purchased_empty_qty: totalPurchasedEmptyQty,
         grand_total: newGrandTotal,
       })
       .eq('id', orderId);
@@ -209,6 +204,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
-    })
+    });
   }
 });

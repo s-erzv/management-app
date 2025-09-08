@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Package, PackageCheck, Banknote, RefreshCw, CheckCircle2, Users, ReceiptText } from 'lucide-react';
+import { Loader2, Package, PackageCheck, Banknote, RefreshCw, CheckCircle2, Users, ReceiptText, ChevronRight, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -42,7 +42,6 @@ const StockAndGalonPage = () => {
   const [currentStock, setCurrentStock] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('stock');
   const [activeStockTab, setActiveStockTab] = useState('summary');
 
   const [openDetail, setOpenDetail] = useState(false);
@@ -55,41 +54,28 @@ const StockAndGalonPage = () => {
     notes: '',
   });
 
+  const [expandedCustomerId, setExpandedCustomerId] = useState(null);
+
   useEffect(() => {
     if (companyId) {
-      fetchData();
+      fetchProducts();
     }
   }, [companyId]);
 
   useEffect(() => {
     if (selectedProductId) {
       fetchMovements(selectedProductId);
+      const selectedProduct = products.find(p => p.id === selectedProductId);
+      if (selectedProduct && selectedProduct.is_returnable) {
+        fetchGalonDebts(selectedProductId);
+      } else {
+        setDebts([]);
+      }
     }
-  }, [selectedProductId]);
-  
-  useEffect(() => {
-    if (companyId && activeTab === 'debt') {
-      const channel = supabase
-        .channel('galon_debt_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-          fetchGalonDebts();
-        })
-        .subscribe();
-      
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [companyId, activeTab]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    await fetchProducts();
-    await fetchGalonDebts();
-    setLoading(false);
-  };
+  }, [selectedProductId, products]);
 
   const fetchProducts = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('products')
       .select('*, is_returnable')
@@ -105,6 +91,7 @@ const StockAndGalonPage = () => {
         setSelectedProductId(data[0].id);
       }
     }
+    setLoading(false);
   };
 
   const fetchMovements = async (productId) => {
@@ -132,14 +119,59 @@ const StockAndGalonPage = () => {
     setLoading(false);
   };
   
-  const fetchGalonDebts = async () => {
+  const fetchGalonDebts = async (productId) => {
     setRefreshing(true);
-    const { data, error } = await supabase.rpc('get_customer_galon_debt', { p_company_id: companyId });
+    const { data, error } = await supabase
+      .from('order_galon_items')
+      .select(`
+        order:order_id(
+          customer:customer_id(id, name, phone)
+        ),
+        product:product_id(id, name),
+        returned_qty,
+        borrowed_qty,
+        purchased_empty_qty
+      `)
+      .or('borrowed_qty.gt.0,returned_qty.gt.0,purchased_empty_qty.gt.0')
+      .eq('product_id', productId)
+      .eq('order.company_id', companyId);
+
     if (error) {
       console.error('Error fetching galon debts:', error);
       toast.error('Gagal memuat data utang galon.');
+      setDebts([]);
     } else {
-      setDebts(data);
+        const groupedDebts = data.reduce((acc, row) => {
+            const customerId = row.order.customer.id;
+            const customerName = row.order.customer.name;
+            const customerPhone = row.order.customer.phone;
+            const productId = row.product.id;
+            const productName = row.product.name;
+
+            if (!acc[customerId]) {
+                acc[customerId] = {
+                    id: customerId,
+                    name: customerName,
+                    phone: customerPhone,
+                    products_debt: {},
+                };
+            }
+            if (!acc[customerId].products_debt[productId]) {
+                acc[customerId].products_debt[productId] = {
+                    product_id: productId,
+                    product_name: productName,
+                    total_borrowed_qty: 0,
+                    total_returned_qty: 0,
+                    total_purchased_qty: 0,
+                };
+            }
+            acc[customerId].products_debt[productId].total_borrowed_qty += row.borrowed_qty;
+            acc[customerId].products_debt[productId].total_returned_qty += row.returned_qty;
+            acc[customerId].products_debt[productId].total_purchased_qty += row.purchased_empty_qty;
+            return acc;
+        }, {});
+        
+        setDebts(Object.values(groupedDebts));
     }
     setRefreshing(false);
   };
@@ -231,6 +263,7 @@ const StockAndGalonPage = () => {
     }
     
     setLoading(true);
+    // Menggunakan RPC untuk memperbarui status utang galon
     const { error } = await supabase.rpc('settle_galon_debt', { p_customer_id: customerId });
     
     if (error) {
@@ -244,6 +277,11 @@ const StockAndGalonPage = () => {
   };
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
+  const isReturnable = selectedProduct?.is_returnable;
+
+  const toggleRow = (customerId) => {
+    setExpandedCustomerId(expandedCustomerId === customerId ? null : customerId);
+  };
 
   if (loading) {
     return (
@@ -260,272 +298,190 @@ const StockAndGalonPage = () => {
         Manajemen Stok & Utang Galon
       </h1>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Card className="border-0 shadow-sm bg-white">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center space-x-0 sm:space-x-4 space-y-2 sm:space-y-0">
+          <CardTitle className="text-lg font-semibold text-[#10182b]">
+            Pilih Produk
+          </CardTitle>
+          <Select
+            id="product-select"
+            value={selectedProductId}
+            onValueChange={(val) => {
+              setSelectedProductId(val);
+              setActiveStockTab('summary');
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Pilih Produk" />
+            </SelectTrigger>
+            <SelectContent>
+              {products.map(product => (
+                <SelectItem key={product.id} value={product.id}>
+                  {product.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
+      </Card>
+      
+      <Tabs value={activeStockTab} onValueChange={setActiveStockTab}>
         <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
-          <TabsTrigger value="stock" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
-            <PackageCheck className="h-4 w-4" /> Stok Produk
-          </TabsTrigger>
-          <TabsTrigger value="debt" className="gap-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">
-            <Banknote className="h-4 w-4" /> Utang Galon
-          </TabsTrigger>
+          <TabsTrigger value="summary" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Ringkasan Stok</TabsTrigger>
+          <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
         </TabsList>
+        
+        <TabsContent value="summary" className="pt-4 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="border-0 shadow-sm bg-white">
+              <CardHeader>
+                <CardTitle className="text-[#10182b]">Stok Tersedia</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-4xl font-bold text-[#10182b]">{currentStock}</p>
+              </CardContent>
+            </Card>
+          </div>
 
-        <TabsContent value="stock" className="pt-4 space-y-6">
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center space-x-0 sm:space-x-4 space-y-2 sm:space-y-0">
-              <CardTitle className="text-lg font-semibold text-[#10182b]">
-                Pilih Produk
-              </CardTitle>
-              <Select
-                id="product-select"
-                value={selectedProductId}
-                onValueChange={(val) => {
-                  setSelectedProductId(val);
-                  setActiveStockTab('summary');
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Pilih Produk" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map(product => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardHeader>
-          </Card>
-          
-          <Tabs value={activeStockTab} onValueChange={setActiveStockTab}>
-            <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
-              <TabsTrigger value="summary" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Ringkasan Stok</TabsTrigger>
-              <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="summary" className="pt-4 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-0 shadow-sm bg-white">
-                  <CardHeader>
-                    <CardTitle className="text-[#10182b]">Stok Tersedia</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-4xl font-bold text-[#10182b]">{currentStock}</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {selectedProduct && selectedProduct.is_returnable && (
-                <Card className="border-0 shadow-sm bg-white">
-                  <CardHeader>
-                    <CardTitle className="text-[#10182b]">Ringkasan Galon Returnable</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                      <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold text-[#10182b]">Dibeli (Galon Kosong)</h3>
-                        <button
-                          className="text-3xl font-bold text-purple-600 hover:underline"
-                          onClick={() => fetchDetail('dibeli')}
-                        >
-                          {movements.filter(m => m.type === 'galon_dibeli').reduce((sum, m) => sum + m.qty, 0)}
-                        </button>
-                      </div>
-                      <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold text-[#10182b]">Dikembalikan</h3>
-                        <button
-                          className="text-3xl font-bold text-green-600 hover:underline"
-                          onClick={() => fetchDetail('dikembalikan')}
-                        >
-                          {movements.filter(m => m.type === 'pengembalian').reduce((sum, m) => sum + m.qty, 0)}
-                        </button>
-                      </div>
-                      <div className="p-4 rounded-lg border bg-gray-50">
-                        <h3 className="text-lg font-semibold text-[#10182b]">Dipinjam</h3>
-                        <button
-                          className="text-3xl font-bold text-yellow-600 hover:underline"
-                          onClick={() => fetchDetail('dipinjam')}
-                        >
-                          {movements.filter(m => m.type === 'pinjam_kembali').reduce((sum, m) => sum + m.qty, 0)}
-                        </button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader>
-                  <CardTitle className="text-[#10182b]">Log Semua Pergerakan Stok</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="rounded-md border-t overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
-                          <TableHead className="text-[#10182b]">Produk</TableHead>
-                          <TableHead className="text-[#10182b]">Jenis</TableHead>
-                          <TableHead className="text-[#10182b]">Jumlah</TableHead>
-                          <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {movements.map(m => (
-                          <TableRow key={m.id}>
-                            <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
-                            <TableCell>{m.products?.name}</TableCell>
-                            <TableCell>{m.type || m.item_type}</TableCell>
-                            <TableCell>{m.qty}</TableCell>
-                            <TableCell>{m.notes}</TableCell>
-                          </TableRow>
-                        ))}
-                        {movements.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                              Tidak ada data pergerakan stok.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="adjustment" className="pt-4 space-y-6">
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader>
-                  <CardTitle className="text-[#10182b]">Penyesuaian Stok</CardTitle>
-                  <CardDescription>
-                    Tambahkan stok masuk atau keluar secara manual.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <Select
-                      value={newMovementForm.type}
-                      onValueChange={(val) => setNewMovementForm({ ...newMovementForm, type: val })}
+          {isReturnable && (
+            <Card className="border-0 shadow-sm bg-white">
+              <CardHeader>
+                <CardTitle className="text-[#10182b]">Ringkasan Galon Returnable</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                  <div className="p-4 rounded-lg border bg-gray-50">
+                    <h3 className="text-lg font-semibold text-[#10182b]">Dibeli (Galon Kosong)</h3>
+                    <button
+                      className="text-3xl font-bold text-purple-600 hover:underline"
+                      onClick={() => fetchDetail('dibeli')}
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Pilih Jenis Pergerakan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="masuk">Stok Masuk</SelectItem>
-                        <SelectItem value="keluar">Stok Keluar</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      name="qty"
-                      placeholder="Jumlah Stok"
-                      value={newMovementForm.qty}
-                      onChange={handleInputChange}
-                      required
-                    />
-                    <Input
-                      name="notes"
-                      placeholder="Catatan (Opsional)"
-                      value={newMovementForm.notes}
-                      onChange={handleInputChange}
-                    />
-                    <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Penyesuaian'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-              
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader>
-                  <CardTitle className="text-[#10182b]">Riwayat Penyesuaian Manual</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="rounded-md border-t overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
-                          <TableHead className="text-[#10182b]">Produk</TableHead>
-                          <TableHead className="text-[#10182b]">Jenis</TableHead>
-                          <TableHead className="text-[#10182b]">Jumlah</TableHead>
-                          <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {manualMovements.map(m => (
-                          <TableRow key={m.id}>
-                            <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
-                            <TableCell>{m.products?.name}</TableCell>
-                            <TableCell>{m.type}</TableCell>
-                            <TableCell>{m.qty}</TableCell>
-                            <TableCell>{m.notes}</TableCell>
-                          </TableRow>
-                        ))}
-                        {manualMovements.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                              Tidak ada data penyesuaian manual.
+                      {movements.filter(m => m.type === 'galon_dibeli').reduce((sum, m) => sum + m.qty, 0)}
+                    </button>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-gray-50">
+                    <h3 className="text-lg font-semibold text-[#10182b]">Dikembalikan</h3>
+                    <button
+                      className="text-3xl font-bold text-green-600 hover:underline"
+                      onClick={() => fetchDetail('dikembalikan')}
+                    >
+                      {movements.filter(m => m.type === 'pengembalian').reduce((sum, m) => sum + m.qty, 0)}
+                    </button>
+                  </div>
+                  <div className="p-4 rounded-lg border bg-gray-50">
+                    <h3 className="text-lg font-semibold text-[#10182b]">Dipinjam</h3>
+                    <button
+                      className="text-3xl font-bold text-yellow-600 hover:underline"
+                      onClick={() => fetchDetail('dipinjam')}
+                    >
+                      {movements.filter(m => m.type === 'pinjam_kembali').reduce((sum, m) => sum + m.qty, 0)}
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {isReturnable && (
+            <Card className="border-0 shadow-sm bg-white">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
+                <Button onClick={() => fetchGalonDebts(selectedProductId)} disabled={loading || refreshing} variant="outline" className="text-[#10182b] hover:bg-gray-100">
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  <span className="ml-2">Refresh Data</span>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border-t overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[150px] text-[#10182b]">Pelanggan</TableHead>
+                        <TableHead className="min-w-[150px] text-[#10182b]">Nomor Telepon</TableHead>
+                        <TableHead className="min-w-[150px] text-[#10182b]">Galon Dipinjam</TableHead>
+                        <TableHead className="min-w-[150px] text-[#10182b]">Galon Dikembalikan</TableHead>
+                        <TableHead className="min-w-[150px] text-[#10182b]">Galon Dibeli</TableHead>
+                        <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {debts.length > 0 ? (
+                        debts.map((debt) => (
+                          <TableRow key={debt.id} className="cursor-pointer hover:bg-gray-50" onClick={() => toggleRow(debt.id)}>
+                            <TableCell className="font-medium text-[#10182b]">{debt.name}</TableCell>
+                            <TableCell>{debt.phone}</TableCell>
+                            <TableCell>
+                                <Badge variant="destructive" className="bg-red-500 text-white font-semibold">
+                                  {debt.products_debt[selectedProductId]?.total_borrowed_qty || 0} galon
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant="default" className="bg-green-500 text-white font-semibold">
+                                  {debt.products_debt[selectedProductId]?.total_returned_qty || 0} galon
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant="default" className="bg-blue-500 text-white font-semibold">
+                                  {debt.products_debt[selectedProductId]?.total_purchased_qty || 0} galon
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button 
+                                size="sm" 
+                                onClick={(e) => { e.stopPropagation(); handleSettleDebt(debt.id); }}
+                                disabled={loading}
+                                className="bg-green-500 text-white hover:bg-green-600"
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Lunas
+                              </Button>
                             </TableCell>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                            Tidak ada pergerakan galon untuk produk ini.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          </Tabs>
-        </TabsContent>
-
-        <TabsContent value="debt" className="pt-4">
           <Card className="border-0 shadow-sm bg-white">
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
-              <Button onClick={fetchGalonDebts} disabled={loading || refreshing} className="text-[#10182b] hover:bg-gray-100" variant="outline">
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="ml-2">Refresh Data</span>
-              </Button>
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Log Semua Pergerakan Stok</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <div className="rounded-md border-t overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[150px] text-[#10182b]">Pelanggan</TableHead>
-                      <TableHead className="min-w-[150px] text-[#10182b]">Nomor Telepon</TableHead>
-                      <TableHead className="min-w-[150px] text-[#10182b]">Jumlah Galon Dipinjam</TableHead>
-                      <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
+                      <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                      <TableHead className="text-[#10182b]">Produk</TableHead>
+                      <TableHead className="text-[#10182b]">Jenis</TableHead>
+                      <TableHead className="text-[#10182b]">Jumlah</TableHead>
+                      <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {debts.length > 0 ? (
-                      debts.map((debt) => (
-                        <TableRow key={debt.customer_id}>
-                          <TableCell className="font-medium text-[#10182b]">{debt.customer_name}</TableCell>
-                          <TableCell>{debt.customer_phone}</TableCell>
-                          <TableCell>{debt.total_borrowed_qty}</TableCell>
-                          <TableCell>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleSettleDebt(debt.customer_id)}
-                              disabled={loading}
-                              className="bg-green-500 text-white hover:bg-green-600"
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Lunas
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
+                    {movements.map(m => (
+                      <TableRow key={m.id}>
+                        <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
+                        <TableCell>{m.products?.name}</TableCell>
+                        <TableCell>{m.type || m.item_type}</TableCell>
+                        <TableCell>{m.qty}</TableCell>
+                        <TableCell>{m.notes}</TableCell>
+                      </TableRow>
+                    ))}
+                    {movements.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                          Tidak ada utang galon saat ini.
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          Tidak ada data pergerakan stok.
                         </TableCell>
                       </TableRow>
                     )}
@@ -535,6 +491,90 @@ const StockAndGalonPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="adjustment" className="pt-4 space-y-6">
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Penyesuaian Stok</CardTitle>
+              <CardDescription>
+                Tambahkan stok masuk atau keluar secara manual.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                <Select
+                  value={newMovementForm.type}
+                  onValueChange={(val) => setNewMovementForm({ ...newMovementForm, type: val })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pilih Jenis Pergerakan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="masuk">Stok Masuk</SelectItem>
+                    <SelectItem value="keluar">Stok Keluar</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  name="qty"
+                  placeholder="Jumlah Stok"
+                  value={newMovementForm.qty}
+                  onChange={handleInputChange}
+                  required
+                />
+                <Input
+                  name="notes"
+                  placeholder="Catatan (Opsional)"
+                  value={newMovementForm.notes}
+                  onChange={handleInputChange}
+                />
+                <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Penyesuaian'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Riwayat Penyesuaian Manual</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="rounded-md border-t overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                      <TableHead className="text-[#10182b]">Produk</TableHead>
+                      <TableHead className="text-[#10182b]">Jenis</TableHead>
+                      <TableHead className="text-[#10182b]">Jumlah</TableHead>
+                      <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manualMovements.map(m => (
+                      <TableRow key={m.id}>
+                        <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
+                        <TableCell>{m.products?.name}</TableCell>
+                        <TableCell>{m.type}</TableCell>
+                        <TableCell>{m.qty}</TableCell>
+                        <TableCell>{m.notes}</TableCell>
+                      </TableRow>
+                    ))}
+                    {manualMovements.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          Tidak ada data penyesuaian manual.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
 
       <Dialog open={openDetail} onOpenChange={setOpenDetail}>

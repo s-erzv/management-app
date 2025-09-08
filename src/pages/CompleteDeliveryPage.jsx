@@ -1,5 +1,3 @@
-// src/pages/CompleteDeliveryPage.jsx
-
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -55,12 +53,26 @@ const CompleteDeliveryPage = () => {
   const [transferAmount, setTransferAmount] = useState('0');
   const [file, setFile] = useState(null);
   const [transferProofFile, setTransferProofFile] = useState(null);
-  const [formState, setFormState] = useState({
-    returnedQty: '',
-    borrowedQty: '',
-    purchasedEmptyQty: '',
-    transportCost: '',
-  });
+  const [itemQuantities, setItemQuantities] = useState({});
+  const [transportCost, setTransportCost] = useState('0');
+  
+  const returnableItemsInOrder = useMemo(() => 
+    order?.order_items.filter(item => item.products?.is_returnable) || [], [order]
+  );
+
+  useEffect(() => {
+    if (!order || !returnableItemsInOrder.length) return;
+    const initialQuantities = {};
+    returnableItemsInOrder.forEach(item => {
+      initialQuantities[item.product_id] = {
+        returnedQty: order.returned_qty || '', 
+        purchasedEmptyQty: order.purchased_empty_qty || '',
+        borrowedQty: order.borrowed_qty || '',
+      };
+    });
+    setItemQuantities(initialQuantities);
+    setTransportCost(order.transport_cost?.toString() || '0');
+  }, [order, returnableItemsInOrder]);
   
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [orderCouriers, setOrderCouriers] = useState([]);
@@ -73,23 +85,6 @@ const CompleteDeliveryPage = () => {
     }
     fetchData();
   }, [orderId, session]);
-
-  useEffect(() => {
-    if (!order || !order.order_items) return;
-    const returnableItems = order.order_items.filter(item => item.products?.is_returnable);
-    const totalReturnableQty = returnableItems.reduce((sum, item) => sum + (item.qty || 0), 0);
-    
-    const returnedQty = parseFloat(formState.returnedQty) || 0;
-    const purchasedEmptyQty = parseFloat(formState.purchasedEmptyQty) || 0;
-    
-    const calculatedBorrowedQty = totalReturnableQty - returnedQty - purchasedEmptyQty;
-
-    setFormState(prev => ({
-      ...prev,
-      borrowedQty: calculatedBorrowedQty > 0 ? calculatedBorrowedQty.toString() : '0',
-    }));
-
-  }, [order, formState.returnedQty, formState.purchasedEmptyQty]);
   
   const fetchData = async () => {
     setLoading(true);
@@ -144,18 +139,7 @@ const CompleteDeliveryPage = () => {
 
     setOrder(orderWithDetails);
     setOrderCouriers(orderData.order_couriers.map(oc => oc.courier));
-    setFormState({
-      returnedQty: orderData.returned_qty > 0 ? orderData.returned_qty.toString() : '',
-      borrowedQty: orderData.borrowed_qty > 0 ? orderData.borrowed_qty.toString() : '',
-      purchasedEmptyQty: orderData.purchased_empty_qty > 0 ? orderData.purchased_empty_qty.toString() : '',
-      transportCost: orderData.transport_cost > 0 ? orderData.transport_cost.toString() : '',
-    });
     setLoading(false);
-  };
-
-  const handleFormChange = (e) => {
-    const { id, value } = e.target;
-    setFormState(prev => ({ ...prev, [id]: value }));
   };
   
   const handleAmountChange = (e, setter) => {
@@ -167,15 +151,15 @@ const CompleteDeliveryPage = () => {
     setTransferMethod('');
   }
   
-  const returnableItem = order?.order_items.find(item => item.products?.is_returnable);
-  const emptyBottlePrice = returnableItem?.products?.empty_bottle_price || 0;
-  const purchasedEmptyQty = parseFloat(formState.purchasedEmptyQty) || 0;
-  const totalPurchaseCost = purchasedEmptyQty * emptyBottlePrice;
-
   const orderItemsTotal = order?.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0) || 0;
-  const transportCost = parseFloat(formState.transportCost) || 0;
+  const transportCostVal = parseFloat(transportCost) || 0;
   
-  const newGrandTotal = orderItemsTotal + transportCost + totalPurchaseCost;
+  const totalPurchaseCost = returnableItemsInOrder.reduce((sum, item) => {
+      const qty = parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty) || 0;
+      return sum + (qty * (item.products?.empty_bottle_price || 0));
+  }, 0);
+
+  const newGrandTotal = orderItemsTotal + transportCostVal + totalPurchaseCost;
   
   const remainingDue = newGrandTotal - (order?.total_paid || 0);
 
@@ -260,8 +244,6 @@ const CompleteDeliveryPage = () => {
         transferProofUrl = transferUploadData.path;
       }
       
-      const totalPurchaseCost = (parseFloat(formState.purchasedEmptyQty) || 0) * emptyBottlePrice;
-
       let finalPaymentAmount = 0;
       if (paymentStatus !== 'unpaid') {
         finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
@@ -274,15 +256,26 @@ const CompleteDeliveryPage = () => {
           pmToSend = paymentMethod;
       }
 
+      // Perbaikan: Menambahkan logika untuk menghitung borrowedQty sebelum mengirim payload
       const payload = {
         orderId,
         paymentAmount: finalPaymentAmount,
         paymentMethodId: pmToSend,
-        returnedQty: parseInt(formState.returnedQty, 10) || 0,
-        borrowedQty: parseInt(formState.borrowedQty, 10) || 0,
-        purchasedEmptyQty: parseInt(formState.purchasedEmptyQty, 10) || 0,
-        totalPurchaseCost, 
-        transportCost: parseFloat(formState.transportCost) || 0,
+        returnableItems: returnableItemsInOrder.map(item => {
+            const returnedQty = parseInt(itemQuantities[item.product_id]?.returnedQty, 10) || 0;
+            const purchasedEmptyQty = parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty, 10) || 0;
+            const orderedQty = item.qty || 0;
+            const calculatedBorrowedQty = Math.max(0, orderedQty - returnedQty - purchasedEmptyQty);
+            
+            return {
+                product_id: item.product_id,
+                returnedQty,
+                borrowedQty: calculatedBorrowedQty,
+                purchasedEmptyQty,
+                empty_bottle_price: item.products.empty_bottle_price,
+            };
+        }),
+        transportCost: parseFloat(transportCost) || 0,
         proofFileUrl: deliveryFilePath,
         transferProofUrl,
         receivedByUserId: user?.id || null,
@@ -332,8 +325,6 @@ const CompleteDeliveryPage = () => {
     ...paymentMethods,
     { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' }
   ];
-
-  const hasReturnableItems = order.order_items.some(item => item.products?.is_returnable);
   
   const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);
   const selectedMethodType = selectedMethodObj?.type;
@@ -522,40 +513,57 @@ const CompleteDeliveryPage = () => {
               </>
             )}
 
-            {hasReturnableItems && (
+            {returnableItemsInOrder.length > 0 && (
               <>
-                <div className="grid gap-2">
-                  <Label htmlFor="returnedQty">Jumlah Galon Kembali</Label>
-                  <Input
-                    id="returnedQty"
-                    type="number"
-                    placeholder="Jumlah Galon Kembali"
-                    value={formState.returnedQty}
-                    onChange={handleFormChange}
-                    
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="borrowedQty">Jumlah Galon Dipinjam</Label>
-                  <Input
-                    id="borrowedQty"
-                    type="number"
-                    placeholder="Jumlah Galon Dipinjam"
-                    value={formState.borrowedQty}
-                    readOnly 
-                    className="bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="purchasedEmptyQty">Jumlah Galon Kosong Dibeli</Label>
-                  <Input
-                    id="purchasedEmptyQty"
-                    type="number"
-                    placeholder="Jumlah Galon Kosong Dibeli"
-                    value={formState.purchasedEmptyQty}
-                    onChange={handleFormChange}
-                    
-                  />
+                <Separator />
+                <div className="space-y-4">
+                  <h3 className="text-xl font-bold">Galon</h3>
+                  {returnableItemsInOrder.map(item => (
+                    <div key={item.product_id} className="space-y-2 border-l-4 pl-4">
+                      <h4 className="font-semibold text-[#10182b]">{item.products.name}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor={`returnedQty-${item.product_id}`}>Galon Kembali</Label>
+                          <Input
+                            id={`returnedQty-${item.product_id}`}
+                            type="number"
+                            placeholder="0"
+                            value={itemQuantities[item.product_id]?.returnedQty || ''}
+                            onChange={(e) => setItemQuantities(prev => ({
+                              ...prev,
+                              [item.product_id]: { ...prev[item.product_id], returnedQty: e.target.value }
+                            }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`purchasedEmptyQty-${item.product_id}`}>Beli Galon Kosong</Label>
+                          <Input
+                            id={`purchasedEmptyQty-${item.product_id}`}
+                            type="number"
+                            placeholder="0"
+                            value={itemQuantities[item.product_id]?.purchasedEmptyQty || ''}
+                            onChange={(e) => setItemQuantities(prev => ({
+                              ...prev,
+                              [item.product_id]: { ...prev[item.product_id], purchasedEmptyQty: e.target.value }
+                            }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`borrowedQty-${item.product_id}`}>Galon Dipinjam</Label>
+                        <Input
+                          id={`borrowedQty-${item.product_id}`}
+                          type="number"
+                          placeholder="0"
+                          value={
+                            Math.max(0, (item.qty || 0) - (parseInt(itemQuantities[item.product_id]?.returnedQty) || 0) - (parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty) || 0))
+                          }
+                          readOnly
+                          className="bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
@@ -566,9 +574,8 @@ const CompleteDeliveryPage = () => {
                 id="transportCost"
                 type="number"
                 placeholder="Biaya Transportasi"
-                value={formState.transportCost}
-                onChange={handleFormChange}
-                
+                value={transportCost}
+                onChange={(e) => setTransportCost(e.target.value)}
               />
             </div>
             
