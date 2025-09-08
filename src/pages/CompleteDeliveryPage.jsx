@@ -287,7 +287,7 @@ const handleCompleteDelivery = async (e) => {
   }
   
   const combinedPaymentMethods = [
-    { id: 'pending', method_name: 'Belum Lunas', type: 'pending' },
+    { id: 'pending', method_name: 'Pending', type: 'pending' },
     { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' },
     ...paymentMethods
   ];
