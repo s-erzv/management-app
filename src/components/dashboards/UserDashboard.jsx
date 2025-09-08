@@ -96,7 +96,7 @@ const UserDashboard = ({ userId }) => {
     }
   }, [userId, fetchData]);
 
-  const updateOrderStatus = async (order, newStatus) => {
+const updateOrderStatus = async (order, newStatus) => {
     if (order.status === 'completed') {
       toast.error('Pesanan sudah selesai dan tidak bisa diperbarui lagi.');
       return;
@@ -120,23 +120,47 @@ const UserDashboard = ({ userId }) => {
         }
 
         if (existingMoves && existingMoves.length > 0) {
-          // Sudah ada pergerakan stok keluar → jangan insert lagi
-          console.log(`Stok untuk order ${order.id} sudah pernah dicatat, skip insert.`);
+          // Stok sudah pernah dicatat, lewati langkah ini.
+          console.log(`Stok untuk pesanan ${order.id} sudah pernah dicatat, lewati langkah update.`);
         } else {
-          // Belum ada → lakukan insert stok keluar
+          // Belum ada pergerakan stok keluar, lakukan pengurangan stok dan catat pergerakan.
           for (const item of soldItems) {
-            const { error: insertError } = await supabase
-              .from('stock_movements')
-              .insert({
-                type: 'keluar',
-                qty: item.qty,
-                notes: `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
-                order_id: order.id,
-                user_id: userId,
-                product_id: item.product_id,
-                company_id: item.products.company_id,
-              });
+            // Ambil stok produk saat ini
+            const { data: productData, error: productFetchError } = await supabase
+                .from('products')
+                .select('stock')
+                .eq('id', item.product_id)
+                .single();
 
+            if (productFetchError) {
+                throw productFetchError;
+            }
+
+            const currentStock = productData.stock;
+            const newStock = currentStock - item.qty;
+
+            // Perbarui stok produk
+            const { error: stockUpdateError } = await supabase
+                .from('products')
+                .update({ stock: newStock })
+                .eq('id', item.product_id);
+
+            if (stockUpdateError) {
+                throw stockUpdateError;
+            }
+
+            // Catat pergerakan stok
+            const { error: insertError } = await supabase
+                .from('stock_movements')
+                .insert({
+                  type: 'keluar',
+                  qty: item.qty,
+                  notes: `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
+                  order_id: order.id,
+                  user_id: userId,
+                  product_id: item.product_id,
+                  company_id: item.products.company_id,
+                });
             if (insertError) {
               throw insertError;
             }
@@ -144,7 +168,7 @@ const UserDashboard = ({ userId }) => {
         }
       }
 
-
+      // Perbarui status pesanan utama setelah semua operasi selesai
       const { error } = await supabase
         .from('orders')
         .update({ status: newStatus })
@@ -157,6 +181,9 @@ const UserDashboard = ({ userId }) => {
         toast.success('Status berhasil diperbarui!');
         fetchData(userId);
       }
+    } catch (e) {
+      console.error('Error in updateOrderStatus:', e);
+      toast.error('Terjadi kesalahan saat memperbarui pesanan: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -355,13 +382,13 @@ const UserDashboard = ({ userId }) => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
           <TruckIcon className="h-8 w-8" />
-          Dashboard Kurir
+          Dashboard Petugas
         </h1>
         <p className="text-muted-foreground">Kelola pengiriman dan pesanan Anda</p>
       </div>
 
       {/* Stats Cards */}
-      {/* Bagian ini hanya ditampilkan jika user adalah kurir yang sedang login */}
+      {/* Bagian ini hanya ditampilkan jika user adalah Petugas yang sedang login */}
       {currentUserId && userId === currentUserId && !loading && incompleteTasks.length > 0 && (
         // === BAGIAN YANG DIUBAH UNTUK TAMPILAN MOBILE ===
         <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:overflow-x-hidden md:pb-0 mb-6">

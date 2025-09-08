@@ -56,6 +56,10 @@ const CompleteDeliveryPage = () => {
   const [itemQuantities, setItemQuantities] = useState({});
   const [transportCost, setTransportCost] = useState('0');
   
+  const handleInputWheel = (e) => {
+    e.target.blur();
+  };
+  
   const returnableItemsInOrder = useMemo(() => 
     order?.order_items.filter(item => item.products?.is_returnable) || [], [order]
   );
@@ -458,7 +462,7 @@ const CompleteDeliveryPage = () => {
                       <Label htmlFor="receivedByName">Nama Penerima</Label>
                        <Select value={receivedByName} onValueChange={setReceivedByName}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Pilih kurir penerima" />
+                          <SelectValue placeholder="Pilih Petugas penerima" />
                         </SelectTrigger>
                         <SelectContent>
                           {orderCouriers.map(courier => (

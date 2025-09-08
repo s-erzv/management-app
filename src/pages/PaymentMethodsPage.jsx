@@ -191,7 +191,7 @@ const PaymentMethodsPage = () => {
         <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle>Daftar Metode Pembayaran</CardTitle>
           <CardDescription className="text-gray-200">
-            Kelola metode pembayaran yang tersedia untuk kurir.
+            Kelola metode pembayaran yang tersedia untuk Petugas.
           </CardDescription>
         </CardHeader>
         <CardContent>

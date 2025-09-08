@@ -51,6 +51,10 @@ const AddOrderForm = () => {
     courier_ids: [],
   });
 
+  const handleInputWheel = (e) => {
+    e.target.blur();
+  };
+
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
   useEffect(() => {
@@ -301,7 +305,7 @@ const AddOrderForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Tugaskan Kurir</Label>
+              <Label>Tugaskan Petugas</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {couriers.map((courier) => (
                   <div key={courier.id} className="flex items-center space-x-2">
@@ -356,7 +360,7 @@ const AddOrderForm = () => {
                     name="qty"
                     value={newItem.qty}
                     onChange={(e) => setNewItem({ ...newItem, qty: e.target.value })}
-                    
+                     onWheel={handleInputWheel}
                     disabled={!newItem.product_id}
                   />
                   <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">

@@ -101,7 +101,7 @@ serve(async (req) => {
     if (orderError) throw orderError;
     const orderId = insertedOrder.id;
 
-    // 2. Masukkan kurir ke tabel order_couriers
+    // 2. Masukkan Petugas ke tabel order_couriers
     const couriersToInsert = orderForm.courier_ids?.map(courierId => ({
         order_id: orderId,
         courier_id: courierId,

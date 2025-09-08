@@ -63,7 +63,7 @@ const AdminDashboard = ({ profile, data }) => {
               value="courier-dashboard"
               className="w-full text-xs sm:text-sm px-2 py-2 rounded-md data-[state=active]:bg-[#10182b] data-[state=active]:text-white"
             >
-              <span className="truncate">Dashboard Kurir</span>
+              <span className="truncate">Dashboard Petugas</span>
             </TabsTrigger>
 
             <TabsTrigger
@@ -144,10 +144,10 @@ const AdminDashboard = ({ profile, data }) => {
         <TabsContent value="courier-dashboard" className="mt-4 pt-4"> {/* ⬅️ tweak: tambah mt-4 */}
           <div className="mb-4 flex items-center flex-wrap gap-2"> {/* ⬅️ tweak: flex-wrap + gap-2 */}
             <UserCircle2 className="h-5 w-5 text-gray-600" />
-            <span className="text-sm font-medium text-gray-600">Pilih Kurir:</span>
+            <span className="text-sm font-medium text-gray-600">Pilih Petugas:</span>
             <Select onValueChange={setSelectedUserId}>
               <SelectTrigger className="w-[200px] sm:w-[240px]"> {/* ⬅️ tweak: tambah sm:w */}
-                <SelectValue placeholder="Pilih Kurir" />
+                <SelectValue placeholder="Pilih Petugas" />
               </SelectTrigger>
               <SelectContent>
                 {couriers.map(courier => (
@@ -165,9 +165,9 @@ const AdminDashboard = ({ profile, data }) => {
             <Card className="p-12">
               <div className="flex flex-col items-center justify-center space-y-3 text-center">
                 <Truck className="h-12 w-12 text-muted-foreground" />
-                <h3 className="text-lg font-semibold">Pilih Kurir untuk Melihat Dashboard</h3>
+                <h3 className="text-lg font-semibold">Pilih Petugas untuk Melihat Dashboard</h3>
                 <p className="text-sm text-muted-foreground max-w-sm">
-                  Pilih salah satu kurir dari dropdown di atas untuk melihat detail pengiriman dan tugas mereka.
+                  Pilih salah satu Petugas dari dropdown di atas untuk melihat detail pengiriman dan tugas mereka.
                 </p>
               </div>
             </Card>

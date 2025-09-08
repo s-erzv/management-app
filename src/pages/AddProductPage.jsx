@@ -85,6 +85,10 @@ const AddProductPage = () => {
     setLoading(false);
   };
   
+  const handleInputWheel = (e) => {
+    e.target.blur();
+  };
+
   const handleProductFormChange = (e) => {
     const { name, value, type, checked } = e.target;
     setProductForm(prev => ({
@@ -300,6 +304,7 @@ const AddProductPage = () => {
                 type="number"
                 value={productForm.stock}
                 onChange={handleProductFormChange}
+                onWheel={handleInputWheel}
                 required
                 />
             </div>
@@ -313,6 +318,7 @@ const AddProductPage = () => {
                 placeholder="Harga beli dari pusat"
                 value={productForm.purchase_price}
                 onChange={handleProductFormChange}
+                onWheel={handleInputWheel}
                 required
                 />
             </div>
@@ -337,6 +343,7 @@ const AddProductPage = () => {
                     placeholder="Harga jual galon kosong"
                     value={productForm.empty_bottle_price}
                     onChange={handleProductFormChange}
+                    onWheel={handleInputWheel}
                     required
                 />
                 </div>
@@ -354,6 +361,7 @@ const AddProductPage = () => {
                     placeholder="0"
                     value={p.price}
                     onChange={(e) => handlePriceChange(p.customer_status, e.target.value)}
+                    onWheel={handleInputWheel}
                     required
                     className="w-full"
                     />

@@ -104,6 +104,10 @@ const CentralOrderFormPage = () => {
     }).format(amount);
   };
   
+  const handleInputWheel = (e) => {
+    e.target.blur();
+  };
+  
   useEffect(() => {
     if (!authLoading && companyId) {
       fetchData();
@@ -600,6 +604,7 @@ const CentralOrderFormPage = () => {
                         type="number"
                         value={item.qty}
                         onChange={(e) => handleItemChange(index, 'qty', e.target.value)}
+                        onWheel={handleInputWheel}
                         min="1"
                       />
                     </div>
@@ -611,7 +616,7 @@ const CentralOrderFormPage = () => {
                         value={item.price}
                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                         placeholder="Harga"
-                        
+                        onWheel={handleInputWheel}
                         readOnly // Membuat input read-only
                         className="bg-gray-100 cursor-not-allowed"
                       />
@@ -697,6 +702,7 @@ const CentralOrderFormPage = () => {
                         placeholder="Masukkan biaya admin"
                         value={transactionDetails.admin_fee}
                         onChange={(e) => setTransactionDetails({...transactionDetails, admin_fee: parseFloat(e.target.value) || 0})}
+                        onWheel={handleInputWheel}
                       />
                     </div>
                   </div>
@@ -725,7 +731,7 @@ const CentralOrderFormPage = () => {
                           placeholder="Jumlah Pembayaran"
                           value={newPayment.amount}
                           onChange={(e) => setNewPayment(prev => ({...prev, amount: e.target.value}))}
-                          
+                          onWheel={handleInputWheel}
                           required
                           disabled={remainingDue <= 0}
                         />
@@ -824,6 +830,7 @@ const CentralOrderFormPage = () => {
                     placeholder="Tip Supir"
                     value={transactionDetails.driver_tip}
                     onChange={(e) => setTransactionDetails({...transactionDetails, driver_tip: e.target.value})}
+                    onWheel={handleInputWheel}
                   />
                   <Input
                     label="Catatan"
@@ -906,7 +913,7 @@ const CentralOrderFormPage = () => {
                               type="number"
                               value={item.received_qty}
                               onChange={(e) => handleReceivedQtyChange(index, e.target.value)}
-                              
+                              onWheel={handleInputWheel}
                             />
                           </TableCell>
                           <TableCell>

@@ -28,30 +28,104 @@ serve(async (req) => {
       })
     }
     
-    // Mulai dengan menghapus data dari tabel yang memiliki foreign key ke orders
-    // Menghapus payments
+    // --- LUNASIKAN UTANG GALON SEBELUM MENGHAPUS ---
+    const { error: galonSettleError } = await supabase.rpc('settle_galon_debt', { p_order_id: orderId, p_company_id: companyId });
+    if (galonSettleError) {
+        console.warn('Gagal melunasi utang galon sebelum menghapus, melanjutkan penghapusan order:', galonSettleError);
+    }
+    
+    // --- LANGKAH BARU: KEMBALIKAN STOK PRODUK SEBELUM DIHAPUS ---
+    // 1. Ambil item-item pesanan untuk mengetahui produk dan jumlah yang terlibat
+    const { data: orderItemsData, error: orderItemsFetchError } = await supabase
+        .from('order_items')
+        .select('product_id, qty, item_type')
+        .eq('order_id', orderId);
+        
+    if (orderItemsFetchError) throw orderItemsFetchError;
+    
+    // 2. Periksa apakah pesanan sudah pernah dikirim (status sent atau completed)
+    const { data: orderData, error: orderFetchError } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+        
+    if (orderFetchError) throw orderFetchError;
+    
+    // 3. Jika status pesanan sudah sent atau completed, kembalikan stok
+    if (orderData.status === 'sent' || orderData.status === 'completed') {
+        for (const item of orderItemsData) {
+            // Kita hanya mengembalikan stok untuk item yang memang dijual
+            if (item.item_type === 'beli') {
+                // Ambil stok saat ini untuk menghindari race condition
+                const { data: productData, error: productFetchError } = await supabase
+                    .from('products')
+                    .select('stock')
+                    .eq('id', item.product_id)
+                    .single();
+                if (productFetchError) throw productFetchError;
+    
+                const newStock = (productData?.stock || 0) + item.qty;
+    
+                const { error: stockUpdateError } = await supabase
+                    .from('products')
+                    .update({ stock: newStock })
+                    .eq('id', item.product_id);
+                if (stockUpdateError) throw stockUpdateError;
+    
+                // Catat pergerakan stok
+                const { error: movementError } = await supabase
+                    .from('stock_movements')
+                    .insert({
+                        product_id: item.product_id,
+                        qty: item.qty,
+                        type: 'masuk_hapus_pesanan',
+                        notes: `Stok dikembalikan karena pesanan #${orderId.slice(0, 8)} dihapus.`,
+                        company_id: companyId,
+                        order_id: orderId,
+                    });
+                if (movementError) throw movementError;
+            }
+        }
+    }
+
+
+    // --- Hapus data terkait setelah stok dikembalikan ---
+    const { error: galonError } = await supabase
+      .from('order_galon_items')
+      .delete()
+      .eq('order_id', orderId);
+    if (galonError) throw galonError;
+    
+    const { error: couriersError } = await supabase
+        .from('order_couriers')
+        .delete()
+        .eq('order_id', orderId);
+    if (couriersError) throw couriersError;
+    
     const { error: paymentsError } = await supabase
       .from('payments')
       .delete()
-      .eq('order_id', orderId)
-      .eq('company_id', companyId);
+      .eq('order_id', orderId);
     if (paymentsError) throw paymentsError;
 
-    // Menghapus order_items
     const { error: orderItemsError } = await supabase
       .from('order_items')
       .delete()
-      .eq('order_id', orderId)
-      .eq('company_id', companyId);
+      .eq('order_id', orderId);
     if (orderItemsError) throw orderItemsError;
 
-    // Menghapus invoices
     const { error: invoicesError } = await supabase
       .from('invoices')
       .delete()
-      .eq('order_id', orderId)
-      .eq('company_id', companyId);
+      .eq('order_id', orderId);
     if (invoicesError) throw invoicesError;
+
+    const { error: stockMovementsError } = await supabase
+        .from('stock_movements')
+        .delete()
+        .eq('order_id', orderId);
+    if (stockMovementsError) throw stockMovementsError;
 
     // Akhirnya, hapus order itu sendiri
     const { error: orderError } = await supabase

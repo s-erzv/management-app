@@ -426,13 +426,13 @@ const selectDisplayColumns = (data, type) => {
 
       'delivered_at_formatted': 'Tanggal Kirim',
 
-      'courier_name': 'Kurir',
+      'courier_name': 'Petugas',
 
       'created_by_name': 'Dibuat Oleh',
 
       'order_items_display': 'Item Pesanan',
 
-      'order_couriers_display': 'Kurir Ditugaskan',
+      'order_couriers_display': 'Petugas Ditugaskan',
 
       'created_at_formatted': 'Tanggal Dibuat'
 

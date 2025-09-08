@@ -275,7 +275,7 @@ serve(async (req) => {
     if (invErr) throw invErr;
 
     // Unggah PDF ke Supabase Storage
-    const fileName = `invoice-${invoice_number}.pdf`;
+     const fileName = `invoice-${invData.id}.pdf`;
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('invoices')
       .upload(fileName, pdfBytes, {

@@ -91,7 +91,7 @@ const OrdersPage = () => {
     setLoading(true);
     if (!companyId) return;
 
-    // Langkah 1: Tentukan ID pesanan yang cocok dengan filter kurir, jika ada.
+    // Langkah 1: Tentukan ID pesanan yang cocok dengan filter Petugas, jika ada.
     let filteredOrderIds = null;
     if (filters.courier && filters.courier !== 'all') {
       const { data: matchingOrderCouriers, error: courierFilterError } = await supabase
@@ -101,7 +101,7 @@ const OrdersPage = () => {
 
       if (courierFilterError) {
         console.error('Error fetching orders by courier:', courierFilterError);
-        toast.error('Gagal memuat pesanan berdasarkan kurir.');
+        toast.error('Gagal memuat pesanan berdasarkan Petugas.');
         setLoading(false);
         return;
       }
@@ -139,7 +139,7 @@ const OrdersPage = () => {
         query = query.lte('planned_date', filters.plannedDateEnd);
     }
     
-    // Terapkan filter kurir menggunakan daftar ID pesanan yang sudah didapat
+    // Terapkan filter Petugas menggunakan daftar ID pesanan yang sudah didapat
     if (filteredOrderIds !== null) {
         query = query.in('id', filteredOrderIds);
     }
@@ -361,7 +361,7 @@ const OrdersPage = () => {
   const handleExportToExcel = () => {
     const header = [
       "ID Pesanan", "Nomor Invoice", "Nama Pelanggan", "Alamat Pelanggan", "Telepon Pelanggan",
-      "Tanggal Order", "Status Pengiriman", "Status Pembayaran", "Nama Kurir",
+      "Tanggal Order", "Status Pengiriman", "Status Pembayaran", "Nama Petugas",
       "Total Harga", "Pembayaran Diterima", "Sisa Tagihan", "Galon Dikembalikan", 
       "Galon Dipinjam", "Galon Kosong Dibeli", "Biaya Transportasi", "Detail Produk", 
       "Bukti Pengiriman", "Riwayat Pembayaran"
@@ -488,7 +488,7 @@ const OrdersPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Tugaskan Kurir (Opsional)</Label>
+              <Label>Tugaskan Petugas (Opsional)</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {couriers.map((courier) => (
                   <div key={courier.id} className="flex items-center space-x-2">
@@ -593,10 +593,10 @@ const OrdersPage = () => {
 
             <Select value={courierFilter} onValueChange={setCourierFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Kurir" />
+                <SelectValue placeholder="Petugas" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Kurir</SelectItem>
+                <SelectItem value="all">Semua Petugas</SelectItem>
                 {couriers.map(courier => (
                   <SelectItem key={courier.id} value={courier.id}>{courier.full_name}</SelectItem>
                 ))}
@@ -662,7 +662,7 @@ const OrdersPage = () => {
                   <TableHead className="min-w-[150px] text-[#10182b]">Status</TableHead>
                   <TableHead className="min-w-[150px] text-[#10182b]">Status Bayar</TableHead>
                   <TableHead className="min-w-[150px] text-[#10182b]">Total Harga</TableHead>
-                  <TableHead className="min-w-[150px] text-[#10182b]">Kurir</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Petugas</TableHead>
                   <TableHead className="min-w-[250px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -701,7 +701,7 @@ const OrdersPage = () => {
                         {order.order_couriers && order.order_couriers.length > 0 ? (
                             <div className="flex flex-col space-y-1">
                                 {order.order_couriers.map((c, index) => (
-                                    <span key={index}>{c.courier?.full_name ?? 'Kurir tidak ditemukan'}</span>
+                                    <span key={index}>{c.courier?.full_name ?? 'Petugas tidak ditemukan'}</span>
                                 ))}
                             </div>
                         ) : 'Belum Ditugaskan'}
