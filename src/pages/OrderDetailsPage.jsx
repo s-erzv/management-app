@@ -39,11 +39,11 @@ const getDeliveryStatusBadge = (status) => {
 const getPaymentStatusBadge = (status) => {
   switch ((status || '').toLowerCase()) {
     case 'paid':
-      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
+      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> Lunas</Badge>;
     case 'unpaid':
-      return <Badge className="bg-red-500 text-white gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
+      return <Badge className="bg-red-500 text-white gap-1"><AlertCircle className="h-3 w-3" /> Pending</Badge>;
     case 'partial':
-      return <Badge className="bg-yellow-400 text-black gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
+      return <Badge className="bg-yellow-400 text-black gap-1"><AlertCircle className="h-3 w-3" /> Sebagian</Badge>;
     default:
       return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
   }
@@ -285,9 +285,9 @@ ${companyName}`;
   }, [order?.grand_total, totalPaid]);
 
   const paymentStatusMap = {
-    paid: { variant: 'default', label: 'LUNAS', icon: <CheckCircle2 className="h-3 w-3" /> },
-    unpaid: { variant: 'destructive', label: 'BELUM LUNAS', icon: <AlertCircle className="h-3 w-3" /> },
-    partial: { variant: 'secondary', label: 'SEBAGIAN', icon: <AlertCircle className="h-3 w-3" /> },
+    paid: { variant: 'default', label: 'Lunas', icon: <CheckCircle2 className="h-3 w-3" /> },
+    unpaid: { variant: 'destructive', label: 'Pending', icon: <AlertCircle className="h-3 w-3" /> },
+    partial: { variant: 'secondary', label: 'Sebagian', icon: <AlertCircle className="h-3 w-3" /> },
   };
   const currentPaymentStatus = paymentStatusMap[derivedPaymentStatus];
 

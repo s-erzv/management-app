@@ -24,18 +24,6 @@ import { toast } from 'react-hot-toast';
 import { Loader2, ArrowLeft, PackageCheck, TruckIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-const getPaymentStatusBadge = (status) => {
-  switch ((status || '').toLowerCase()) {
-    case 'paid':
-      return <Badge className="bg-green-500 text-white gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
-    case 'unpaid':
-      return <Badge className="bg-red-500 text-white gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
-    case 'partial':
-      return <Badge className="bg-yellow-400 text-black gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
-    default:
-      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
-  }
-};
 
 const CompleteDeliveryPage = () => {
   const { orderId } = useParams();
@@ -371,10 +359,6 @@ const CompleteDeliveryPage = () => {
               <p className="text-[#10182b]">{order.customers?.address}</p>
             </div>
             <div>
-              <Label className="text-muted-foreground">Status Pembayaran</Label>
-              {getPaymentStatusBadge(order.payment_status)}
-            </div>
-            <div>
               <Label className="text-muted-foreground">Total Tagihan Baru</Label>
               <p className="font-bold text-lg text-green-600">{formatCurrency(newGrandTotal)}</p>
             </div>
@@ -410,7 +394,7 @@ const CompleteDeliveryPage = () => {
                 <SelectContent>
                   <SelectItem value="paid">Lunas</SelectItem>
                   <SelectItem value="partial">Sebagian</SelectItem>
-                  <SelectItem value="unpaid">Belum Lunas</SelectItem>
+                  <SelectItem value="unpaid">Pending</SelectItem>
                 </SelectContent>
               </Select>
             </div>

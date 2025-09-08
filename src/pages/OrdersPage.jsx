@@ -53,11 +53,11 @@ const getStatusBadge = (status) => {
 const getPaymentStatusBadge = (status) => {
   switch ((status || '').toLowerCase()) {
     case 'paid':
-      return <Badge className="bg-green-500 text-white flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
+      return <Badge className="bg-green-500 text-white flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Lunas</Badge>;
     case 'unpaid':
-      return <Badge className="bg-red-500 text-white flex items-center gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
+      return <Badge className="bg-red-500 text-white flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Pending</Badge>;
     case 'partial':
-      return <Badge className="bg-yellow-400 text-black flex items-center gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
+      return <Badge className="bg-yellow-400 text-black flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Sebagian</Badge>;
     default:
       return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
   }
@@ -680,10 +680,12 @@ const OrdersPage = () => {
                     <TableCell className="whitespace-nowrap">{order.customers?.name ?? 'N/A'}</TableCell>
                     <TableCell className="whitespace-nowrap">{order.planned_date}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="grid">
                         {order.order_items.map(item => (
                           <Badge key={item.id} variant="secondary" className="text-[#10182b]">
-                            {item.products.name} ({item.qty})
+                            <ol>
+                              <li>{item.products.name} ({item.qty})</li>
+                            </ol>
                           </Badge>
                         ))}
                       </div>

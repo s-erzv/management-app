@@ -40,7 +40,7 @@ const SuperAdminDashboard = ({ profile, data }) => {
           <CardContent><p className="text-2xl font-bold">{data.paidOrders}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Order Belum Lunas</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Order Pending</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-bold">{data.unpaidOrders}</p></CardContent>
         </Card>
       </div>
