@@ -1,5 +1,3 @@
-// supabase/functions/complete-delivery/index.ts
-
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -27,6 +25,7 @@ serve(async (req) => {
       proofFileUrl,
       transferProofUrl,
       receivedByUserId,
+      receivedByName, // Perbaikan: Menerima nama penerima dari frontend
     } = await req.json()
 
     const supabase = createClient(
@@ -54,7 +53,8 @@ serve(async (req) => {
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
     const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + (parseFloat(totalPurchaseCost) || 0);
 
-    if (paymentAmount > 0) {
+    // Perbaikan: Pastikan paymentMethodId ada sebelum mencatat pembayaran
+    if (paymentAmount > 0 && paymentMethodId) {
       const { error: paymentInsertError } = await supabase
         .from('payments')
         .insert({
@@ -65,6 +65,7 @@ serve(async (req) => {
           company_id: company_id,
           proof_url: transferProofUrl,
           received_by: receivedByUserId,
+          received_by_name: receivedByName, // Perbaikan: Menggunakan nama yang diinputkan
         });
       if (paymentInsertError) throw paymentInsertError;
     }

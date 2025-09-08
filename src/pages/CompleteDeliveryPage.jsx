@@ -38,10 +38,10 @@ const CompleteDeliveryPage = () => {
   const [file, setFile] = useState(null);
   const [transferProofFile, setTransferProofFile] = useState(null);
   const [formState, setFormState] = useState({
-    returnedQty: '0',
-    borrowedQty: '0',
-    purchasedEmptyQty: '0',
-    transportCost: '0',
+    returnedQty: '',
+    borrowedQty: '',
+    purchasedEmptyQty: '',
+    transportCost: '',
   });
   
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -107,9 +107,10 @@ const CompleteDeliveryPage = () => {
 
     setOrder(orderWithDetails);
     setFormState({
-      ...formState,
-      // Perbaikan di sini: Gunakan string kosong jika 0
-      transportCost: orderWithDetails.transport_cost > 0 ? orderWithDetails.transport_cost.toString() : '',
+      returnedQty: orderData.returned_qty > 0 ? orderData.returned_qty.toString() : '',
+      borrowedQty: orderData.borrowed_qty > 0 ? orderData.borrowed_qty.toString() : '',
+      purchasedEmptyQty: orderData.purchased_empty_qty > 0 ? orderData.purchased_empty_qty.toString() : '',
+      transportCost: orderData.transport_cost > 0 ? orderData.transport_cost.toString() : '',
     });
     setLoading(false);
   };
@@ -244,6 +245,7 @@ const handleCompleteDelivery = async (e) => {
       proofFileUrl: deliveryFilePath,
       transferProofUrl,
       receivedByUserId: user?.id || null,
+      receivedByName: receivedByName || null, // Perbaikan di sini
     };
 
     const response = await fetch(
@@ -285,7 +287,7 @@ const handleCompleteDelivery = async (e) => {
   }
   
   const combinedPaymentMethods = [
-    { id: 'pending', method_name: 'Pending', type: 'pending' },
+    { id: 'pending', method_name: 'Belum Lunas', type: 'pending' },
     { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' },
     ...paymentMethods
   ];
