@@ -69,8 +69,9 @@ const OrdersPage = () => {
   // Filter states
   const [statusFilter, setStatusFilter] = useState('');
   const [courierFilter, setCourierFilter] = useState('');
-  const [invoiceNumberStart, setInvoiceNumberStart] = useState('');
-  const [invoiceNumberEnd, setInvoiceNumberEnd] = useState('');
+  const [plannedDateStart, setPlannedDateStart] = useState('');
+  const [plannedDateEnd, setPlannedDateEnd] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
 
   const fetchOrdersAndCustomers = useCallback(async (filters = {}) => {
     setLoading(true);
@@ -111,12 +112,17 @@ const OrdersPage = () => {
       query = query.eq('status', filters.status);
     }
 
-    // Terapkan filter nomor invoice
-    if (filters.invoiceNumberStart) {
-      query = query.gte('invoice_number', filters.invoiceNumberStart);
+    // Terapkan filter pelanggan
+    if (filters.customer && filters.customer !== 'all') {
+      query = query.eq('customer_id', filters.customer);
     }
-    if (filters.invoiceNumberEnd) {
-      query = query.lte('invoice_number', filters.invoiceNumberEnd);
+    
+    // Terapkan filter tanggal pengiriman
+    if (filters.plannedDateStart) {
+        query = query.gte('planned_date', filters.plannedDateStart);
+    }
+    if (filters.plannedDateEnd) {
+        query = query.lte('planned_date', filters.plannedDateEnd);
     }
     
     // Terapkan filter kurir menggunakan daftar ID pesanan yang sudah didapat
@@ -428,8 +434,9 @@ ${companyName}`;
     fetchOrdersAndCustomers({
       status: statusFilter,
       courier: courierFilter,
-      invoiceNumberStart: invoiceNumberStart,
-      invoiceNumberEnd: invoiceNumberEnd,
+      customer: customerFilter,
+      plannedDateStart: plannedDateStart,
+      plannedDateEnd: plannedDateEnd,
     });
   };
 
@@ -581,53 +588,70 @@ ${companyName}`;
             <Filter className="h-4 w-4 inline mr-2" /> Filter Pesanan
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 pt-0 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Status</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="sent">Dikirim</SelectItem>
-              <SelectItem value="completed">Selesai</SelectItem>
-            </SelectContent>
-          </Select>
+        <CardContent className="p-6 pt-0 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Dikirim</SelectItem>
+                <SelectItem value="completed">Selesai</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={courierFilter} onValueChange={setCourierFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Kurir" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Kurir</SelectItem>
-              {couriers.map(courier => (
-                <SelectItem key={courier.id} value={courier.id}>{courier.full_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={courierFilter} onValueChange={setCourierFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Kurir" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Kurir</SelectItem>
+                {couriers.map(courier => (
+                  <SelectItem key={courier.id} value={courier.id}>{courier.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Input
-            placeholder="Invoice dari..."
-            type="number"
-            value={invoiceNumberStart}
-            onChange={(e) => setInvoiceNumberStart(e.target.value)}
-            className="w-full"
-          />
-          <Input
-            placeholder="Invoice sampai..."
-            type="number"
-            value={invoiceNumberEnd}
-            onChange={(e) => setInvoiceNumberEnd(e.target.value)}
-            className="w-full"
-          />
-          <Button onClick={applyFilters} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]">Filter</Button>
-          <Button onClick={() => {
-              setStatusFilter('all');
-              setCourierFilter('all');
-              setInvoiceNumberStart('');
-              setInvoiceNumberEnd('');
-              fetchOrdersAndCustomers();
-          }} variant="outline" className="w-full text-[#10182b] hover:bg-gray-100">Reset</Button>
+            <Select value={customerFilter} onValueChange={setCustomerFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Pelanggan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Pelanggan</SelectItem>
+                {customers.map(customer => (
+                  <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Input
+              placeholder="Tanggal dari..."
+              type="date"
+              value={plannedDateStart}
+              onChange={(e) => setPlannedDateStart(e.target.value)}
+              className="w-full"
+            />
+            <Input
+              placeholder="Tanggal sampai..."
+              type="date"
+              value={plannedDateEnd}
+              onChange={(e) => setPlannedDateEnd(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button onClick={applyFilters} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]">Filter</Button>
+            <Button onClick={() => {
+                setStatusFilter('all');
+                setCourierFilter('all');
+                setCustomerFilter('all');
+                setPlannedDateStart('');
+                setPlannedDateEnd('');
+                fetchOrdersAndCustomers();
+            }} variant="outline" className="w-full text-[#10182b] hover:bg-gray-100">Reset</Button>
+          </div>
         </CardContent>
       </Card>
 

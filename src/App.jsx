@@ -24,6 +24,8 @@ import FinancialReportPage from './pages/FinancialReportPage';
 import FinancialManagementPage from './pages/FinancialManagementPage';
 import DataExportPage from './pages/DataExportPage';
 import CalendarPage from './pages/CalendarPage';
+import AddProductPage from './pages/AddProductPage';
+import EditProductPage from './pages/EditProductPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -130,6 +132,14 @@ const App = () => {
              <Route
               path="/calendar"
               element={session ? <CalendarPage /> : <Navigate to="/login" />}
+            />
+            <Route
+                path="/products/add"
+                element={session && isAdminOrSuperAdmin ? <AddProductPage /> : <Navigate to="/dashboard" />}
+            />
+            <Route
+                path="/products/edit/:id"
+                element={session && isAdminOrSuperAdmin ? <EditProductPage /> : <Navigate to="/dashboard" />}
             />
             <Route path="*" element={<Navigate to="/dashboard" />} />
             {isSuperAdmin && (

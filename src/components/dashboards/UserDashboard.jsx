@@ -66,9 +66,11 @@ const UserDashboard = ({ userId }) => {
       );
 
       const finalTasks = courierTasks.map(task => {
-        // Perbaikan: Ambil grand_total langsung dari objek task
-        const total = task.grand_total || 0;
-        const totalPaid = (task.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+        // PERBAIKAN LOGIKA: Hitung ulang total pesanan dari order_items jika grand_total tidak valid
+        const calculatedTotal = (task.order_items || []).reduce((sum, item) => sum + (item.qty * item.price), 0);
+        const total = (task.grand_total > 0) ? task.grand_total : calculatedTotal;
+        
+        const totalPaid = (task.payments || []).reduce((sum, payment) => sum + (payment.amount || 0), 0);
         
         return { 
           ...task,
