@@ -108,7 +108,8 @@ const CompleteDeliveryPage = () => {
     setOrder(orderWithDetails);
     setFormState({
       ...formState,
-      transportCost: orderWithDetails.transport_cost?.toString() || '0',
+      // Perbaikan di sini: Gunakan string kosong jika 0
+      transportCost: orderWithDetails.transport_cost > 0 ? orderWithDetails.transport_cost.toString() : '',
     });
     setLoading(false);
   };
@@ -225,9 +226,11 @@ const handleCompleteDelivery = async (e) => {
     const finalPaymentAmount =
       (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
 
-    const pmToSend = paymentMethod === "hybrid"
-      ? transferMethod
-      : paymentMethod;
+    const pmToSend = paymentMethod === "pending" || finalPaymentAmount <= 0
+      ? null
+      : paymentMethod === "hybrid"
+        ? transferMethod
+        : paymentMethod;
 
     const payload = {
       orderId,

@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, MessageSquareText } from 'lucide-react';
+import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, MessageSquareText, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Dialog,
@@ -35,17 +35,31 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-// Fungsi baru untuk mendapatkan badge status yang dinamis
+// Fungsi untuk mendapatkan badge status pengiriman yang dinamis
 const getStatusBadge = (status) => {
   switch (status) {
     case 'draft':
-      return <Badge className="bg-gray-200 text-[#10182b]"><Clock className="h-3 w-3 mr-1" /> Menunggu</Badge>;
+      return <Badge className="bg-gray-200 text-[#10182b] flex items-center gap-1"><Clock className="h-3 w-3" /> Menunggu</Badge>;
     case 'sent':
-      return <Badge className="bg-[#10182b] text-white"><TruckIcon className="h-3 w-3 mr-1" /> Dalam Pengiriman</Badge>;
+      return <Badge className="bg-[#10182b] text-white flex items-center gap-1"><TruckIcon className="h-3 w-3" /> Dalam Pengiriman</Badge>;
     case 'completed':
-      return <Badge className="bg-green-500 text-white"><CheckCircle2 className="h-3 w-3 mr-1" /> Selesai</Badge>;
+      return <Badge className="bg-green-500 text-white flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Selesai</Badge>;
     default:
-      return <Badge className="bg-gray-200 text-[#10182b]">{status}</Badge>;
+      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status}</Badge>;
+  }
+};
+
+// Fungsi baru untuk mendapatkan badge status pembayaran yang dinamis
+const getPaymentStatusBadge = (status) => {
+  switch ((status || '').toLowerCase()) {
+    case 'paid':
+      return <Badge className="bg-green-500 text-white flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> LUNAS</Badge>;
+    case 'unpaid':
+      return <Badge className="bg-red-500 text-white flex items-center gap-1"><AlertCircle className="h-3 w-3" /> BELUM LUNAS</Badge>;
+    case 'partial':
+      return <Badge className="bg-yellow-400 text-black flex items-center gap-1"><AlertCircle className="h-3 w-3" /> SEBAGIAN</Badge>;
+    default:
+      return <Badge className="bg-gray-200 text-[#10182b] capitalize">{status || 'unknown'}</Badge>;
   }
 };
 
@@ -667,19 +681,20 @@ ${companyName}`;
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-[#10182b]">No. Invoice</TableHead>
-                  <TableHead className="text-[#10182b]">Pelanggan</TableHead>
-                  <TableHead className="text-[#10182b]">Tgl. Pengiriman</TableHead>
-                  <TableHead className="text-[#10182b]">Produk</TableHead>
-                  <TableHead className="text-[#10182b]">Status</TableHead>
-                  <TableHead className="text-[#10182b]">Total Harga</TableHead>
-                  <TableHead className="text-[#10182b]">Kurir</TableHead>
-                  <TableHead className="text-[#10182b]">Aksi</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Pelanggan</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Tgl. Pengiriman</TableHead>
+                  <TableHead className="min-w-[200px] text-[#10182b]">Produk</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Status</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Status Bayar</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Total Harga</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Kurir</TableHead>
+                  <TableHead className="min-w-[250px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#10182b]" />
                     </TableCell>
                   </TableRow>
@@ -701,6 +716,9 @@ ${companyName}`;
                     <TableCell>
                       {getStatusBadge(order.status)}
                     </TableCell>
+                    <TableCell>
+                      {getPaymentStatusBadge(order.payment_status)}
+                    </TableCell>
                    <TableCell>
                     {formatCurrency(order.grand_total || 0)}
                   </TableCell>
@@ -713,7 +731,7 @@ ${companyName}`;
                             </div>
                         ) : 'Belum Ditugaskan'}
                     </TableCell>
-                    <TableCell className="flex gap-2">
+                    <TableCell className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Detail</Button>
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)} className="bg-red-500 hover:bg-red-600 text-white">Hapus</Button>
@@ -725,7 +743,7 @@ ${companyName}`;
                 )))}
                 {orders.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       Tidak ada data pesanan.
                     </TableCell>
                   </TableRow>
