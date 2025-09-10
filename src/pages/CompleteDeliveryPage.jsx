@@ -42,7 +42,7 @@ const CompleteDeliveryPage = () => {
   const [file, setFile] = useState(null);
   const [transferProofFile, setTransferProofFile] = useState(null);
   const [itemQuantities, setItemQuantities] = useState({});
-  const [transportCost, setTransportCost] = useState('0');
+  const [transportCost, setTransportCost] = useState(' ');
   
   const handleInputWheel = (e) => {
     e.target.blur();
@@ -562,7 +562,7 @@ const CompleteDeliveryPage = () => {
                 id="transportCost"
                 type="number"
                 placeholder="Biaya Transportasi"
-                value={transportCost}
+                alue={transportCost === '0' ? '' : transportCost}
                 onChange={(e) => setTransportCost(e.target.value)}
               />
             </div>

@@ -26,6 +26,7 @@ import DataExportPage from './pages/DataExportPage';
 import CalendarPage from './pages/CalendarPage';
 import AddProductPage from './pages/AddProductPage';
 import EditProductPage from './pages/EditProductPage';
+import EditOrderPage from './pages/EditOrderPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
@@ -85,6 +86,7 @@ const App = () => {
               path="/orders/:id"
               element={session && (isAdminOrSuperAdmin || isCourier) ? <OrderDetailsPage /> : <Navigate to="/dashboard" />}
             />
+            <Route path="/orders/edit/:orderId" element={<EditOrderPage />} />
             <Route
               path="/stock"
              element={session && (isAdminOrSuperAdmin || isCourier) ? <StockAndGalonPage /> : <Navigate to="/dashboard" />}

@@ -87,10 +87,10 @@ const ReportsPage = () => {
         productsQuery = productsQuery.eq('subcategory_id', selectedSubCategoryId);
       }
 
-      const { data: productsData, error: productError } = await productsQuery;
+     const { data: productsData, error: productError } = await productsQuery;
       if (productError) throw productError;
       const safeProducts = (productsData || []).map(p => ({ ...p, stock: Number(p.stock) || 0 }));
-      
+
       const productIds = safeProducts.map(p => p.id);
 
       const { data: reconciliationsData, error: reconciliationsError } = await supabase
@@ -106,21 +106,27 @@ const ReportsPage = () => {
         .eq("company_id", companyId)
         .in("status", ["draft", "sent"]);
       if (orderError) throw orderError;
-      
+
       const filteredOrderIds = (filteredOrders || []).map((order) => order.id);
-      
-      const { data: demandItems, error: demandItemsError } = await supabase
-        .from("order_items")
-        .select(`product_id, qty`)
-        .in("order_id", filteredOrderIds.length ? filteredOrderIds : [null])
-        .in("product_id", productIds.length ? productIds : [null]); // Filter demand items by selected products
-      if (demandItemsError) throw demandItemsError;
+
+      let demandItems = [];
+      if (filteredOrderIds.length > 0 && productIds.length > 0) {
+        const { data: items, error: demandItemsError } = await supabase
+          .from("order_items")
+          .select(`product_id, qty`)
+          .in("order_id", filteredOrderIds)
+          .in("product_id", productIds);
+        
+        if (demandItemsError) throw demandItemsError;
+        demandItems = items || [];
+      }
 
       const demandByProduct = (demandItems || []).reduce((acc, item) => {
         const qty = Number(item.qty) || 0;
         acc[item.product_id] = (acc[item.product_id] || 0) + qty;
         return acc;
       }, {});
+
 
       const chartData = safeProducts.map((p) => ({
         id: p.id,

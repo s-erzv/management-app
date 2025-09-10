@@ -11,15 +11,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Download, Plus, X, ListOrdered, Filter, Search, Banknote, CreditCard, Clock, TruckIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Download, Plus, ListOrdered, Filter, TruckIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -28,18 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom'; 
-import { Separator } from '@/components/ui/separator';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 // Fungsi untuk mendapatkan badge status pengiriman yang dinamis
 const getStatusBadge = (status) => {
   switch (status) {
     case 'draft':
-      return <Badge className="bg-gray-200 text-[#10182b] flex items-center gap-1"><Clock className="h-3 w-3" /> Menunggu</Badge>;
+      return <Badge className="bg-gray-200 text-[#10182b] flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Menunggu</Badge>;
     case 'sent':
       return <Badge className="bg-[#10182b] text-white flex items-center gap-1"><TruckIcon className="h-3 w-3" /> Dalam Pengiriman</Badge>;
     case 'completed':
@@ -65,33 +55,23 @@ const getPaymentStatusBadge = (status) => {
 
 const OrdersPage = () => {
   const navigate = useNavigate();
-  const { session, userRole, companyId, companyName } = useAuth();
+  const { userRole, companyId } = useAuth();
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState(null);
-  
-  const [editForm, setEditForm] = useState({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
-  const [editItems, setEditItems] = useState([]);
-  const [newEditItem, setNewEditItem] = useState({ product_id: '', qty: 0, price: 0 });
-  const [isEditLoading, setIsEditLoading] = useState(false);
-
   // Filter states
-  const [statusFilter, setStatusFilter] = useState('');
-  const [courierFilter, setCourierFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [courierFilter, setCourierFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [plannedDateStart, setPlannedDateStart] = useState('');
   const [plannedDateEnd, setPlannedDateEnd] = useState('');
-  const [customerFilter, setCustomerFilter] = useState('');
 
   const fetchOrdersAndCustomers = useCallback(async (filters = {}) => {
     setLoading(true);
     if (!companyId) return;
 
-    // Langkah 1: Tentukan ID pesanan yang cocok dengan filter Petugas, jika ada.
     let filteredOrderIds = null;
     if (filters.courier && filters.courier !== 'all') {
       const { data: matchingOrderCouriers, error: courierFilterError } = await supabase
@@ -108,7 +88,6 @@ const OrdersPage = () => {
       filteredOrderIds = matchingOrderCouriers.map(oc => oc.order_id);
     }
 
-    // Langkah 2: Bangun kueri utama dengan semua filter.
     let query = supabase
       .from('orders')
       .select(`
@@ -121,17 +100,14 @@ const OrdersPage = () => {
       .order('created_at', { ascending: false })
       .eq('company_id', companyId);
 
-    // Terapkan filter status
     if (filters.status && filters.status !== 'all') {
       query = query.eq('status', filters.status);
     }
 
-    // Terapkan filter pelanggan
     if (filters.customer && filters.customer !== 'all') {
       query = query.eq('customer_id', filters.customer);
     }
     
-    // Terapkan filter tanggal pengiriman
     if (filters.plannedDateStart) {
         query = query.gte('planned_date', filters.plannedDateStart);
     }
@@ -139,15 +115,18 @@ const OrdersPage = () => {
         query = query.lte('planned_date', filters.plannedDateEnd);
     }
     
-    // Terapkan filter Petugas menggunakan daftar ID pesanan yang sudah didapat
     if (filteredOrderIds !== null) {
+        if (filteredOrderIds.length === 0) {
+            setOrders([]);
+            setLoading(false);
+            return;
+        }
         query = query.in('id', filteredOrderIds);
     }
 
     const { data: ordersData, error: ordersError } = await query;
     const { data: customersData } = await supabase.from('customers').select('id, name, customer_status').eq('company_id', companyId);
     const { data: couriersData } = await supabase.from('profiles').select('id, full_name').eq('role', 'user').eq('company_id', companyId);
-    const { data: productsData } = await supabase.from('products').select('id, name, is_returnable, company_id').eq('company_id', companyId);
 
     if (ordersError) {
       console.error('Error fetching data:', ordersError);
@@ -156,7 +135,6 @@ const OrdersPage = () => {
       setOrders(ordersData);
       setCustomers(customersData);
       setCouriers(couriersData);
-      setProducts(productsData);
     }
     setLoading(false);
   }, [companyId]);
@@ -166,156 +144,6 @@ const OrdersPage = () => {
         fetchOrdersAndCustomers();
     }
   }, [companyId, fetchOrdersAndCustomers]);
-  
-  const handleOpenEditModal = (order) => {
-    setCurrentOrder(order);
-    if (order) {
-      setEditForm({
-        customer_id: order.customer_id,
-        planned_date: order.planned_date,
-        notes: order.notes,
-        courier_ids: order.order_couriers.map(c => c.courier.id),
-      });
-      setEditItems(order.order_items.map(item => ({
-        product_id: item.product_id,
-        product_name: item.products.name,
-        qty: item.qty,
-        price: item.price,
-        item_type: item.item_type,
-      })));
-    } 
-    setIsEditModalOpen(true);
-  };
-
-  const handleEditModalClose = () => {
-    setIsEditModalOpen(false);
-    setCurrentOrder(null);
-    setEditForm({ customer_id: '', planned_date: '', notes: '', courier_ids: [] });
-    setEditItems([]);
-    setNewEditItem({ product_id: '', qty: 0, price: 0 });
-  };
-
-  const handleEditFormChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm({ ...editForm, [name]: value });
-  };
-  
-  const handleEditCourierCheckboxChange = (courierId, checked) => {
-    setEditForm(prevForm => {
-      const newCourierIds = checked
-        ? [...prevForm.courier_ids, courierId]
-        : prevForm.courier_ids.filter(id => id !== courierId);
-      return { ...prevForm, courier_ids: newCourierIds };
-    });
-  };
-
-  const handleNewEditItemChange = (e) => {
-    const { name, value } = e.target;
-    setNewEditItem({ ...newEditItem, [name]: parseInt(value) || 0 });
-  };
-  
-  const handleProductSelectChange = async (val) => {
-    const selectedProduct = products.find((p) => p.id === val);
-    const selectedCustomer = customers.find((c) => c.id === editForm.customer_id);
-
-    if (!selectedCustomer) {
-      toast.error('Data pelanggan tidak ditemukan.');
-      return;
-    }
-
-    const { data: priceData, error } = await supabase
-      .from('product_prices')
-      .select('price')
-      .eq('product_id', selectedProduct.id)
-      .eq('customer_status', selectedCustomer.customer_status)
-      .single();
-
-    if (error) {
-      console.error('Error fetching price:', error);
-      toast.error('Gagal memuat harga produk.');
-      return;
-    }
-
-    setNewEditItem({
-      ...newEditItem,
-      product_id: val,
-      price: priceData?.price || 0,
-    });
-  };
-
-  const handleEditItemAdd = () => {
-    if (!newEditItem.product_id || newEditItem.qty <= 0) {
-      toast.error('Pilih produk dan masukkan jumlah.');
-      return;
-    }
-
-    const selectedProduct = products.find((p) => p.id === newEditItem.product_id);
-    const itemToAdd = {
-      product_id: selectedProduct.id,
-      product_name: selectedProduct.name,
-      qty: newEditItem.qty,
-      price: newEditItem.price,
-      item_type: 'beli',
-      order_id: currentOrder.id,
-    };
-
-    setEditItems([...editItems, itemToAdd]);
-    setNewEditItem({ product_id: '', qty: 0, price: 0 });
-  };
-
-  const handleEditItemRemove = (index) => {
-    const newItems = editItems.filter((_, i) => i !== index);
-    setEditItems(newItems);
-  };
-  
-  const handleEditFormSubmit = async (e) => {
-    e.preventDefault();
-    setIsEditLoading(true);
-
-    if (editItems.length === 0) {
-      toast.error('Pesanan harus memiliki setidaknya satu item.');
-      setIsEditLoading(false);
-      return;
-    }
-    
-    // Kirim payload ke Edge Function
-    try {
-      const payload = {
-        orderId: currentOrder.id,
-        orderDetails: { ...editForm, company_id: companyId },
-        orderItems: editItems.map(item => ({
-          product_id: item.product_id,
-          qty: item.qty,
-          price: item.price,
-          item_type: item.item_type,
-        })),
-      };
-
-      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/edit-order', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Gagal memperbarui pesanan.');
-      }
-    
-      toast.success('Pesanan berhasil diperbarui!');
-      fetchOrdersAndCustomers();
-      handleEditModalClose();
-    } catch (error) {
-      console.error('Error updating order:', error.message);
-      toast.error('Gagal memperbarui pesanan: ' + error.message);
-    } finally {
-      setIsEditLoading(false);
-    }
-  };
   
   const handleDeleteClick = async (orderId) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus pesanan ini?')) return;
@@ -429,6 +257,15 @@ const OrdersPage = () => {
     });
   };
 
+  const resetFilters = () => {
+    setStatusFilter('all');
+    setCourierFilter('all');
+    setCustomerFilter('all');
+    setPlannedDateStart('');
+    setPlannedDateEnd('');
+    fetchOrdersAndCustomers();
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -447,129 +284,6 @@ const OrdersPage = () => {
           </Button>
         </div>
       </div>
-      
-      <Dialog open={isEditModalOpen} onOpenChange={handleEditModalClose}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Pesanan #{currentOrder?.invoice_number}</DialogTitle>
-            <DialogDescription>
-              Perbarui detail pesanan.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditFormSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="customer_id">Pelanggan</Label>
-              <Select
-                name="customer_id"
-                value={editForm.customer_id}
-                onValueChange={(val) => setEditForm({ ...editForm, customer_id: val })}
-                disabled={true}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih Pelanggan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="planned_date">Tanggal Order</Label>
-              <Input
-                type="date"
-                name="planned_date"
-                value={editForm.planned_date}
-                onChange={handleEditFormChange}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tugaskan Petugas (Opsional)</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {couriers.map((courier) => (
-                  <div key={courier.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`edit-courier-${courier.id}`}
-                      checked={editForm.courier_ids?.includes(courier.id)}
-                      onCheckedChange={(checked) => handleEditCourierCheckboxChange(courier.id, checked)}
-                    />
-                    <Label htmlFor={`edit-courier-${courier.id}`}>
-                      {courier.full_name}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Catatan Pesanan</Label>
-              <Input
-                name="notes"
-                placeholder="Catatan Pesanan (opsional)"
-                value={editForm.notes}
-                onChange={handleEditFormChange}
-              />
-            </div>
-            
-            <Separator />
-
-            <div className="space-y-2">
-              <Label>Item Pesanan</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                <Select
-                  value={newEditItem.product_id}
-                  onValueChange={handleProductSelectChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih Produk" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Jumlah"
-                    name="qty"
-                    value={newEditItem.qty}
-                    onChange={handleNewEditItemChange}
-                    
-                    disabled={!newEditItem.product_id}
-                  />
-                  <Button type="button" onClick={handleEditItemAdd} disabled={!newEditItem.product_id || newEditItem.qty <= 0} size="icon" className="bg-[#10182b] text-white hover:bg-[#20283b]">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                Harga per item: {formatCurrency(newEditItem.price)}
-              </p>
-
-              <div className="flex flex-wrap gap-2 mt-2">
-                {editItems.map((item, index) => (
-                  <Badge key={index} variant="secondary">
-                    {item.product_name} x{item.qty} ({formatCurrency(item.price)})
-                    <X className="ml-2 h-3 w-3 cursor-pointer" onClick={() => handleEditItemRemove(index)} />
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={isEditLoading}>
-              {isEditLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Perbarui Pesanan'}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
       
       <Card className="border-0 shadow-sm bg-white">
         <CardHeader className="p-6">
@@ -632,14 +346,7 @@ const OrdersPage = () => {
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <Button onClick={applyFilters} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]">Filter</Button>
-            <Button onClick={() => {
-                setStatusFilter('all');
-                setCourierFilter('all');
-                setCustomerFilter('all');
-                setPlannedDateStart('');
-                setPlannedDateEnd('');
-                fetchOrdersAndCustomers();
-            }} variant="outline" className="w-full text-[#10182b] hover:bg-gray-100">Reset</Button>
+            <Button onClick={resetFilters} variant="outline" className="w-full text-[#10182b] hover:bg-gray-100">Reset</Button>
           </div>
         </CardContent>
       </Card>
@@ -710,7 +417,7 @@ const OrdersPage = () => {
                     </TableCell>
                     <TableCell className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Detail</Button>
-                      <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(order)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/orders/edit/${order.id}`)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(order.id)} className="bg-red-500 hover:bg-red-600 text-white">Hapus</Button>
                     </TableCell>
                   </TableRow>

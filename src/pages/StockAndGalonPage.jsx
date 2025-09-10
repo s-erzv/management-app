@@ -120,6 +120,13 @@ const StockAndGalonPage = () => {
   };
   
   const fetchGalonDebts = async (productId) => {
+    if (!productId) {
+        console.error('Product ID is undefined, skipping fetch.');
+        setDebts([]);
+        setRefreshing(false);
+        return;
+    }
+    
     setRefreshing(true);
     const { data, error } = await supabase
       .from('order_galon_items')
@@ -263,7 +270,7 @@ const StockAndGalonPage = () => {
     }
     
     setLoading(true);
-    // Menggunakan RPC untuk memperbarui status utang galon
+    
     const { error } = await supabase.rpc('settle_galon_debt', { p_customer_id: customerId });
     
     if (error) {
@@ -271,7 +278,8 @@ const StockAndGalonPage = () => {
       toast.error('Gagal melunasi utang galon.');
     } else {
       toast.success('Utang galon berhasil dilunasi!');
-      fetchGalonDebts();
+      // Memuat ulang data utang galon setelah pelunasan
+      fetchGalonDebts(selectedProductId);
     }
     setLoading(false);
   };
