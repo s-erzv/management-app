@@ -26,9 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Package, PackageCheck, Banknote, RefreshCw, CheckCircle2, Users, ReceiptText, ChevronRight, ChevronDown } from 'lucide-react';
+import { Loader2, Package, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
@@ -65,7 +64,7 @@ const StockAndGalonPage = () => {
   useEffect(() => {
     if (selectedProductId) {
       fetchMovements(selectedProductId);
-      const selectedProduct = products.find(p => p.id === selectedProductId);
+      const selectedProduct = products.find((p) => p.id === selectedProductId);
       if (selectedProduct && selectedProduct.is_returnable) {
         fetchGalonDebts(selectedProductId);
       } else {
@@ -86,9 +85,11 @@ const StockAndGalonPage = () => {
       console.error('Error fetching products:', error);
       toast.error('Gagal memuat daftar produk.');
     } else {
-      setProducts(data);
-      if (data.length > 0) {
+      setProducts(data || []);
+      if (data && data.length > 0) {
         setSelectedProductId(data[0].id);
+      } else {
+        setSelectedProductId(null);
       }
     }
     setLoading(false);
@@ -96,8 +97,12 @@ const StockAndGalonPage = () => {
 
   const fetchMovements = async (productId) => {
     setLoading(true);
-    const { data: productData } = await supabase.from('products').select('stock').eq('id', productId).single();
-    setCurrentStock(productData.stock);
+    const { data: productData } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', productId)
+      .single();
+    setCurrentStock(Number(productData?.stock || 0));
 
     const { data: movementsData, error } = await supabase
       .from('stock_movements')
@@ -113,75 +118,112 @@ const StockAndGalonPage = () => {
       console.error('Error fetching movements:', error);
       toast.error('Gagal memuat data pergerakan stok.');
     } else {
-      setMovements(movementsData);
-      setManualMovements(movementsData.filter(m => m.type === 'masuk' || m.type === 'keluar'));
+      const list = movementsData || [];
+      setMovements(list);
+      setManualMovements(list.filter((m) => m.type === 'masuk' || m.type === 'keluar'));
     }
     setLoading(false);
   };
   
   const fetchGalonDebts = async (productId) => {
-    if (!productId) {
-        console.error('Product ID is undefined, skipping fetch.');
-        setDebts([]);
-        setRefreshing(false);
-        return;
-    }
-    
-    setRefreshing(true);
-    const { data, error } = await supabase
-      .from('order_galon_items')
-      .select(`
-        order:order_id(
-          customer:customer_id(id, name, phone)
-        ),
-        product:product_id(id, name),
-        returned_qty,
-        borrowed_qty,
-        purchased_empty_qty
-      `)
-      .or('borrowed_qty.gt.0,returned_qty.gt.0,purchased_empty_qty.gt.0')
-      .eq('product_id', productId)
-      .eq('order.company_id', companyId);
-
-    if (error) {
-      console.error('Error fetching galon debts:', error);
-      toast.error('Gagal memuat data utang galon.');
-      setDebts([]);
-    } else {
-        const groupedDebts = data.reduce((acc, row) => {
-            const customerId = row.order.customer.id;
-            const customerName = row.order.customer.name;
-            const customerPhone = row.order.customer.phone;
-            const productId = row.product.id;
-            const productName = row.product.name;
-
-            if (!acc[customerId]) {
-                acc[customerId] = {
-                    id: customerId,
-                    name: customerName,
-                    phone: customerPhone,
-                    products_debt: {},
-                };
-            }
-            if (!acc[customerId].products_debt[productId]) {
-                acc[customerId].products_debt[productId] = {
-                    product_id: productId,
-                    product_name: productName,
-                    total_borrowed_qty: 0,
-                    total_returned_qty: 0,
-                    total_purchased_qty: 0,
-                };
-            }
-            acc[customerId].products_debt[productId].total_borrowed_qty += row.borrowed_qty;
-            acc[customerId].products_debt[productId].total_returned_qty += row.returned_qty;
-            acc[customerId].products_debt[productId].total_purchased_qty += row.purchased_empty_qty;
-            return acc;
-        }, {});
-        
-        setDebts(Object.values(groupedDebts));
-    }
+  if (!productId) {
+    console.error('Product ID is undefined, skipping fetch.');
+    setDebts([]);
     setRefreshing(false);
-  };
+    return;
+  }
+  setRefreshing(true);
+
+  const { data, error } = await supabase
+    .from('order_galon_items')
+    .select(`
+      order:order_id(
+        id,
+        created_at,
+        delivered_at,
+        customer:customer_id(id, name, phone),
+        company_id
+      ),
+      product:product_id(id, name),
+      returned_qty,
+      borrowed_qty,
+      purchased_empty_qty
+    `)
+    .or('borrowed_qty.gt.0,returned_qty.gt.0,purchased_empty_qty.gt.0')
+    .eq('product_id', productId)
+    .eq('order.company_id', companyId);
+
+  if (error) {
+    console.error('Error fetching galon debts:', error);
+    toast.error('Gagal memuat data utang galon.');
+    setDebts([]);
+    setRefreshing(false);
+    return;
+  }
+
+  // Group per customer → product + simpan event
+  const grouped = (data || []).reduce((acc, row) => {
+    const c = row.order.customer;
+    const p = row.product;
+
+    if (!acc[c.id]) {
+      acc[c.id] = { id: c.id, name: c.name, phone: c.phone, products_debt: {} };
+    }
+    if (!acc[c.id].products_debt[p.id]) {
+      acc[c.id].products_debt[p.id] = {
+        product_id: p.id,
+        product_name: p.name,
+        total_borrowed_qty: 0,
+        total_returned_qty: 0,
+        total_purchased_qty: 0,
+        _events: [],
+        outstanding: 0,
+      };
+    }
+
+    const pd = acc[c.id].products_debt[p.id];
+    const borrowed = Number(row.borrowed_qty || 0);
+    const returned = Number(row.returned_qty || 0);
+    const purchased = Number(row.purchased_empty_qty || 0);
+
+    pd.total_borrowed_qty += borrowed;
+    pd.total_returned_qty += returned;
+    pd.total_purchased_qty += purchased;
+
+    pd._events.push({
+      date: row.order.delivered_at || row.order.created_at || '',
+      id: row.order.id,
+      borrowed,
+      returned,
+      purchased,
+    });
+
+    return acc;
+  }, {});
+
+  // Fold kronologis: return dan purchased menutup utang
+  Object.values(grouped).forEach((cust) => {
+    Object.values(cust.products_debt).forEach((pd) => {
+      pd._events.sort((a, b) => {
+        const ta = a.date ? new Date(a.date).getTime() : 0;
+        const tb = b.date ? new Date(b.date).getTime() : 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.id).localeCompare(String(b.id)); // tie-breaker
+      });
+      let balance = 0;
+      for (const ev of pd._events) {
+        // PERUBAHAN KRITIS: purchased dan returned mengurangi saldo
+        balance = Math.max(0, balance + ev.borrowed - ev.returned - ev.purchased);
+      }
+      pd.outstanding = balance;
+      delete pd._events;
+    });
+  });
+
+  setDebts(Object.values(grouped));
+  setRefreshing(false);
+};
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -234,7 +276,7 @@ const StockAndGalonPage = () => {
     }
     setLoading(false);
   };
-  
+
   const fetchDetail = async (category) => {
     let query = supabase.from('orders').select(`
       id,
@@ -259,38 +301,18 @@ const StockAndGalonPage = () => {
 
     const { data, error } = await query;
     if (!error) {
-      setDetailData(data);
+      setDetailData(data || []);
       setOpenDetail(true);
     }
   };
-  
-  const handleSettleDebt = async (customerId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menandai utang galon ini sebagai lunas? Tindakan ini tidak dapat diurungkan.')) {
-      return;
-    }
-    
-    setLoading(true);
-    
-    const { error } = await supabase.rpc('settle_galon_debt', { p_customer_id: customerId });
-    
-    if (error) {
-      console.error('Error settling debt:', error);
-      toast.error('Gagal melunasi utang galon.');
-    } else {
-      toast.success('Utang galon berhasil dilunasi!');
-      // Memuat ulang data utang galon setelah pelunasan
-      fetchGalonDebts(selectedProductId);
-    }
-    setLoading(false);
-  };
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
   const isReturnable = selectedProduct?.is_returnable;
 
   const toggleRow = (customerId) => {
     setExpandedCustomerId(expandedCustomerId === customerId ? null : customerId);
   };
-
+  
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-white">
@@ -313,7 +335,7 @@ const StockAndGalonPage = () => {
           </CardTitle>
           <Select
             id="product-select"
-            value={selectedProductId}
+            value={selectedProductId || undefined}
             onValueChange={(val) => {
               setSelectedProductId(val);
               setActiveStockTab('summary');
@@ -323,7 +345,7 @@ const StockAndGalonPage = () => {
               <SelectValue placeholder="Pilih Produk" />
             </SelectTrigger>
             <SelectContent>
-              {products.map(product => (
+              {products.map((product) => (
                 <SelectItem key={product.id} value={product.id}>
                   {product.name}
                 </SelectItem>
@@ -333,7 +355,7 @@ const StockAndGalonPage = () => {
         </CardHeader>
       </Card>
       
-      <Tabs value={activeStockTab} onValueChange={setActiveStockTab}>
+      <Tabs value={activeStockTab} onValueChange={(v) => setActiveStockTab(v)}>
         <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
           <TabsTrigger value="summary" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Ringkasan Stok</TabsTrigger>
           <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
@@ -364,7 +386,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-purple-600 hover:underline"
                       onClick={() => fetchDetail('dibeli')}
                     >
-                      {movements.filter(m => m.type === 'galon_dibeli').reduce((sum, m) => sum + m.qty, 0)}
+                      {movements.filter((m) => m.type === 'galon_dibeli').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                   <div className="p-4 rounded-lg border bg-gray-50">
@@ -373,7 +395,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-green-600 hover:underline"
                       onClick={() => fetchDetail('dikembalikan')}
                     >
-                      {movements.filter(m => m.type === 'pengembalian').reduce((sum, m) => sum + m.qty, 0)}
+                      {movements.filter((m) => m.type === 'pengembalian').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                   <div className="p-4 rounded-lg border bg-gray-50">
@@ -382,7 +404,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-yellow-600 hover:underline"
                       onClick={() => fetchDetail('dipinjam')}
                     >
-                      {movements.filter(m => m.type === 'pinjam_kembali').reduce((sum, m) => sum + m.qty, 0)}
+                      {movements.filter((m) => m.type === 'pinjam_kembali').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                 </div>
@@ -409,43 +431,53 @@ const StockAndGalonPage = () => {
                         <TableHead className="min-w-[150px] text-[#10182b]">Galon Dipinjam</TableHead>
                         <TableHead className="min-w-[150px] text-[#10182b]">Galon Dikembalikan</TableHead>
                         <TableHead className="min-w-[150px] text-[#10182b]">Galon Dibeli</TableHead>
-                        <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
+                        <TableHead className="min-w-[120px] text-[#10182b]">Sisa Utang</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {debts.length > 0 ? (
-                        debts.map((debt) => (
-                          <TableRow key={debt.id} className="cursor-pointer hover:bg-gray-50" onClick={() => toggleRow(debt.id)}>
-                            <TableCell className="font-medium text-[#10182b]">{debt.name}</TableCell>
-                            <TableCell>{debt.phone}</TableCell>
-                            <TableCell>
-                                <Badge variant="destructive" className="bg-red-500 text-white font-semibold">
-                                  {debt.products_debt[selectedProductId]?.total_borrowed_qty || 0} galon
+                        debts.map((debt) => {
+                          const pd = debt.products_debt[selectedProductId] || {
+                            total_borrowed_qty: 0,
+                            total_returned_qty: 0,
+                            total_purchased_qty: 0,
+                            outstanding: 0,
+                          };
+                          const isSettled = pd.outstanding === 0;
+
+                          return (
+                            <TableRow
+                              key={debt.id}
+                              className={`cursor-pointer ${isSettled ? 'bg-gray-100 text-gray-500 hover:bg-gray-100' : 'hover:bg-gray-50'}`}
+                              onClick={() => toggleRow(debt.id)}
+                            >
+                              <TableCell className={`font-medium ${isSettled ? 'text-gray-500' : 'text-[#10182b]'}`}>
+                                {debt.name}
+                              </TableCell>
+                              <TableCell>{debt.phone}</TableCell>
+                              <TableCell>
+                                <Badge className={`font-semibold ${isSettled ? 'bg-gray-300 text-gray-600' : 'bg-red-500 text-white'}`}>
+                                  {pd.total_borrowed_qty} galon
                                 </Badge>
-                            </TableCell>
-                            <TableCell>
-                                <Badge variant="default" className="bg-green-500 text-white font-semibold">
-                                  {debt.products_debt[selectedProductId]?.total_returned_qty || 0} galon
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`font-semibold ${isSettled ? 'bg-gray-300 text-gray-600' : 'bg-green-500 text-white'}`}>
+                                  {pd.total_returned_qty} galon
                                 </Badge>
-                            </TableCell>
-                            <TableCell>
-                                <Badge variant="default" className="bg-blue-500 text-white font-semibold">
-                                  {debt.products_debt[selectedProductId]?.total_purchased_qty || 0} galon
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`font-semibold ${isSettled ? 'bg-gray-300 text-gray-600' : 'bg-blue-500 text-white'}`}>
+                                  {pd.total_purchased_qty} galon
                                 </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Button 
-                                size="sm" 
-                                onClick={(e) => { e.stopPropagation(); handleSettleDebt(debt.id); }}
-                                disabled={loading}
-                                className="bg-green-500 text-white hover:bg-green-600"
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Lunas
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={`${isSettled ? 'border-gray-300 text-gray-600' : 'border-red-300 text-red-700'}`}>
+                                  {pd.outstanding} galon
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       ) : (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
@@ -453,6 +485,7 @@ const StockAndGalonPage = () => {
                           </TableCell>
                         </TableRow>
                       )}
+
                     </TableBody>
                   </Table>
                 </div>
@@ -477,7 +510,7 @@ const StockAndGalonPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {movements.map(m => (
+                    {movements.map((m) => (
                       <TableRow key={m.id}>
                         <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
                         <TableCell>{m.products?.name}</TableCell>
@@ -560,7 +593,7 @@ const StockAndGalonPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {manualMovements.map(m => (
+                    {manualMovements.map((m) => (
                       <TableRow key={m.id}>
                         <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
                         <TableCell>{m.products?.name}</TableCell>
@@ -592,7 +625,7 @@ const StockAndGalonPage = () => {
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {detailData.length > 0 ? (
-              detailData.map(d => (
+              detailData.map((d) => (
                 <div key={d.id} className="p-2 border rounded-md">
                   <p className="font-medium">{d.customers?.name}</p>
                   <p className="text-sm text-gray-500">{d.customers?.phone}</p>
