@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import AddPaymentModal from '@/components/AddPaymentModal';
 
 // Badge status pengiriman
 const getDeliveryStatusBadge = (status) => {
@@ -75,6 +76,9 @@ const OrderDetailsPage = () => {
   const [editMethodId, setEditMethodId] = useState('');
   
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
 
   // Refs untuk cleanup dan prevent race conditions
   const mountedRef = useRef(true);
@@ -567,6 +571,11 @@ ${companyName}`;
     }
   };
 
+  const handleOpenPaymentModal = (order) => {
+    setSelectedOrderForPayment(order);
+    setIsPaymentModalOpen(true);
+  };
+
   // --- render guards ---
   if (loading) {
     return (
@@ -826,141 +835,7 @@ ${companyName}`;
             </CardContent>
           </Card>
         )}
-
-        <Card className={`border border-gray-200 shadow-sm transition-all hover:shadow-md ${isPaymentFormDisabled ? 'opacity-60' : ''}`}>
-          <CardHeader>
-            <CardTitle className="text-[#10182b]">Tambah Pembayaran</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-              <Input
-                type="number"
-                placeholder="Nominal"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                className="w-full md:w-1/2"
-                disabled={isPaymentFormDisabled}
-              />
-              <Select
-                value={effectivePaymentMethodId}
-                onValueChange={setPaymentMethodId}
-                disabled={isPaymentFormDisabled}
-              >
-                <SelectTrigger className="w-full md:w-1/2">
-                  <SelectValue placeholder="Pilih metode pembayaran" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethodsCash.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-gray-500">Tunai</div>
-                      {paymentMethodsCash.map((method) => (
-                        <SelectItem key={method.id} value={String(method.id)}>
-                          <div className="flex items-center gap-2">
-                            <Banknote className="h-4 w-4" />
-                            <span>{method.method_name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                      <Separator className="my-1" />
-                    </>
-                  )}
-                  {paymentMethodsTransfer.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-gray-500">Transfer</div>
-                      {paymentMethodsTransfer.map((method) => (
-                        <SelectItem key={method.id} value={String(method.id)}>
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="h-4 w-4" />
-                            <span>{method.method_name} ({method.account_name})</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                      <Separator className="my-1" />
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            {isPaymentFormDisabled && (
-              <p className="text-sm text-green-600 mt-2">Pesanan ini sudah lunas, tidak bisa menambah pembayaran lagi.</p>
-            )}
-            <Button onClick={handleAddPayment} className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading || !paymentFormIsValid}>
-              {opLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tambahkan Pembayaran'}
-            </Button>
-          </CardContent>
-        </Card>
       </div>
-      
-      {/* Edit Payment Dialog */}
-      <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Pembayaran</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="edit-amount" className="text-right">Nominal</label>
-              <Input
-                id="edit-amount"
-                type="number"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="edit-method" className="text-right">Metode</label>
-              <Select
-                value={editMethodId}
-                onValueChange={setEditMethodId}
-                className="col-span-3"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih metode pembayaran" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethodsCash.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-gray-500">Tunai</div>
-                      {paymentMethodsCash.map((method) => (
-                        <SelectItem key={method.id} value={String(method.id)}>
-                          <div className="flex items-center gap-2">
-                            <Banknote className="h-4 w-4" />
-                            <span>{method.method_name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                      <Separator className="my-1" />
-                    </>
-                  )}
-                  {paymentMethodsTransfer.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-gray-500">Transfer</div>
-                      {paymentMethodsTransfer.map((method) => (
-                        <SelectItem key={method.id} value={String(method.id)}>
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="h-4 w-4" />
-                            <span>{method.method_name} ({method.account_name})</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                      <Separator className="my-1" />
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Batal</Button>
-            </DialogClose>
-            <Button onClick={handleUpdatePayment} disabled={opLoading}>
-              {opLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Perubahan'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
     </div>
   );

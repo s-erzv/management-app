@@ -466,6 +466,7 @@ const CompleteDeliveryPage = () => {
                         value={cashAmount}
                         onChange={(e) => setCashAmount(e.target.value)}
                         required
+                        onWheel={handleInputWheel}
                       />
                     </div>
                   </>
@@ -482,7 +483,7 @@ const CompleteDeliveryPage = () => {
                         value={transferAmount}
                         onChange={(e) => setTransferAmount(e.target.value)}
                         readOnly={paymentMethod === 'hybrid'}
-                        className={paymentMethod === 'hybrid' ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}
+                        className={paymentMethod === 'hybrid' ? "bg-gray-100 cursor-not-allowed" : ""}
                         required
                       />
                     </div>

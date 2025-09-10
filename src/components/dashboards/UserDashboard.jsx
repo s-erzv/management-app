@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import AddPaymentModal from '@/components/AddPaymentModal';
 
 const UserDashboard = ({ userId }) => {
   const navigate = useNavigate();
@@ -41,6 +42,8 @@ const UserDashboard = ({ userId }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('active');
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
 
   const fetchData = useCallback(async (id) => {
     if (!id) return;
@@ -193,8 +196,16 @@ const updateOrderStatus = async (order, newStatus) => {
     navigate(`/complete-delivery/${orderId}`);
   };
 
-  const incompleteTasks = tasks.filter(task => task.status !== 'completed');
-  const completedTasks = tasks.filter(task => task.status === 'completed');
+  const handlePaymentAdded = () => {
+    fetchData(userId);
+  };
+
+  const incompleteTasks = tasks.filter(task => 
+    task.status !== 'completed' || task.payment_status !== 'paid'
+  );
+  const completedTasks = tasks.filter(task => 
+    task.status === 'completed' && task.payment_status === 'paid'
+  );
   
   const todayTasks = incompleteTasks.filter(task => {
     const taskDate = new Date(task.planned_date);
@@ -350,15 +361,37 @@ const updateOrderStatus = async (order, newStatus) => {
               </Button>
             )}
             {task.status === 'sent' && (
-              <Button 
-                onClick={() => handleNavigateToCompletionPage(task.id)}
-                disabled={loading}
-                className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
-                variant="default"
-              >
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Selesaikan Pesanan
-              </Button>
+              <>
+                <Button 
+                  onClick={() => handleNavigateToCompletionPage(task.id)}
+                  disabled={loading}
+                  className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
+                  variant="default"
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Selesaikan Pesanan
+                </Button>
+                <Button
+                  onClick={() => { setSelectedOrderForPayment(task); setIsPaymentModalOpen(true); }}
+                  disabled={loading}
+                  className="w-full mt-2 bg-green-500 text-white hover:bg-green-600"
+                  variant="default"
+                >
+                  <Banknote className="mr-2 h-4 w-4" />
+                  Tambah Pembayaran
+                </Button>
+              </>
+            )}
+             {task.status === 'completed' && task.payment_status !== 'paid' && (
+                <Button
+                  onClick={() => { setSelectedOrderForPayment(task); setIsPaymentModalOpen(true); }}
+                  disabled={loading}
+                  className="w-full mt-2 bg-green-500 text-white hover:bg-green-600"
+                  variant="default"
+                >
+                  <Banknote className="mr-2 h-4 w-4" />
+                  Tambah Pembayaran
+                </Button>
             )}
           </div>
         )}
@@ -492,6 +525,12 @@ const updateOrderStatus = async (order, newStatus) => {
           </TabsContent>
         </Tabs>
       )}
+      <AddPaymentModal
+        isOpen={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        order={selectedOrderForPayment}
+        onPaymentAdded={handlePaymentAdded}
+      />
     </div>
   );
 };
