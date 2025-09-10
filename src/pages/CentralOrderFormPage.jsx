@@ -1,4 +1,3 @@
-// src/pages/CentralOrderFormPage.jsx
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,7 +10,6 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -36,11 +34,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 
 const CentralOrderFormPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { userProfile, loading: authLoading, companyId } = useAuth();
+  const { userProfile, loading: authLoading, companyId, session } = useAuth();
   
   const [products, setProducts] = useState([]);
   const [purchasePrices, setPurchasePrices] = useState({});
@@ -138,7 +137,7 @@ const CentralOrderFormPage = () => {
 
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('id, name, stock, purchase_price, is_returnable, empty_bottle_price, sort_order')
+      .select('id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price, sort_order')
       .eq('company_id', companyId)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
@@ -175,7 +174,7 @@ const CentralOrderFormPage = () => {
       .from('central_orders')
       .select(`
         *,
-        items:central_order_items (product_id, qty, price, received_qty, products(id, name, stock, purchase_price, is_returnable, empty_bottle_price))
+        items:central_order_items (product_id, qty, price, received_qty, products(id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price))
       `)
       .eq('id', orderId)
       .eq('company_id', companyId)
@@ -202,12 +201,13 @@ const CentralOrderFormPage = () => {
       ...item,
       product_name: item.products.name,
       current_stock: item.products.stock,
+      current_empty_bottle_stock: item.products.empty_bottle_stock,
       price: item.products.purchase_price,
       is_returnable: item.products.is_returnable,
       returned_to_central: orderData.returned_to_central?.[item.product_id] || 0,
       borrowed_from_central: orderData.borrowed_from_central?.[item.product_id] || 0,
       sold_empty_to_central: orderData.sold_empty_to_central?.[item.product_id] || 0,
-      sold_empty_price: item.products.empty_bottle_price || 0,
+      sold_empty_price: 0, // Harga diatur 0 agar bisa diinput manual
     })));
     setReceivedItems(orderData.items.map(item => ({
       product_id: item.product_id,
@@ -237,13 +237,15 @@ const CentralOrderFormPage = () => {
     const newItems = [...orderItems];
     newItems[index][field] = value;
     
-    // Mengisi harga secara otomatis dari purchasePrices dan empty_bottle_price
     if (field === 'product_id') {
         const selectedProduct = products.find(p => p.id === value);
         if (selectedProduct) {
             newItems[index].price = selectedProduct.purchase_price;
             newItems[index].is_returnable = selectedProduct.is_returnable;
-            newItems[index].sold_empty_price = selectedProduct.empty_bottle_price;
+            newItems[index].sold_empty_price = 0; // Reset harga jika produk berubah
+        } else {
+            newItems[index].is_returnable = false;
+            newItems[index].sold_empty_price = 0;
         }
     }
     
@@ -494,7 +496,6 @@ const CentralOrderFormPage = () => {
     }
   };
 
-  // Tab 3 Logic
   const handleReceivedQtyChange = (index, value) => {
     const newReceivedItems = [...receivedItems];
     newReceivedItems[index].received_qty = value;
@@ -503,59 +504,43 @@ const CentralOrderFormPage = () => {
   
   const handleFinalizeReceipt = async () => {
     setLoading(true);
-    try {
-      const { error: updateOrderError } = await supabase
-        .from('central_orders')
-        .update({
-          arrival_date: deliveryDetails.arrival_date || null,
-          central_note_number: deliveryDetails.central_note_number || null,
-          status: 'received',
-        })
-        .eq('id', id);
-      if (updateOrderError) throw updateOrderError;
 
-      const itemsToLog = receivedItems.filter(item => item.received_qty > 0);
-      if (itemsToLog.length > 0) {
-        const { error: movementError } = await supabase
-          .from('stock_movements')
-          .insert(itemsToLog.map(item => ({
-            product_id: item.product_id,
-            qty: parseFloat(item.received_qty),
-            type: 'masuk_dari_pusat',
-            notes: `Barang diterima dari pusat (Nomor Surat: ${deliveryDetails.central_note_number})`,
-            company_id: userProfile.company_id,
-            user_id: userProfile.id,
-            central_order_id: id,
-          })));
-        if (movementError) throw movementError;
-      }
-      
-      // Update stock for received items
-      for (const item of itemsToLog) {
-        const { error: stockUpdateError } = await supabase.rpc('update_product_stock', {
-            product_id: item.product_id,
-            qty_to_add: item.received_qty,
-        });
-        if (stockUpdateError) throw stockUpdateError;
-      }
-
-      const updatedItemsPayload = receivedItems.map(receivedItem => {
-        const originalItem = orderItems.find(
-          (item) => item.product_id === receivedItem.product_id
-        );
-        return {
-          central_order_id: id,
-          product_id: receivedItem.product_id,
-          received_qty: receivedItem.received_qty,
-          qty: originalItem ? originalItem.qty : 0,
-          price: originalItem ? originalItem.price : 0,
+    const galonDetails = orderItems.reduce((acc, item) => {
+      if (item.is_returnable){
+        acc[item.product_id] = {
+          returned_to_central: parseFloat(item.returned_to_central) || 0,
+          borrowed_from_central: parseFloat(item.borrowed_from_central) || 0,
+          sold_empty_to_central: parseFloat(item.sold_empty_to_central) || 0,
+          sold_empty_price: parseFloat(item.sold_empty_price) || 0, // Kirim harga manual ke backend
         };
+      }
+      return acc;
+    }, {});
+    
+    const payload = {
+      orderId: id,
+      receivedItems,
+      orderItems, 
+      galonDetails,
+      deliveryDetails,
+      companyId,
+      userId: userProfile.id,
+    };
+
+    try {
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/manage-central-order-galons', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
       });
 
-      const { error: itemUpdateError } = await supabase
-        .from('central_order_items')
-        .upsert(updatedItemsPayload, { onConflict: ['central_order_id', 'product_id'] });
-      if (itemUpdateError) throw itemUpdateError;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Gagal mencatat penerimaan barang.');
+      }
       
       toast.success('Penerimaan barang berhasil dicatat dan stok diperbarui!');
       navigate('/central-orders');
@@ -596,7 +581,7 @@ const CentralOrderFormPage = () => {
             {!isNewOrder && (
               <TabsTrigger 
                 className="w-full text-xs sm:text-sm px-2 py-2 data-[state=active]:bg-[#10182b] data-[state=active]:text-white rounded-md" 
-                value="attachments-expenses"
+              value="attachments-expenses"
               >
                 2. Pembayaran & Lampiran
               </TabsTrigger>
@@ -629,60 +614,62 @@ const CentralOrderFormPage = () => {
               <h3 className="font-semibold mt-6">Daftar Item</h3>
               <div className="space-y-4">
                 {orderItems.map((item, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row gap-2 items-end">
-                    <div className="w-full sm:w-auto flex-1">
-                      <Label htmlFor={`product-${index}`}>Produk</Label>
-                      <Select
-                        value={item.product_id}
-                        onValueChange={(val) => handleItemChange(index, 'product_id', val)}
+                  <div key={index} className="space-y-4 p-4 border rounded-md">
+                    <div className="flex flex-col sm:flex-row gap-2 items-end">
+                      <div className="w-full sm:w-auto flex-1">
+                        <Label htmlFor={`product-${index}`}>Produk</Label>
+                        <Select
+                          value={item.product_id}
+                          onValueChange={(val) => handleItemChange(index, 'product_id', val)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Pilih Produk" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map(product => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-full sm:w-24">
+                        <Label htmlFor={`qty-${index}`}>Jumlah</Label>
+                        <Input
+                          id={`qty-${index}`}
+                          type="number"
+                          value={item.qty}
+                          onChange={(e) => handleItemChange(index, 'qty', e.target.value)}
+                          onWheel={handleInputWheel}
+                          min="1"
+                        />
+                      </div>
+                      <div className="w-full sm:w-32">
+                        <Label htmlFor={`price-${index}`}>Harga Per Item</Label>
+                        <Input
+                          id={`price-${index}`}
+                          type="number"
+                          value={item.price}
+                          onChange={(e) => handleItemChange(index, 'price', e.target.value)}
+                          placeholder="Harga"
+                          onWheel={handleInputWheel}
+                          readOnly
+                          className="bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => handleRemoveItem(index)}
+                        className="mt-2 sm:mt-0"
                       >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Pilih Produk" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map(product => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="w-full sm:w-24">
-                      <Label htmlFor={`qty-${index}`}>Jumlah</Label>
-                      <Input
-                        id={`qty-${index}`}
-                        type="number"
-                        value={item.qty}
-                        onChange={(e) => handleItemChange(index, 'qty', e.target.value)}
-                        onWheel={handleInputWheel}
-                        min="1"
-                      />
-                    </div>
-                    <div className="w-full sm:w-32">
-                      <Label htmlFor={`price-${index}`}>Harga Per Item</Label>
-                      <Input
-                        id={`price-${index}`}
-                        type="number"
-                        value={item.price}
-                        onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                        placeholder="Harga"
-                        onWheel={handleInputWheel}
-                        readOnly
-                        className="bg-gray-100 cursor-not-allowed"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => handleRemoveItem(index)}
-                      className="mt-2 sm:mt-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                     {item.is_returnable && (
-                        <div className="space-y-4 col-span-full mt-4 p-4 border rounded-md">
+                        <div className="space-y-4 col-span-full mt-4 p-4 border rounded-md bg-gray-50">
                           <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
                             <Package className="h-4 w-4" />
                             Detail Galon ({products.find(p => p.id === item.product_id)?.name})
@@ -711,13 +698,22 @@ const CentralOrderFormPage = () => {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor={`galon-sold-${index}`}>Galon Kosong Dibeli ke Pusat</Label>
+                              <Label htmlFor={`galon-sold-${index}`}>Galon Kosong Dibeli dari Pusat</Label>
                               <Input
                                 id={`galon-sold-${index}`}
                                 type="number"
                                 placeholder="0"
                                 value={item.sold_empty_to_central}
                                 onChange={(e) => handleGalonDetailChange(index, 'sold_empty_to_central', e.target.value)}
+                                onWheel={handleInputWheel}
+                              />
+                              <Label htmlFor={`price-sold-${index}`}>Harga Galon Kosong</Label>
+                              <Input
+                                id={`price-sold-${index}`}
+                                type="number"
+                                placeholder="0"
+                                value={item.sold_empty_price}
+                                onChange={(e) => handleGalonDetailChange(index, 'sold_empty_price', e.target.value)}
                                 onWheel={handleInputWheel}
                               />
                             </div>
@@ -923,7 +919,7 @@ const CentralOrderFormPage = () => {
                     type="number"
                     placeholder="Tip Supir"
                     value={transactionDetails.driver_tip}
-                    onChange={(e) => setTransactionDetails({...transactionDetails, driver_tip: e.target.value})}
+                    onChange={(e) => setTransactionDetails({...transactionDetails, driver_tip: parseFloat(e.target.value) || 0})}
                     onWheel={handleInputWheel}
                   />
                   <Input

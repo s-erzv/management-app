@@ -34,6 +34,7 @@ const UpdateStockPage = () => {
   const [manualCounts, setManualCounts] = useState({});
   const [stockDifferences, setStockDifferences] = useState([]);
   const [reconciliationId, setReconciliationId] = useState(null);
+  const canAdjustStock = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
 
   useEffect(() => {
     if (companyId) {
@@ -217,7 +218,7 @@ const UpdateStockPage = () => {
               <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90">
                 <Box className="h-4 w-4 mr-2" /> Bandingkan Stok
               </Button>
-              {stockDifferences.length > 0 && (
+              {stockDifferences.length > 0 && canAdjustStock && (
                 <Button onClick={handleAutomaticAdjustment} disabled={isSubmitting} variant="secondary" className="w-full sm:w-auto">
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Sesuaikan Stok Otomatis
                 </Button>

@@ -50,6 +50,28 @@ serve(async (req) => {
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
     let totalPurchaseCost = 0;
 
+    // --- LOGIC FOR UPDATING STOCKS AND GALON MOVEMENTS ---
+    for (const item of order.order_items) {
+      const deliveredQty = parseFloat(item.qty) || 0;
+      if (deliveredQty > 0) {
+        // Decrease stock for sold products
+        await supabase.rpc('update_product_stock', {
+          product_id: item.product_id,
+          qty_to_add: -deliveredQty,
+        });
+
+        // Log the stock movement
+        await supabase.from('stock_movements').insert({
+          type: 'keluar',
+          qty: deliveredQty,
+          order_id: orderId,
+          product_id: item.product_id,
+          notes: 'Produk keluar untuk pesanan pelanggan.',
+          company_id: company_id,
+        });
+      }
+    }
+
     for (const item of returnableItems) {
         totalPurchaseCost += (parseFloat(item.purchasedEmptyQty) || 0) * (item.empty_bottle_price || 0);
 
@@ -65,6 +87,11 @@ serve(async (req) => {
 
         const diff_returned = parseFloat(item.returnedQty) || 0;
         if (diff_returned > 0) {
+          // Increase empty bottle stock for galons returned by customer
+          await supabase.rpc('update_empty_bottle_stock', {
+            product_id: item.product_id,
+            qty_to_add: diff_returned,
+          });
           await supabase.from('stock_movements').insert({
             type: 'pengembalian',
             qty: diff_returned,
@@ -77,6 +104,11 @@ serve(async (req) => {
 
         const diff_purchased = parseFloat(item.purchasedEmptyQty) || 0;
         if (diff_purchased > 0) {
+          // Increase empty bottle stock for empty galons purchased from customer
+          await supabase.rpc('update_empty_bottle_stock', {
+            product_id: item.product_id,
+            qty_to_add: diff_purchased,
+          });
           await supabase.from('stock_movements').insert({
             type: 'galon_dibeli',
             qty: diff_purchased,
@@ -118,7 +150,6 @@ serve(async (req) => {
       if (paymentInsertError) throw paymentInsertError;
     }
 
-    // TAMBAHKAN LOGIKA PENCATATAN TRANSAKSI FINANSIAL DI SINI
     if (transportCost > 0) {
       const { error: financialTransactionError } = await supabase
         .from('financial_transactions')
