@@ -88,8 +88,8 @@ const CentralOrderFormPage = () => {
   }, [orderItems]);
 
   const totalOrderValue = useMemo(() => {
-    return totalItemsValue + (parseFloat(transactionDetails.admin_fee) || 0);
-  }, [totalItemsValue, transactionDetails.admin_fee]);
+    return totalItemsValue + (parseFloat(transactionDetails.admin_fee) || 0) + (parseFloat(transactionDetails.driver_tip) || 0);
+  }, [totalItemsValue, transactionDetails.admin_fee, transactionDetails.driver_tip]);
 
   const totalPaid = useMemo(() => {
     return payments.reduce((sum, p) => sum + p.amount, 0);
@@ -116,6 +116,12 @@ const CentralOrderFormPage = () => {
       fetchData();
     }
   }, [authLoading, companyId, id]);
+
+  useEffect(() => {
+    if (activeTab === 'attachments-expenses' && !isNewOrder && remainingDue > 0) {
+      setNewPayment(prev => ({ ...prev, amount: remainingDue.toString() }));
+    }
+  }, [activeTab, isNewOrder, remainingDue]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -174,7 +180,7 @@ const CentralOrderFormPage = () => {
       .from('central_orders')
       .select(`
         *,
-        items:central_order_items (product_id, qty, price, received_qty, products(id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price))
+        items:central_order_items (product_id, qty, price, received_qty, sold_empty_price, products(id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price))
       `)
       .eq('id', orderId)
       .eq('company_id', companyId)
@@ -207,7 +213,7 @@ const CentralOrderFormPage = () => {
       returned_to_central: orderData.returned_to_central?.[item.product_id] || 0,
       borrowed_from_central: orderData.borrowed_from_central?.[item.product_id] || 0,
       sold_empty_to_central: orderData.sold_empty_to_central?.[item.product_id] || 0,
-      sold_empty_price: 0, // Harga diatur 0 agar bisa diinput manual
+      sold_empty_price: item.sold_empty_price || 0,
     })));
     setReceivedItems(orderData.items.map(item => ({
       product_id: item.product_id,
@@ -242,7 +248,7 @@ const CentralOrderFormPage = () => {
         if (selectedProduct) {
             newItems[index].price = selectedProduct.purchase_price;
             newItems[index].is_returnable = selectedProduct.is_returnable;
-            newItems[index].sold_empty_price = 0; // Reset harga jika produk berubah
+            newItems[index].sold_empty_price = selectedProduct.empty_bottle_price;
         } else {
             newItems[index].is_returnable = false;
             newItems[index].sold_empty_price = 0;
@@ -312,6 +318,7 @@ const CentralOrderFormPage = () => {
             product_id: item.product_id,
             qty: item.qty,
             price: item.price,
+            sold_empty_price: item.sold_empty_price,
           })));
         if (itemsError) throw itemsError;
         
@@ -347,6 +354,7 @@ const CentralOrderFormPage = () => {
             product_id: item.product_id,
             qty: item.qty,
             price: item.price,
+            sold_empty_price: item.sold_empty_price,
           })));
         if (itemsError) throw itemsError;
         
@@ -511,7 +519,7 @@ const CentralOrderFormPage = () => {
           returned_to_central: parseFloat(item.returned_to_central) || 0,
           borrowed_from_central: parseFloat(item.borrowed_from_central) || 0,
           sold_empty_to_central: parseFloat(item.sold_empty_to_central) || 0,
-          sold_empty_price: parseFloat(item.sold_empty_price) || 0, // Kirim harga manual ke backend
+          sold_empty_price: parseFloat(item.sold_empty_price) || 0,
         };
       }
       return acc;
@@ -886,7 +894,7 @@ const CentralOrderFormPage = () => {
                             <TableRow key={p.id}>
                               <TableCell>{new Date(p.transaction_date).toLocaleDateString()}</TableCell>
                               <TableCell>{formatCurrency(p.amount)}</TableCell>
-                              <TableCell>{p.payment_method.method_name}</TableCell>
+                              <TableCell>{p.payment_method?.method_name || 'N/A'}</TableCell>
                               <TableCell>
                                 {p.proof_url ? (
                                   <a href={p.proof_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">

@@ -86,7 +86,8 @@ const StockAndGalonPage = () => {
       .from('products')
       .select('*, is_returnable, empty_bottle_stock')
       .eq('company_id', companyId)
-      .order('name', { ascending: true });
+      .order('sort_order', { ascending: true }) // Perbaikan: Mengurutkan berdasarkan sort_order
+      .order('name', { ascending: true }); // Perbaikan: Menambahkan urutan sekunder berdasarkan nama
 
     if (error) {
       console.error('Error fetching products:', error);
