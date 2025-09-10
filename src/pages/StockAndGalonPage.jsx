@@ -212,7 +212,6 @@ const StockAndGalonPage = () => {
       });
       let balance = 0;
       for (const ev of pd._events) {
-        // PERUBAHAN KRITIS: purchased dan returned mengurangi saldo
         balance = Math.max(0, balance + ev.borrowed - ev.returned - ev.purchased);
       }
       pd.outstanding = balance;
@@ -223,7 +222,6 @@ const StockAndGalonPage = () => {
   setDebts(Object.values(grouped));
   setRefreshing(false);
 };
-
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -386,7 +384,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-purple-600 hover:underline"
                       onClick={() => fetchDetail('dibeli')}
                     >
-                      {movements.filter((m) => m.type === 'galon_dibeli').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
+                      {movements.filter((m) => m.type === 'galon_dibeli' || m.type === 'galon_dijual_ke_pusat').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                   <div className="p-4 rounded-lg border bg-gray-50">
@@ -395,7 +393,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-green-600 hover:underline"
                       onClick={() => fetchDetail('dikembalikan')}
                     >
-                      {movements.filter((m) => m.type === 'pengembalian').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
+                      {movements.filter((m) => m.type === 'pengembalian' || m.type === 'galon_dikembalikan_ke_pusat').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                   <div className="p-4 rounded-lg border bg-gray-50">
@@ -404,7 +402,7 @@ const StockAndGalonPage = () => {
                       className="text-3xl font-bold text-yellow-600 hover:underline"
                       onClick={() => fetchDetail('dipinjam')}
                     >
-                      {movements.filter((m) => m.type === 'pinjam_kembali').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
+                      {movements.filter((m) => m.type === 'pinjam_kembali' || m.type === 'keluar_pinjam_dari_pusat').reduce((sum, m) => sum + Number(m.qty || 0), 0)}
                     </button>
                   </div>
                 </div>
@@ -481,7 +479,7 @@ const StockAndGalonPage = () => {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                            Tidak ada pergerakan galon untuk produk ini.
+                            Tidak ada utang galon untuk produk ini.
                           </TableCell>
                         </TableRow>
                       )}
@@ -561,6 +559,7 @@ const StockAndGalonPage = () => {
                   placeholder="Jumlah Stok"
                   value={newMovementForm.qty}
                   onChange={handleInputChange}
+                  
                   required
                 />
                 <Input

@@ -1,3 +1,4 @@
+// src/pages/CentralOrderFormPage.jsx
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -48,7 +49,7 @@ const CentralOrderFormPage = () => {
   
   // Tab 1 State
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
-  const [orderItems, setOrderItems] = useState([{ product_id: '', qty: 1, price: 0 }]);
+  const [orderItems, setOrderItems] = useState([]);
   const [activeTab, setActiveTab] = useState('order-items');
 
   // Tab 2 State
@@ -57,7 +58,7 @@ const CentralOrderFormPage = () => {
     driver_tip: '',
     notes: '',
     attachments: [],
-    admin_fee: 0, // State baru untuk biaya admin
+    admin_fee: 0,
   });
   const [uploading, setUploading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -80,7 +81,10 @@ const CentralOrderFormPage = () => {
     return orderItems.reduce((sum, item) => {
       const qty = parseFloat(item.qty) || 0;
       const price = parseFloat(item.price) || 0;
-      return sum + (qty * price);
+      const soldEmptyQty = parseFloat(item.sold_empty_to_central) || 0;
+      const soldEmptyPrice = parseFloat(item.sold_empty_price) || 0;
+      
+      return sum + (qty * price) + (soldEmptyQty * soldEmptyPrice);
     }, 0);
   }, [orderItems]);
 
@@ -124,6 +128,7 @@ const CentralOrderFormPage = () => {
       setIsNewOrder(false);
       await fetchCentralOrder(id);
     } else {
+      setOrderItems([{ product_id: '', qty: 1, price: 0, is_returnable: false, returned_to_central: 0, borrowed_from_central: 0, sold_empty_to_central: 0, sold_empty_price: 0 }]);
       setLoading(false);
     }
   };
@@ -133,9 +138,9 @@ const CentralOrderFormPage = () => {
 
     const { data: productsData, error: productsError } = await supabase
       .from('products')
-      .select('id, name, stock, purchase_price, sort_order')
+      .select('id, name, stock, purchase_price, is_returnable, empty_bottle_price, sort_order')
       .eq('company_id', companyId)
-      .order('sort_order', { ascending: true }) // <--- Perubahan di sini
+      .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     
     if (productsError) {
@@ -170,7 +175,7 @@ const CentralOrderFormPage = () => {
       .from('central_orders')
       .select(`
         *,
-        items:central_order_items (product_id, qty, price, received_qty, products(name, stock, purchase_price))
+        items:central_order_items (product_id, qty, price, received_qty, products(id, name, stock, purchase_price, is_returnable, empty_bottle_price))
       `)
       .eq('id', orderId)
       .eq('company_id', companyId)
@@ -198,6 +203,11 @@ const CentralOrderFormPage = () => {
       product_name: item.products.name,
       current_stock: item.products.stock,
       price: item.products.purchase_price,
+      is_returnable: item.products.is_returnable,
+      returned_to_central: orderData.returned_to_central?.[item.product_id] || 0,
+      borrowed_from_central: orderData.borrowed_from_central?.[item.product_id] || 0,
+      sold_empty_to_central: orderData.sold_empty_to_central?.[item.product_id] || 0,
+      sold_empty_price: item.products.empty_bottle_price || 0,
     })));
     setReceivedItems(orderData.items.map(item => ({
       product_id: item.product_id,
@@ -227,16 +237,27 @@ const CentralOrderFormPage = () => {
     const newItems = [...orderItems];
     newItems[index][field] = value;
     
-    // Mengisi harga secara otomatis dari purchasePrices
-    if (field === 'product_id' && purchasePrices[value]) {
-        newItems[index].price = purchasePrices[value];
+    // Mengisi harga secara otomatis dari purchasePrices dan empty_bottle_price
+    if (field === 'product_id') {
+        const selectedProduct = products.find(p => p.id === value);
+        if (selectedProduct) {
+            newItems[index].price = selectedProduct.purchase_price;
+            newItems[index].is_returnable = selectedProduct.is_returnable;
+            newItems[index].sold_empty_price = selectedProduct.empty_bottle_price;
+        }
     }
     
     setOrderItems(newItems);
   };
 
+  const handleGalonDetailChange = (index, field, value) => {
+    const newItems = [...orderItems];
+    newItems[index][field] = value;
+    setOrderItems(newItems);
+  };
+
   const handleAddItem = () => {
-    setOrderItems([...orderItems, { product_id: '', qty: 1, price: 0 }]);
+    setOrderItems([...orderItems, { product_id: '', qty: 1, price: 0, is_returnable: false, returned_to_central: 0, borrowed_from_central: 0, sold_empty_to_central: 0, sold_empty_price: 0 }]);
   };
 
   const handleRemoveItem = (index) => {
@@ -251,6 +272,19 @@ const CentralOrderFormPage = () => {
         setLoading(false);
         return;
     }
+    
+    const returnedToCentral = {};
+    const borrowedFromCentral = {};
+    const soldEmptyToCentral = {};
+
+    orderItems.forEach(item => {
+      if(item.is_returnable){
+        returnedToCentral[item.product_id] = parseFloat(item.returned_to_central) || 0;
+        borrowedFromCentral[item.product_id] = parseFloat(item.borrowed_from_central) || 0;
+        soldEmptyToCentral[item.product_id] = parseFloat(item.sold_empty_to_central) || 0;
+      }
+    });
+
     try {
       if (isNewOrder) {
         const { data, error } = await supabase
@@ -261,6 +295,9 @@ const CentralOrderFormPage = () => {
             user_id: userProfile.id,
             status: 'draft',
             attachments: [],
+            returned_to_central: returnedToCentral,
+            borrowed_from_central: borrowedFromCentral,
+            sold_empty_to_central: soldEmptyToCentral,
           })
           .select()
           .single();
@@ -291,7 +328,12 @@ const CentralOrderFormPage = () => {
       } else {
         const { error } = await supabase
           .from('central_orders')
-          .update({ order_date: orderDate })
+          .update({
+            order_date: orderDate,
+            returned_to_central: returnedToCentral,
+            borrowed_from_central: borrowedFromCentral,
+            sold_empty_to_central: soldEmptyToCentral,
+          })
           .eq('id', id);
         if (error) throw error;
 
@@ -327,7 +369,7 @@ const CentralOrderFormPage = () => {
     }
   };
 
-  // Tab 2 Logic (upload to proofs/central-orders/{company}/{order}/)
+  // Tab 2 Logic
   const handleFileUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -382,7 +424,7 @@ const CentralOrderFormPage = () => {
       const { error } = await supabase
         .from('central_orders')
         .update({
-          total_transaction: totalOrderValue, // Menggunakan totalOrderValue
+          total_transaction: totalOrderValue,
           driver_tip: transactionDetails.driver_tip || null,
           notes: transactionDetails.notes || '',
         })
@@ -488,22 +530,31 @@ const CentralOrderFormPage = () => {
         if (movementError) throw movementError;
       }
       
-      const updatedItemsPayload = receivedItems.map(receivedItem => {
-      const originalItem = orderItems.find(
-        (item) => item.product_id === receivedItem.product_id
-      );
-      return {
-        central_order_id: id,
-        product_id: receivedItem.product_id,
-        received_qty: receivedItem.received_qty,
-        qty: originalItem ? originalItem.qty : 0,
-        price: originalItem ? originalItem.price : 0,
-      };
-    });
+      // Update stock for received items
+      for (const item of itemsToLog) {
+        const { error: stockUpdateError } = await supabase.rpc('update_product_stock', {
+            product_id: item.product_id,
+            qty_to_add: item.received_qty,
+        });
+        if (stockUpdateError) throw stockUpdateError;
+      }
 
-    const { error: itemUpdateError } = await supabase
-      .from('central_order_items')
-      .upsert(updatedItemsPayload, { onConflict: ['central_order_id', 'product_id'] });
+      const updatedItemsPayload = receivedItems.map(receivedItem => {
+        const originalItem = orderItems.find(
+          (item) => item.product_id === receivedItem.product_id
+        );
+        return {
+          central_order_id: id,
+          product_id: receivedItem.product_id,
+          received_qty: receivedItem.received_qty,
+          qty: originalItem ? originalItem.qty : 0,
+          price: originalItem ? originalItem.price : 0,
+        };
+      });
+
+      const { error: itemUpdateError } = await supabase
+        .from('central_order_items')
+        .upsert(updatedItemsPayload, { onConflict: ['central_order_id', 'product_id'] });
       if (itemUpdateError) throw itemUpdateError;
       
       toast.success('Penerimaan barang berhasil dicatat dan stok diperbarui!');
@@ -617,7 +668,7 @@ const CentralOrderFormPage = () => {
                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                         placeholder="Harga"
                         onWheel={handleInputWheel}
-                        readOnly // Membuat input read-only
+                        readOnly
                         className="bg-gray-100 cursor-not-allowed"
                       />
                     </div>
@@ -630,6 +681,49 @@ const CentralOrderFormPage = () => {
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    {item.is_returnable && (
+                        <div className="space-y-4 col-span-full mt-4 p-4 border rounded-md">
+                          <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
+                            <Package className="h-4 w-4" />
+                            Detail Galon ({products.find(p => p.id === item.product_id)?.name})
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`galon-returned-${index}`}>Galon Dikembalikan ke Pusat</Label>
+                              <Input
+                                id={`galon-returned-${index}`}
+                                type="number"
+                                placeholder="0"
+                                value={item.returned_to_central}
+                                onChange={(e) => handleGalonDetailChange(index, 'returned_to_central', e.target.value)}
+                                onWheel={handleInputWheel}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`galon-borrowed-${index}`}>Galon Dipinjam dari Pusat</Label>
+                              <Input
+                                id={`galon-borrowed-${index}`}
+                                type="number"
+                                placeholder="0"
+                                value={item.borrowed_from_central}
+                                onChange={(e) => handleGalonDetailChange(index, 'borrowed_from_central', e.target.value)}
+                                onWheel={handleInputWheel}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`galon-sold-${index}`}>Galon Kosong Dibeli ke Pusat</Label>
+                              <Input
+                                id={`galon-sold-${index}`}
+                                type="number"
+                                placeholder="0"
+                                value={item.sold_empty_to_central}
+                                onChange={(e) => handleGalonDetailChange(index, 'sold_empty_to_central', e.target.value)}
+                                onWheel={handleInputWheel}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -924,9 +1018,10 @@ const CentralOrderFormPage = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <Button onClick={handleFinalizeReceipt} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pengecekan & Perbarui Stok'}
-                </Button>
+              
+              <Button onClick={handleFinalizeReceipt} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pengecekan & Perbarui Stok'}
+              </Button>
               </CardContent>
             </Card>
           </TabsContent>
