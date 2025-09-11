@@ -149,24 +149,30 @@ const ReportsPage = () => {
         acc[item.product_id] = (acc[item.product_id] || 0) + qty;
         return acc;
       }, {});
-
+      
+      // Data for the main products chart (all products)
       const allProductsData = safeProducts.map((p) => {
-        const stock = p.is_returnable ? p.empty_bottle_stock : p.stock;
-        const demand = p.is_returnable ? (demandByEmptyBottle[p.id] || 0) : (demandByProduct[p.id] || 0);
-        const diff = stock - demand;
-
         return {
           id: p.id,
           name: p.name,
-          stock,
-          demand,
-          diff,
-          type: p.is_returnable ? 'Galon Kosong' : 'Produk',
+          stock: p.stock,
+          demand: (demandByProduct[p.id] || 0),
+          diff: p.stock - (demandByProduct[p.id] || 0),
+          type: p.is_returnable ? 'Galon' : 'Non-Galon',
         };
       });
 
-      const productChartData = allProductsData.filter(p => p.type === 'Produk');
-      const galonChartData = allProductsData.filter(p => p.type === 'Galon Kosong');
+      // Data for the specific empty bottle chart (only returnable products)
+      const galonChartData = safeProducts.filter(p => p.is_returnable).map((p) => {
+        return {
+          id: p.id,
+          name: p.name,
+          stock: p.empty_bottle_stock,
+          demand: (demandByEmptyBottle[p.id] || 0),
+          diff: p.empty_bottle_stock - (demandByEmptyBottle[p.id] || 0),
+          type: 'Galon Kosong',
+        };
+      });
 
       const demandTableData = safeProducts.map((p) => ({
         name: p.name,
@@ -179,7 +185,7 @@ const ReportsPage = () => {
 
       setReportData({
         products: safeProducts,
-        productChartData,
+        productChartData: allProductsData,
         galonChartData,
         demand: demandTableData,
         diff: diffTableData,
@@ -321,14 +327,14 @@ const ReportsPage = () => {
         </CardContent>
       </Card>
       
-      {/* GRAFIK 1: Stok Produk vs Permintaan */}
+      {/* GRAFIK 1: Stok Produk Non-Galon vs Permintaan */}
       <Card className="border-0 shadow-lg bg-white">
         <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok Produk vs Permintaan
+            <TrendingUp className="h-6 w-6" /> Stok Produk (Semua) vs Permintaan
           </CardTitle>
           <CardDescription className="text-gray-200">
-            Perbandingan visual stok tersedia dengan total permintaan dari pesanan aktif untuk produk non-galon.
+            Perbandingan visual stok produk yang tersedia dengan total permintaan dari pesanan aktif, untuk semua produk.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -369,8 +375,11 @@ const ReportsPage = () => {
       <Card className="border-0 shadow-lg bg-white">
         <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok Product Returnable
+            <TrendingUp className="h-6 w-6" /> Stok Galon Kosong vs Permintaan
           </CardTitle>
+          <CardDescription className="text-gray-200">
+            Perbandingan visual stok galon kosong dengan total permintaan dari pesanan aktif.
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           {reportData.galonChartData && reportData.galonChartData.length > 0 ? (
@@ -395,6 +404,7 @@ const ReportsPage = () => {
                   <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
                   <Legend verticalAlign="top" align="right" height={36} />
                   <Line type="monotone" dataKey="stock" name="Stok Galon" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="demand" name="Permintaan" stroke="#ff6b6b" strokeWidth={2} dot={{ r: 2 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
