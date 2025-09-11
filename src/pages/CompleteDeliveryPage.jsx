@@ -385,6 +385,18 @@ const CompleteDeliveryPage = () => {
             <CardDescription>Masukkan detail pembayaran, pengembalian, dan biaya.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
+
+            <div className="grid gap-2">
+              <Label htmlFor="transportCost">Biaya Transportasi</Label>
+              <Input
+                id="transportCost"
+                type="number"
+                placeholder="Biaya Transportasi"
+                alue={transportCost === '0' ? '' : transportCost}
+                onChange={(e) => setTransportCost(e.target.value)}
+              />
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="paymentStatus">Status Pembayaran</Label>
               <Select value={paymentStatus} onValueChange={setPaymentStatus}>
@@ -548,7 +560,7 @@ const CompleteDeliveryPage = () => {
                             Math.max(0, (item.qty || 0) - (parseInt(itemQuantities[item.product_id]?.returnedQty) || 0) - (parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty) || 0))
                           }
                           readOnly
-                          className="bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+                          className="bg-gray-100 cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -556,17 +568,6 @@ const CompleteDeliveryPage = () => {
                 </div>
               </>
             )}
-
-            <div className="grid gap-2">
-              <Label htmlFor="transportCost">Biaya Transportasi</Label>
-              <Input
-                id="transportCost"
-                type="number"
-                placeholder="Biaya Transportasi"
-                alue={transportCost === '0' ? '' : transportCost}
-                onChange={(e) => setTransportCost(e.target.value)}
-              />
-            </div>
             
             <div className="grid gap-2">
               <Label htmlFor="proofFile">Unggah Bukti Pengiriman</Label>

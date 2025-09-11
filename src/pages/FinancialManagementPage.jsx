@@ -294,7 +294,7 @@ const FinancialManagementPage = () => {
                   <SelectContent>
                     {paymentMethods.map(method => (
                       <SelectItem key={method.id} value={method.id}>
-                        {method.method_name}
+                        {method.method_name} ({method.account_name})
                       </SelectItem>
                     ))}
                   </SelectContent>

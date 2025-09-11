@@ -150,20 +150,21 @@ serve(async (req) => {
       if (paymentInsertError) throw paymentInsertError;
     }
 
-    if (transportCost > 0) {
-      const { error: financialTransactionError } = await supabase
-        .from('financial_transactions')
-        .insert({
-          company_id: company_id,
-          type: 'income',
-          amount: transportCost,
-          description: `Pemasukan dari biaya transportasi pesanan #${orderId.slice(0, 8)}`,
-          payment_method_id: paymentMethodId,
-          source_table: 'orders',
-          source_id: orderId,
-        });
-      if (financialTransactionError) throw financialTransactionError;
-    }
+    // --- BAGIAN YANG DIHAPUS (SEBELUMNYA MENYEBABKAN DOUBLE LOG) ---
+    // if (transportCost > 0) {
+    //   const { error: financialTransactionError } = await supabase
+    //     .from('financial_transactions')
+    //     .insert({
+    //       company_id: company_id,
+    //       type: 'income',
+    //       amount: transportCost,
+    //       description: `Pemasukan dari biaya transportasi pesanan #${orderId.slice(0, 8)}`,
+    //       payment_method_id: paymentMethodId,
+    //       source_table: 'orders',
+    //       source_id: orderId,
+    //     });
+    //   if (financialTransactionError) throw financialTransactionError;
+    // }
 
     if (totalPurchaseCost > 0) {
        const { error: emptyBottlePurchaseError } = await supabase
