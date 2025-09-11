@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 
 const StockAndGalonPage = () => {
-  const { companyId, userProfile } = useAuth();
+  const { companyId } = useAuth();
   const [products, setProducts] = useState([]);
   const [debts, setDebts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState(null);
@@ -244,11 +244,6 @@ const StockAndGalonPage = () => {
   
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (userProfile?.role !== 'admin') {
-      toast.error('Anda tidak memiliki izin untuk melakukan penyesuaian stok.');
-      return;
-    }
-
     setLoading(true);
 
     const { type, qty, notes, movement_for } = newMovementForm;
@@ -372,9 +367,7 @@ const StockAndGalonPage = () => {
       <Tabs value={activeStockTab} onValueChange={(v) => setActiveStockTab(v)}>
         <TabsList className="w-full sm:w-auto grid grid-cols-2 bg-gray-100 text-[#10182b]">
           <TabsTrigger value="summary" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Ringkasan Stok</TabsTrigger>
-          {userProfile?.role === 'admin' && (
-            <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
-          )}
+          <TabsTrigger value="adjustment" className="data-[state=active]:bg-[#10182b] data-[state=active]:text-white data-[state=active]:shadow-sm">Penyesuaian Stok</TabsTrigger>
         </TabsList>
         
         <TabsContent value="summary" className="pt-4 space-y-6">
@@ -537,116 +530,115 @@ const StockAndGalonPage = () => {
           </Card>
         </TabsContent>
 
-        {userProfile?.role === 'admin' && (
-          <TabsContent value="adjustment" className="pt-4 space-y-6">
-            <Card className="border-0 shadow-sm bg-white">
-              <CardHeader>
-                <CardTitle className="text-[#10182b]">Penyesuaian Stok</CardTitle>
-                <CardDescription>
-                  Tambahkan stok masuk atau keluar secara manual.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="movement-for">Stok yang Disesuaikan</Label>
-                    <Select
-                      value={newMovementForm.movement_for}
-                      onValueChange={(val) => setNewMovementForm({ ...newMovementForm, movement_for: val })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Pilih Jenis Stok" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="product_stock">Stok Produk</SelectItem>
-                        {isReturnable && <SelectItem value="empty_bottle_stock">Stok Galon Kosong</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="movement-type">Jenis Pergerakan</Label>
-                    <Select
-                      value={newMovementForm.type}
-                      onValueChange={(val) => setNewMovementForm({ ...newMovementForm, type: val })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Pilih Jenis Pergerakan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="masuk">Stok Masuk</SelectItem>
-                        <SelectItem value="keluar">Stok Keluar</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="movement-qty">Jumlah</Label>
-                    <Input
-                      type="number"
-                      id="movement-qty"
-                      name="qty"
-                      placeholder="Jumlah Stok"
-                      value={newMovementForm.qty}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="movement-notes">Catatan</Label>
-                    <Input
-                      id="movement-notes"
-                      name="notes"
-                      placeholder="Catatan (Opsional)"
-                      value={newMovementForm.notes}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Penyesuaian'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-0 shadow-sm bg-white">
-              <CardHeader>
-                <CardTitle className="text-[#10182b]">Riwayat Penyesuaian Manual</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="rounded-md border-t overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
-                        <TableHead className="text-[#10182b]">Produk</TableHead>
-                        <TableHead className="text-[#10182b]">Jenis</TableHead>
-                        <TableHead className="text-[#10182b]">Jumlah</TableHead>
-                        <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {manualMovements.map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
-                          <TableCell>{m.products?.name}</TableCell>
-                          <TableCell>{m.type}</TableCell>
-                          <TableCell>{m.qty}</TableCell>
-                          <TableCell>{m.notes}</TableCell>
-                        </TableRow>
-                      ))}
-                      {manualMovements.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            Tidak ada data penyesuaian manual.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+        <TabsContent value="adjustment" className="pt-4 space-y-6">
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Penyesuaian Stok</CardTitle>
+              <CardDescription>
+                Tambahkan stok masuk atau keluar secara manual.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="movement-for">Stok yang Disesuaikan</Label>
+                  <Select
+                    value={newMovementForm.movement_for}
+                    onValueChange={(val) => setNewMovementForm({ ...newMovementForm, movement_for: val })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Pilih Jenis Stok" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="product_stock">Stok Produk</SelectItem>
+                      {isReturnable && <SelectItem value="empty_bottle_stock">Stok Galon Kosong</SelectItem>}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+                <div className="space-y-2">
+                  <Label htmlFor="movement-type">Jenis Pergerakan</Label>
+                  <Select
+                    value={newMovementForm.type}
+                    onValueChange={(val) => setNewMovementForm({ ...newMovementForm, type: val })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Pilih Jenis Pergerakan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="masuk">Stok Masuk</SelectItem>
+                      <SelectItem value="keluar">Stok Keluar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="movement-qty">Jumlah</Label>
+                  <Input
+                    type="number"
+                    id="movement-qty"
+                    name="qty"
+                    placeholder="Jumlah Stok"
+                    value={newMovementForm.qty}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="movement-notes">Catatan</Label>
+                  <Input
+                    id="movement-notes"
+                    name="notes"
+                    placeholder="Catatan (Opsional)"
+                    value={newMovementForm.notes}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Catat Penyesuaian'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="text-[#10182b]">Riwayat Penyesuaian Manual</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="rounded-md border-t overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                      <TableHead className="text-[#10182b]">Produk</TableHead>
+                      <TableHead className="text-[#10182b]">Jenis</TableHead>
+                      <TableHead className="text-[#10182b]">Jumlah</TableHead>
+                      <TableHead className="min-w-[200px] text-[#10182b]">Catatan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manualMovements.map((m) => (
+                      <TableRow key={m.id}>
+                        <TableCell>{new Date(m.movement_date).toLocaleDateString()}</TableCell>
+                        <TableCell>{m.products?.name}</TableCell>
+                        <TableCell>{m.type}</TableCell>
+                        <TableCell>{m.qty}</TableCell>
+                        <TableCell>{m.notes}</TableCell>
+                      </TableRow>
+                    ))}
+                    {manualMovements.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          Tidak ada data penyesuaian manual.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
     </div>
   );

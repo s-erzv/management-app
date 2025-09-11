@@ -34,7 +34,9 @@ const UpdateStockPage = () => {
   const [manualCounts, setManualCounts] = useState({});
   const [stockDifferences, setStockDifferences] = useState([]);
   const [reconciliationId, setReconciliationId] = useState(null);
-  const canAdjustStock = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  
+  // Perubahan di sini: menyertakan 'user' sebagai peran yang bisa menyesuaikan stok
+  const canAdjustStock = userProfile?.role === 'admin' || userProfile?.role === 'super_admin' || userProfile?.role === 'user';
 
   useEffect(() => {
     if (companyId) {
