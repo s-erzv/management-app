@@ -334,13 +334,13 @@ const AddProductPage = () => {
 
             {productForm.is_returnable && (
                 <div className="space-y-2">
-                <Label htmlFor="empty_bottle_price">Harga Galon Kosong</Label>
+                <Label htmlFor="empty_bottle_price">Harga Product returnable kosong</Label>
                 <Input
                     id="empty_bottle_price"
                     name="empty_bottle_price"
                     type="number"
                     
-                    placeholder="Harga jual galon kosong"
+                    placeholder="Harga jual Product Returnable"
                     value={productForm.empty_bottle_price}
                     onChange={handleProductFormChange}
                     onWheel={handleInputWheel}

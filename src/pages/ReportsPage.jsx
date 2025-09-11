@@ -369,7 +369,7 @@ const ReportsPage = () => {
       <Card className="border-0 shadow-lg bg-white">
         <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok Galon Kosong
+            <TrendingUp className="h-6 w-6" /> Stok Product Returnable
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">

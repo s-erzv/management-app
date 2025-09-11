@@ -174,7 +174,7 @@ const ProductSettings = () => {
                   <TableHead className="min-w-[150px]">Supplier</TableHead>
                   <TableHead className="min-w-[100px]">Stok</TableHead>
                   <TableHead className="min-w-[150px]">Harga Beli</TableHead>
-                  <TableHead className="min-w-[150px]">Harga Galon Kosong</TableHead>
+                  <TableHead className="min-w-[150px]">Harga Product Returnable Kosong</TableHead>
                   <TableHead className="min-w-[150px]">Dapat Dikembalikan</TableHead>
                   <TableHead className="min-w-[120px]">Aksi</TableHead>
                 </TableRow>
