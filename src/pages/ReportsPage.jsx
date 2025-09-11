@@ -34,7 +34,8 @@ const ReportsPage = () => {
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({
     products: [],
-    chartData: [],
+    productChartData: [],
+    galonChartData: [],
     demand: [],
     diff: [],
     reconciliations: [],
@@ -63,7 +64,6 @@ const ReportsPage = () => {
       toast.error('Gagal memuat kategori.');
     } else {
       setCategories(data || []);
-      // refresh subcategories if current selected category exists
       const selectedCategory = data?.find((c) => String(c.id) === String(selectedCategoryId));
       setSubCategories(selectedCategory ? (selectedCategory.subcategories || []) : []);
     }
@@ -76,9 +76,9 @@ const ReportsPage = () => {
     try {
       let productsQuery = supabase
         .from("products")
-        .select("id, name, stock, is_returnable, sort_order")
+        .select("id, name, stock, empty_bottle_stock, is_returnable, sort_order")
         .eq("company_id", companyId)
-        .order('sort_order', { ascending: true }); // Perubahan: Menambahkan order by sort_order
+        .order('sort_order', { ascending: true });
 
       if (selectedCategoryId !== 'all') {
         productsQuery = productsQuery.eq('category_id', selectedCategoryId);
@@ -87,9 +87,9 @@ const ReportsPage = () => {
         productsQuery = productsQuery.eq('subcategory_id', selectedSubCategoryId);
       }
 
-     const { data: productsData, error: productError } = await productsQuery;
+      const { data: productsData, error: productError } = await productsQuery;
       if (productError) throw productError;
-      const safeProducts = (productsData || []).map(p => ({ ...p, stock: Number(p.stock) || 0 }));
+      const safeProducts = (productsData || []).map(p => ({ ...p, stock: Number(p.stock) || 0, empty_bottle_stock: Number(p.empty_bottle_stock) || 0 }));
 
       const productIds = safeProducts.map(p => p.id);
 
@@ -110,15 +110,26 @@ const ReportsPage = () => {
       const filteredOrderIds = (filteredOrders || []).map((order) => order.id);
 
       let demandItems = [];
+      let galonDemands = [];
+      let galonSupplies = [];
+
       if (filteredOrderIds.length > 0 && productIds.length > 0) {
         const { data: items, error: demandItemsError } = await supabase
           .from("order_items")
           .select(`product_id, qty`)
           .in("order_id", filteredOrderIds)
           .in("product_id", productIds);
-        
         if (demandItemsError) throw demandItemsError;
         demandItems = items || [];
+
+        const { data: galonItems, error: galonItemsError } = await supabase
+          .from("order_galon_items")
+          .select(`product_id, returned_qty, purchased_empty_qty`)
+          .in("order_id", filteredOrderIds)
+          .in("product_id", productIds);
+        if (galonItemsError) throw galonItemsError;
+        galonDemands = galonItems.map(item => ({ product_id: item.product_id, qty: Number(item.purchased_empty_qty) || 0 }));
+        galonSupplies = galonItems.map(item => ({ product_id: item.product_id, qty: Number(item.returned_qty) || 0 }));
       }
 
       const demandByProduct = (demandItems || []).reduce((acc, item) => {
@@ -126,29 +137,50 @@ const ReportsPage = () => {
         acc[item.product_id] = (acc[item.product_id] || 0) + qty;
         return acc;
       }, {});
+      
+      const demandByEmptyBottle = (galonDemands || []).reduce((acc, item) => {
+        const qty = Number(item.qty) || 0;
+        acc[item.product_id] = (acc[item.product_id] || 0) + qty;
+        return acc;
+      }, {});
 
+      const supplyByEmptyBottle = (galonSupplies || []).reduce((acc, item) => {
+        const qty = Number(item.qty) || 0;
+        acc[item.product_id] = (acc[item.product_id] || 0) + qty;
+        return acc;
+      }, {});
 
-      const chartData = safeProducts.map((p) => ({
-        id: p.id,
-        name: p.name,
-        stock: p.stock,
-        demand: demandByProduct[p.id] || 0,
-        diff: (p.stock) - (demandByProduct[p.id] || 0),
-      }));
+      const allProductsData = safeProducts.map((p) => {
+        const stock = p.is_returnable ? p.empty_bottle_stock : p.stock;
+        const demand = p.is_returnable ? (demandByEmptyBottle[p.id] || 0) : (demandByProduct[p.id] || 0);
+        const diff = stock - demand;
+
+        return {
+          id: p.id,
+          name: p.name,
+          stock,
+          demand,
+          diff,
+          type: p.is_returnable ? 'Galon Kosong' : 'Produk',
+        };
+      });
+
+      const productChartData = allProductsData.filter(p => p.type === 'Produk');
+      const galonChartData = allProductsData.filter(p => p.type === 'Galon Kosong');
 
       const demandTableData = safeProducts.map((p) => ({
         name: p.name,
-        demand: demandByProduct[p.id] || 0,
+        demand: p.is_returnable ? (demandByEmptyBottle[p.id] || 0) : (demandByProduct[p.id] || 0),
       }));
 
-      const diffTableData = chartData
-        .map(({ name, stock, demand, diff }) => ({ name, stock, demand, diff }))
-        // optional: sort by lowest diff to highlight risiko
+      const diffTableData = allProductsData
+        .map(({ name, stock, demand, diff, type }) => ({ name, stock, demand, diff, type }))
         .sort((a, b) => a.diff - b.diff);
 
       setReportData({
         products: safeProducts,
-        chartData,
+        productChartData,
+        galonChartData,
         demand: demandTableData,
         diff: diffTableData,
         reconciliations: reconciliationsData || [],
@@ -159,7 +191,8 @@ const ReportsPage = () => {
       toast.error('Gagal memuat data laporan.');
       setReportData({
         products: [],
-        chartData: [],
+        productChartData: [],
+        galonChartData: [],
         demand: [],
         diff: [],
         reconciliations: [],
@@ -181,7 +214,6 @@ const ReportsPage = () => {
   };
 
   const formatTick = (val = '') => {
-    // potong nama yang terlalu panjang agar tidak kepotong; tampilkan 18 char + …
     const s = String(val);
     return s.length > 18 ? `${s.slice(0, 18)}…` : s;
   };
@@ -195,10 +227,10 @@ const ReportsPage = () => {
     const today = new Date().toISOString().slice(0, 10);
     const filename = `laporan_stok_permintaan_${today}.csv`;
     
-    let csvContent = "Produk,Stok,Permintaan,Selisih\n";
+    let csvContent = "Produk,Jenis Stok,Stok,Permintaan,Selisih\n";
     
     reportData.diff.forEach(row => {
-      csvContent += `${row.name},${row.stock},${row.demand},${row.diff}\n`;
+      csvContent += `${row.name},${row.type},${row.stock},${row.demand},${row.diff}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -221,8 +253,8 @@ const ReportsPage = () => {
     );
   }
 
-  // Hitung tinggi grafik secara dinamis
-  const chartHeight = Math.max(300, reportData.chartData.length * 25);
+  const chartHeight = Math.max(300, reportData.productChartData.length * 25);
+  const galonChartHeight = Math.max(300, reportData.galonChartData.length * 25);
 
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
@@ -241,18 +273,18 @@ const ReportsPage = () => {
         </Button>
       </div>
 
-      {/* GRAFIK: stok vs permintaan */}
+      {/* FILTER SECTIONS */}
       <Card className="border-0 shadow-lg bg-white">
-        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+        <CardHeader className="bg-gray-50 rounded-t-lg">
           <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok vs Permintaan per Produk
+            <TrendingUp className="h-6 w-6" /> Filter Laporan
           </CardTitle>
-          <CardDescription className="text-gray-200">
-            Perbandingan visual stok tersedia dengan total permintaan dari pesanan aktif.
+          <CardDescription>
+            Pilih kategori atau subkategori untuk menyaring laporan.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="space-y-2">
               <Label htmlFor="category-filter">Filter Kategori</Label>
               <Select value={selectedCategoryId} onValueChange={handleCategoryChange}>
@@ -286,12 +318,25 @@ const ReportsPage = () => {
               </Select>
             </div>
           </div>
-
-          {reportData.chartData && reportData.chartData.length > 0 ? (
+        </CardContent>
+      </Card>
+      
+      {/* GRAFIK 1: Stok Produk vs Permintaan */}
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <TrendingUp className="h-6 w-6" /> Stok Produk vs Permintaan
+          </CardTitle>
+          <CardDescription className="text-gray-200">
+            Perbandingan visual stok tersedia dengan total permintaan dari pesanan aktif untuk produk non-galon.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {reportData.productChartData && reportData.productChartData.length > 0 ? (
             <div className="border rounded-lg p-2">
               <ResponsiveContainer width="100%" height={chartHeight} className='p-1'>
                 <ComposedChart
-                  data={reportData.chartData}
+                  data={reportData.productChartData}
                   margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
@@ -315,12 +360,52 @@ const ReportsPage = () => {
             </div>
           ) : (
             <div className="flex justify-center items-center h-40">
-              <p className="text-muted-foreground">Tidak ada data untuk grafik.</p>
+              <p className="text-muted-foreground">Tidak ada data untuk grafik produk.</p>
             </div>
           )}
         </CardContent>
       </Card>
-      
+
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <TrendingUp className="h-6 w-6" /> Stok Galon Kosong
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {reportData.galonChartData && reportData.galonChartData.length > 0 ? (
+            <div className="border rounded-lg p-2">
+              <ResponsiveContainer width="100%" height={galonChartHeight} className='p-1'>
+                <ComposedChart
+                  data={reportData.galonChartData}
+                  margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    height={120}
+                    interval={0}
+                    angle={-90}
+                    textAnchor="end"
+                    tickMargin={12}
+                    tickFormatter={formatTick}
+                    minTickGap={0}
+                  />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                  <Legend verticalAlign="top" align="right" height={36} />
+                  <Line type="monotone" dataKey="stock" name="Stok Galon" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex justify-center items-center h-40">
+              <p className="text-muted-foreground">Tidak ada data untuk grafik galon kosong.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* DETAIL TABEL KOMPREHENSIF HORIZONTAL */}
       <Card className="border-0 shadow-lg bg-white">
         <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
@@ -336,27 +421,33 @@ const ReportsPage = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50">Produk</th>
-                  {reportData.chartData.map(product => (
+                  {reportData.diff.map(product => (
                     <th key={product.name} className="text-center p-3 border-b border-r">{product.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 <tr className="hover:bg-gray-50">
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Tipe Stok</th>
+                  {reportData.diff.map(product => (
+                    <td key={product.name} className="p-3 border-b border-r text-center">{product.type}</td>
+                  ))}
+                </tr>
+                <tr className="hover:bg-gray-50">
                   <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Stok</th>
-                  {reportData.chartData.map(product => (
+                  {reportData.diff.map(product => (
                     <td key={product.name} className="p-3 border-b border-r text-center">{product.stock}</td>
                   ))}
                 </tr>
                 <tr className="hover:bg-gray-50">
                   <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Permintaan</th>
-                  {reportData.chartData.map(product => (
+                  {reportData.diff.map(product => (
                     <td key={product.name} className="p-3 border-b border-r text-center">{product.demand}</td>
                   ))}
                 </tr>
                 <tr className="hover:bg-gray-50">
                   <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Selisih</th>
-                  {reportData.chartData.map(product => (
+                  {reportData.diff.map(product => (
                     <td
                       key={product.name}
                       className={`p-3 border-b border-r text-center font-medium ${product.diff < 0 ? 'text-red-600' : product.diff === 0 ? 'text-amber-600' : 'text-emerald-700'}`}
@@ -365,9 +456,9 @@ const ReportsPage = () => {
                     </td>
                   ))}
                 </tr>
-                {reportData.chartData.length === 0 && (
+                {reportData.diff.length === 0 && (
                   <tr>
-                    <td colSpan={reportData.chartData.length + 1} className="p-4 text-center text-muted-foreground">Belum ada data.</td>
+                    <td colSpan={reportData.diff.length + 1} className="p-4 text-center text-muted-foreground">Belum ada data.</td>
                   </tr>
                 )}
               </tbody>

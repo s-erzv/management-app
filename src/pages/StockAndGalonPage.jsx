@@ -86,8 +86,8 @@ const StockAndGalonPage = () => {
       .from('products')
       .select('*, is_returnable, empty_bottle_stock')
       .eq('company_id', companyId)
-      .order('sort_order', { ascending: true }) // Perbaikan: Mengurutkan berdasarkan sort_order
-      .order('name', { ascending: true }); // Perbaikan: Menambahkan urutan sekunder berdasarkan nama
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
 
     if (error) {
       console.error('Error fetching products:', error);
@@ -422,7 +422,7 @@ const StockAndGalonPage = () => {
             </Card>
           )}
 
-          {isReturnable && (
+          {/* {isReturnable && (
             <Card className="border-0 shadow-sm bg-white">
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
@@ -443,48 +443,52 @@ const StockAndGalonPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {debts.length > 0 ? (
-                        debts.map((debt) => {
-                          const pd = debt.products_debt[selectedProductId];
-                          const isSettled = pd?.outstanding === 0;
-                          
-                          if (!pd || isSettled) return null;
-                          
-                          return (
-                            <TableRow
-                              key={debt.id}
-                              className={`cursor-pointer hover:bg-gray-50`}
-                            >
-                              <TableCell className={`font-medium text-[#10182b]`}>
-                                {debt.name}
-                              </TableCell>
-                              <TableCell>{debt.phone}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={`${isSettled ? 'border-gray-300 text-gray-600' : 'border-red-300 text-red-700'}`}>
-                                  {pd?.outstanding || 0} galon
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={isSettled ? "outline" : "destructive"}>
-                                  {isSettled ? "Lunas" : "Belum Lunas"}
-                                </Badge>
-                              </TableCell>
+                        {debts.length > 0 ? (
+                            debts.map((debt) => {
+                                const pd = debt.products_debt[selectedProductId];
+                                
+                                // Logika yang diperbaiki: hanya tampilkan baris jika ada data utang untuk produk ini
+                                if (!pd) {
+                                    return null;
+                                }
+
+                                const isSettled = pd.outstanding === 0;
+                                
+                                return (
+                                    <TableRow
+                                        key={debt.id}
+                                        className={`cursor-pointer hover:bg-gray-50`}
+                                    >
+                                        <TableCell className={`font-medium text-[#10182b]`}>
+                                            {debt.name}
+                                        </TableCell>
+                                        <TableCell>{debt.phone}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className={`${isSettled ? 'border-gray-300 text-gray-600' : 'border-red-300 text-red-700'}`}>
+                                                {pd.outstanding} galon
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={isSettled ? "outline" : "destructive"}>
+                                                {isSettled ? "Lunas" : "Belum Lunas"}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                    Tidak ada utang galon untuk produk ini.
+                                </TableCell>
                             </TableRow>
-                          );
-                        })
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                            Tidak ada utang galon untuk produk ini.
-                          </TableCell>
-                        </TableRow>
-                      )}
+                        )}
                     </TableBody>
                   </Table>
                 </div>
               </CardContent>
             </Card>
-          )}
+          )} */}
 
           <Card className="border-0 shadow-sm bg-white">
             <CardHeader>

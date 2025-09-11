@@ -18,8 +18,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'react-hot-toast';
-import { Loader2, Database, Download } from 'lucide-react';
+import { Loader2, Database, Download, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 
 // Import for Excel
 import * as XLSX from 'xlsx';
@@ -399,6 +400,14 @@ const selectDisplayColumns = (data, type) => {
       'created_at_formatted': 'Tanggal Dibuat'
 
     },
+    
+    empty_bottle_stock: {
+      'id': 'ID Produk',
+      'name': 'Nama Produk',
+      'empty_bottle_stock': 'Stok Galon Kosong',
+      'empty_bottle_price_formatted': 'Harga Galon Kosong',
+      'company_name': 'Nama Perusahaan',
+    },
 
     orders: {
 
@@ -624,7 +633,7 @@ const selectDisplayColumns = (data, type) => {
 
       'created_at_formatted': 'Tanggal Dibuat'
 
-    }
+    },
 
   };
 
@@ -665,6 +674,8 @@ const DataExportPage = () => {
   const [companiesData, setCompaniesData] = useState({});
 
   const [processedData, setProcessedData] = useState({});
+  
+  const [searchQuery, setSearchQuery] = useState('');
 
 
 
@@ -879,19 +890,41 @@ const DataExportPage = () => {
         // Process data for display
 
         processedDataAll[comp.id] = {};
+        
+        // Process products table as a whole
+        const productsRawData = allData[comp.id].products;
+        if (productsRawData) {
+          const processedRawProducts = processDataForDisplay(productsRawData, 'products', lookupData);
+          processedDataAll[comp.id]['products'] = selectDisplayColumns(processedRawProducts, 'products');
+          
+          // Separate out the returnable products for the empty bottle stock table
+          const emptyBottleProducts = productsRawData.filter(p => p.is_returnable);
+          const processedEmptyBottleProducts = processDataForDisplay(emptyBottleProducts, 'products', lookupData);
+          processedDataAll[comp.id]['empty_bottle_stock'] = selectDisplayColumns(processedEmptyBottleProducts, 'empty_bottle_stock');
+        }
 
-        Object.entries(allData[comp.id]).forEach(([key, data]) => {
-
-          if (data) {
-
-            const processedRawData = processDataForDisplay(data, key, lookupData);
-
-            processedDataAll[comp.id][key] = selectDisplayColumns(processedRawData, key);
-
-          }
-
+        // Process other tables
+        const otherTables = [
+            'customers', 'orders', 'profiles', 'payment_methods', 'central_orders', 
+            'expense_reports', 'financial_transactions', 'invoices', 'payments', 
+            'stock_movements', 'categories', 'suppliers', 'subcategories', 'customer_statuses'
+        ];
+        
+        otherTables.forEach(tableName => {
+            const data = allData[comp.id][tableName];
+            if (data) {
+                const processedRawData = processDataForDisplay(data, tableName, lookupData);
+                processedDataAll[comp.id][tableName] = selectDisplayColumns(processedRawData, tableName);
+            }
         });
-
+        
+        if (userProfile.role === 'super_admin') {
+          const data = allData[comp.id].companies;
+          if (data) {
+            const processedRawData = processDataForDisplay(data, 'companies', lookupData);
+            processedDataAll[comp.id]['companies'] = selectDisplayColumns(processedRawData, 'companies');
+          }
+        }
       }
 
       
@@ -939,8 +972,19 @@ const DataExportPage = () => {
     Object.entries(dataToExport).forEach(([tableName, data]) => {
 
       if (data && data.length > 0) {
-
-        const sheetName = tableName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        
+        let sheetName;
+        // Map internal table names to more readable sheet names
+        switch(tableName) {
+            case 'empty_bottle_stock':
+                sheetName = 'Stok Galon Kosong';
+                break;
+            case 'stock_movements':
+                sheetName = 'Pergerakan Stok';
+                break;
+            default:
+                sheetName = tableName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
 
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheetName);
 
@@ -989,52 +1033,46 @@ const DataExportPage = () => {
     );
 
   }
-
   
-
-  // Tables definition
+  const filteredTables = (processedData[activeTab] && Object.keys(processedData[activeTab]).length > 0)
+    ? Object.keys(processedData[activeTab]).map(key => {
+        let name = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (key === 'empty_bottle_stock') name = 'Stok Galon Kosong';
+        if (key === 'products') name = 'Produk';
+        if (key === 'stock_movements') name = 'Pergerakan Stok';
+        
+        return {
+          name,
+          data: processedData[activeTab][key] || [],
+          fileName: key
+        };
+      })
+    : [];
 
   const tables = [
-
     ...(userProfile?.role === 'super_admin' ? [{ name: 'Perusahaan', data: processedData[activeTab]?.companies, fileName: 'companies' }] : []),
-
     { name: 'Pelanggan', data: processedData[activeTab]?.customers, fileName: 'customers' },
-
     { name: 'Produk', data: processedData[activeTab]?.products, fileName: 'products' },
-
+    { name: 'Stok Galon Kosong', data: processedData[activeTab]?.empty_bottle_stock, fileName: 'empty_bottle_stock' },
     { name: 'Pesanan', data: processedData[activeTab]?.orders, fileName: 'orders' },
-
     { name: 'Order Pusat', data: processedData[activeTab]?.central_orders, fileName: 'central_orders' },
-
     { name: 'Laporan Pengeluaran', data: processedData[activeTab]?.expense_reports, fileName: 'expense_reports' },
-
     { name: 'Transaksi Keuangan', data: processedData[activeTab]?.financial_transactions, fileName: 'financial_transactions' },
-
     { name: 'Invoices', data: processedData[activeTab]?.invoices, fileName: 'invoices' },
-
     { name: 'Pembayaran', data: processedData[activeTab]?.payments, fileName: 'payments' },
-
     { name: 'Pergerakan Stok', data: processedData[activeTab]?.stock_movements, fileName: 'stock_movements' },
-
     { name: 'Profil Pengguna', data: processedData[activeTab]?.profiles, fileName: 'profiles' },
-
     { name: 'Metode Pembayaran', data: processedData[activeTab]?.payment_methods, fileName: 'payment_methods' },
-
     { name: 'Kategori', data: processedData[activeTab]?.categories, fileName: 'categories' },
-
     { name: 'Sub Kategori', data: processedData[activeTab]?.subcategories, fileName: 'subcategories' },
-
     { name: 'Pemasok', data: processedData[activeTab]?.suppliers, fileName: 'suppliers' },
-
   ];
-
-
-
+  
   return (
 
     <div className="container mx-auto p-4 md:p-8">
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
 
         <h1 className="text-3xl font-bold flex items-center gap-3">
 
@@ -1051,8 +1089,17 @@ const DataExportPage = () => {
         </Button>
 
       </div>
-
-
+      
+      <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <Input
+            type="text"
+            placeholder="Cari data di semua tabel..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10"
+          />
+      </div>
 
       {userProfile.role === 'super_admin' ? (
 
@@ -1081,65 +1128,50 @@ const DataExportPage = () => {
             <TabsContent key={comp.id} value={comp.id} className="space-y-8 mt-6">
 
               {tables.map(table => (
-
                 <Card key={table.name} className="border-0 shadow-lg bg-white">
-
                   <CardHeader className="flex-row items-center justify-between">
-
                     <div>
-
                       <CardTitle>{table.name}</CardTitle>
-
                       <CardDescription>Total {table.data?.length || 0} entri</CardDescription>
-
                     </div>
-
                   </CardHeader>
-
                   <CardContent>
-
                     {table.data && table.data.length > 0 ? (
-
                       <div className="overflow-x-auto overflow-y-auto rounded-md border max-h-[400px]">
-
                         <Table className="table-auto min-w-max">
-
                           <TableHeader>
-
                             <TableRow>
-
                               {Object.keys(table.data[0]).map(key => (
-
                                 <TableHead key={key} className="whitespace-nowrap">{key}</TableHead>
-
                               ))}
-
                             </TableRow>
-
                           </TableHeader>
-
                           <TableBody>
-                            {table.data.map((row, index) => (
-                              <TableRow key={index}>
-                                {Object.values(row).map((value, idx) => (
-                                  <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
-                                    {value?.toString() || '-'}
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            ))}
+                            {table.data
+                              .filter(row => Object.values(row).some(value => String(value).toLowerCase().includes(searchQuery.toLowerCase())))
+                              .map((row, index) => (
+                                <TableRow key={index}>
+                                  {Object.values(row).map((value, idx) => (
+                                    <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
+                                      {value?.toString() || '-'}
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            {table.data.length > 0 && table.data.filter(row => Object.values(row).some(value => String(value).toLowerCase().includes(searchQuery.toLowerCase()))).length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={Object.keys(table.data[0]).length} className="text-center text-muted-foreground py-8">
+                                        Tidak ada data yang cocok dengan pencarian Anda.
+                                    </TableCell>
+                                </TableRow>
+                            )}
                           </TableBody>
-
                         </Table>
-
                       </div>
-
                     ) : (
-
                       <p>Tidak ada data untuk tabel ini.</p>
-
                     )}
-                                          </CardContent>
+                  </CardContent>
                 </Card>
               ))}
             </TabsContent>
@@ -1168,15 +1200,24 @@ const DataExportPage = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {table.data.map((row, index) => (
-                            <TableRow key={index}>
-                              {Object.values(row).map((value, idx) => (
-                                <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
-                                  {value?.toString() || '-'}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
+                          {table.data
+                            .filter(row => Object.values(row).some(value => String(value).toLowerCase().includes(searchQuery.toLowerCase())))
+                            .map((row, index) => (
+                              <TableRow key={index}>
+                                {Object.values(row).map((value, idx) => (
+                                  <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
+                                    {value?.toString() || '-'}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))}
+                          {table.data.length > 0 && table.data.filter(row => Object.values(row).some(value => String(value).toLowerCase().includes(searchQuery.toLowerCase()))).length === 0 && (
+                              <TableRow>
+                                  <TableCell colSpan={Object.keys(table.data[0]).length} className="text-center text-muted-foreground py-8">
+                                      Tidak ada data yang cocok dengan pencarian Anda.
+                                  </TableCell>
+                              </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </div>
