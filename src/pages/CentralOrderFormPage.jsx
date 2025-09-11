@@ -379,53 +379,108 @@ const CentralOrderFormPage = () => {
     }
   };
 
+  const handleDeliveryNotesUpload = async (e) => {
+    const files = e.target.files;
+    if (files.length === 0 || !id) {
+      if (!id) toast.error('Harap simpan pesanan terlebih dahulu.');
+      return;
+    }
+    
+    setUploading(true);
+    const newDeliveryNotes = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${userProfile.company_id}/${id}/delivery_note_${Date.now()}_${i}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage.from('proofs').upload(filePath, file);
+      if (uploadError) {
+        console.error('Error uploading delivery note:', uploadError);
+        toast.error(`Gagal mengunggah file ${i + 1}: ${uploadError.message}`);
+        setUploading(false);
+        return;
+      }
+      const { data: publicUrlData } = supabase.storage.from('proofs').getPublicUrl(filePath);
+      newDeliveryNotes.push({ file_type: 'delivery_note', file_url: publicUrlData.publicUrl });
+    }
+
+    const updatedAttachments = [...transactionDetails.attachments, ...newDeliveryNotes];
+
+    try {
+      const { error: dbError } = await supabase
+        .from('central_orders')
+        .update({ attachments: updatedAttachments })
+        .eq('id', id);
+
+      if (dbError) throw dbError;
+
+      setTransactionDetails(prev => ({ ...prev, attachments: updatedAttachments }));
+      toast.success('Surat jalan berhasil diunggah!');
+    } catch (error) {
+      console.error('Error saving delivery note URLs to DB:', error);
+      toast.error('Gagal menyimpan tautan surat jalan.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Tab 2 Logic
   const handleFileUpload = async (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!id) {
-        toast.error('Harap simpan pesanan terlebih dahulu.');
-        return;
+    const files = e.target.files;
+    if (files.length === 0 || !id) {
+      if (!id) toast.error('Harap simpan pesanan terlebih dahulu.');
+      return;
     }
 
     setUploading(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${userProfile.company_id}/${id}/${type}_${Date.now()}.${fileExt}`;
+    const newAttachments = [...transactionDetails.attachments];
+    const uploadPromises = [];
 
-    const { error: uploadError } = await supabase.storage
-      .from('proofs')
-      .upload(filePath, file);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${userProfile.company_id}/${id}/${type}_${Date.now()}_${i}.${fileExt}`;
 
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      toast.error('Gagal mengunggah file.');
-      setUploading(false);
-      return;
+      uploadPromises.push(
+        supabase.storage
+          .from('proofs')
+          .upload(filePath, file)
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('Error uploading file:', error);
+              return null; // Return null to handle the error gracefully
+            }
+            const { data: publicUrlData } = supabase.storage
+              .from('proofs')
+              .getPublicUrl(filePath);
+            return { file_type: type, file_url: publicUrlData.publicUrl };
+          })
+      );
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from('proofs')
-      .getPublicUrl(filePath);
-    
-    const newAttachment = { file_type: type, file_url: publicUrlData.publicUrl };
-    const newAttachments = [...transactionDetails.attachments, newAttachment];
+    try {
+      const uploadedFiles = await Promise.all(uploadPromises);
+      const validUploads = uploadedFiles.filter(Boolean); // Filter out any failed uploads
 
-    const { error: dbError } = await supabase
+      const updatedAttachments = [...newAttachments, ...validUploads];
+
+      const { error: dbError } = await supabase
         .from('central_orders')
-        .update({ attachments: newAttachments })
+        .update({ attachments: updatedAttachments })
         .eq('id', id);
 
-    if (dbError) {
-      console.error('Error saving file URL to DB:', dbError);
-      toast.error('Gagal menyimpan tautan file.');
-      setUploading(false);
-      return;
-    }
+      if (dbError) throw dbError;
 
-    setTransactionDetails(prev => ({ ...prev, attachments: newAttachments }));
-    
-    toast.success('File berhasil diunggah!');
-    setUploading(false);
+      setTransactionDetails(prev => ({ ...prev, attachments: updatedAttachments }));
+      toast.success('File berhasil diunggah!');
+
+    } catch (error) {
+      console.error('Error in file upload process:', error);
+      toast.error('Gagal mengunggah file.');
+    } finally {
+      setUploading(false);
+    }
   };
   
   const handleUpdateTransaction = async () => {

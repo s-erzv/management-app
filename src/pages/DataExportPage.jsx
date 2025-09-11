@@ -1100,7 +1100,7 @@ const DataExportPage = () => {
 
                     {table.data && table.data.length > 0 ? (
 
-                      <div className="overflow-x-auto rounded-md border">
+                      <div className="overflow-x-auto overflow-y-auto rounded-md border max-h-[400px]">
 
                         <Table className="table-auto min-w-max">
 
@@ -1119,25 +1119,15 @@ const DataExportPage = () => {
                           </TableHeader>
 
                           <TableBody>
-
-                            {table.data.slice(0, 5).map((row, index) => (
-
+                            {table.data.map((row, index) => (
                               <TableRow key={index}>
-
                                 {Object.values(row).map((value, idx) => (
-
                                   <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
-
-                                      {value?.toString() || '-'}
-
+                                    {value?.toString() || '-'}
                                   </TableCell>
-
                                 ))}
-
                               </TableRow>
-
                             ))}
-
                           </TableBody>
 
                         </Table>
@@ -1168,7 +1158,7 @@ const DataExportPage = () => {
                 </CardHeader>
                 <CardContent>
                   {table.data && table.data.length > 0 ? (
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="overflow-x-auto overflow-y-auto rounded-md border max-h-[400px] scrollbar-hide">
                       <Table className="table-auto min-w-max">
                         <TableHeader>
                           <TableRow>
@@ -1178,7 +1168,7 @@ const DataExportPage = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {table.data.slice(0, 5).map((row, index) => (
+                          {table.data.map((row, index) => (
                             <TableRow key={index}>
                               {Object.values(row).map((value, idx) => (
                                 <TableCell key={idx} className="whitespace-nowrap max-w-xs truncate">
