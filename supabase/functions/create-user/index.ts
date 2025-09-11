@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { email, password, role, companyName, companyId, full_name, rekening, googleSheetsLink } = await req.json()
+    const { email, password, role, companyName, companyId, full_name, phone, rekening, googleSheetsLink } = await req.json()
     
     // Inisialisasi Supabase dengan service_role key
     const supabase = createClient(
@@ -59,7 +59,7 @@ serve(async (req) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name, rekening }
+      user_metadata: { full_name, phone, rekening }
     })
 
     if (userError) throw userError;
@@ -68,7 +68,7 @@ serve(async (req) => {
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert(
-        { id: user.id, role, company_id: profile_company_id, full_name, rekening },
+        { id: user.id, role, company_id: profile_company_id, full_name, phone, rekening },
         { onConflict: 'id' }
       )
     

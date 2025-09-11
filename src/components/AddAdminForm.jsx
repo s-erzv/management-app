@@ -19,6 +19,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [googleSheetsLink, setGoogleSheetsLink] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
         role: 'admin', 
         companyName,
         full_name: fullName,
+        phone: phoneNumber,
         googleSheetsLink,
       };
 
@@ -114,6 +116,7 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
     setEmail('');
     setPassword('');
     setFullName('');
+    setPhoneNumber('');
     setLogoFile(null);
     setGoogleSheetsLink('');
     onOpenChange(false);
@@ -146,6 +149,16 @@ const AddAdminForm = ({ open, onOpenChange, onUserAdded }) => {
               placeholder="Nama Lengkap"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Nomor Telepon Admin</label>
+            <Input
+              type="tel"
+              placeholder="mis. 081234567890"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
               required
             />
           </div>

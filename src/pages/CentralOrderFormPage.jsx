@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package, ArrowLeft, MessageSquareText } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
+import WhatsappOrderModal from '@/components/WhatsappOrderModal';
+
 
 const CentralOrderFormPage = () => {
   const { id } = useParams();
@@ -42,9 +44,10 @@ const CentralOrderFormPage = () => {
   const { userProfile, loading: authLoading, companyId, session } = useAuth();
   
   const [products, setProducts] = useState([]);
-  const [purchasePrices, setPurchasePrices] = useState({});
   const [loading, setLoading] = useState(true);
   const [isNewOrder, setIsNewOrder] = useState(true);
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
   
   // Tab 1 State
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
@@ -53,11 +56,10 @@ const CentralOrderFormPage = () => {
 
   // Tab 2 State
   const [transactionDetails, setTransactionDetails] = useState({
-    total_transaction: '',
     driver_tip: '',
     notes: '',
     attachments: [],
-    admin_fee: 0,
+    admin_fee: '',
   });
   const [uploading, setUploading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -67,6 +69,7 @@ const CentralOrderFormPage = () => {
     proof: null,
   });
   const [payments, setPayments] = useState([]);
+  const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
 
   // Tab 3 State
   const [deliveryDetails, setDeliveryDetails] = useState({
@@ -74,22 +77,28 @@ const CentralOrderFormPage = () => {
     central_note_number: '',
     delivery_notes_url: [],
   });
+
+  const [gallonDetails, setGallonDetails] = useState({});
   const [receivedItems, setReceivedItems] = useState([]);
   
   const totalItemsValue = useMemo(() => {
     return orderItems.reduce((sum, item) => {
       const qty = parseFloat(item.qty) || 0;
       const price = parseFloat(item.price) || 0;
-      const soldEmptyQty = parseFloat(item.sold_empty_to_central) || 0;
-      const soldEmptyPrice = parseFloat(item.sold_empty_price) || 0;
-      
-      return sum + (qty * price) + (soldEmptyQty * soldEmptyPrice);
+      return sum + (qty * price);
     }, 0);
   }, [orderItems]);
 
   const totalOrderValue = useMemo(() => {
-    return totalItemsValue + (parseFloat(transactionDetails.admin_fee) || 0) + (parseFloat(transactionDetails.driver_tip) || 0);
-  }, [totalItemsValue, transactionDetails.admin_fee, transactionDetails.driver_tip]);
+    const totalGalonPrice = Object.values(gallonDetails).reduce((sum, galon) => {
+      const soldEmptyQty = parseFloat(galon.sold_empty_to_central) || 0;
+      const soldEmptyPrice = parseFloat(galon.sold_empty_price) || 0;
+      return sum + (soldEmptyQty * soldEmptyPrice);
+    }, 0);
+    const adminFee = parseFloat(transactionDetails.admin_fee) || 0;
+    const driverTip = parseFloat(transactionDetails.driver_tip) || 0;
+    return totalItemsValue + totalGalonPrice + adminFee + driverTip;
+  }, [totalItemsValue, gallonDetails, transactionDetails.admin_fee, transactionDetails.driver_tip]);
 
   const totalPaid = useMemo(() => {
     return payments.reduce((sum, p) => sum + p.amount, 0);
@@ -118,35 +127,49 @@ const CentralOrderFormPage = () => {
   }, [authLoading, companyId, id]);
 
   useEffect(() => {
-    if (activeTab === 'attachments-expenses' && !isNewOrder && remainingDue > 0) {
-      setNewPayment(prev => ({ ...prev, amount: remainingDue.toString() }));
+    if (activeTab === 'attachments-expenses' && !isNewOrder) {
+      if (remainingDue > 0) {
+        setNewPayment(prev => ({ ...prev, amount: remainingDue.toString() }));
+      } else {
+        setNewPayment(prev => ({ ...prev, amount: '' }));
+      }
     }
   }, [activeTab, isNewOrder, remainingDue]);
 
   const fetchData = async () => {
     setLoading(true);
     await Promise.all([
-      fetchProductsAndPrices(),
-      fetchPaymentMethods()
+      fetchSuppliers(),
+      fetchPaymentMethods(),
+      fetchProductsAndPrices()
     ]);
     if (id) {
       setIsNewOrder(false);
       await fetchCentralOrder(id);
     } else {
-      setOrderItems([{ product_id: '', qty: 1, price: 0, is_returnable: false, returned_to_central: 0, borrowed_from_central: 0, sold_empty_to_central: 0, sold_empty_price: 0 }]);
+      setOrderItems([{ product_id: '', qty: '', price: '', is_returnable: false }]);
       setLoading(false);
+    }
+  };
+  
+  const fetchSuppliers = async () => {
+    if (!companyId) return;
+    const { data, error } = await supabase
+        .from('suppliers')
+        .select('id, name, phone')
+        .eq('company_id', companyId);
+    if (!error) {
+        setSuppliers(data);
     }
   };
   
   const fetchProductsAndPrices = async () => {
     if (!companyId) return;
 
-    const { data: productsData, error: productsError } = await supabase
-      .from('products')
-      .select('id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price, sort_order')
-      .eq('company_id', companyId)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true });
+    let query = supabase.from('products').select('id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price, sort_order, supplier_id').eq('company_id', companyId);
+    query = query.order('sort_order', { ascending: true }).order('name', { ascending: true });
+
+    const { data: productsData, error: productsError } = await query;
     
     if (productsError) {
       console.error('Error fetching products:', productsError);
@@ -154,12 +177,6 @@ const CentralOrderFormPage = () => {
       return;
     }
     setProducts(productsData);
-
-    const purchasePricesMap = productsData.reduce((acc, p) => {
-      acc[p.id] = p.purchase_price;
-      return acc;
-    }, {});
-    setPurchasePrices(purchasePricesMap);
   };
   
   const fetchPaymentMethods = async () => {
@@ -180,7 +197,7 @@ const CentralOrderFormPage = () => {
       .from('central_orders')
       .select(`
         *,
-        items:central_order_items (product_id, qty, price, received_qty, sold_empty_price, products(id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price))
+        items:central_order_items (product_id, qty, price, received_qty, sold_empty_price, products(id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price, supplier_id))
       `)
       .eq('id', orderId)
       .eq('company_id', companyId)
@@ -192,7 +209,13 @@ const CentralOrderFormPage = () => {
       setLoading(false);
       return;
     }
-
+    
+    const { data: productsData } = await supabase
+      .from('products')
+      .select('id, name, stock, empty_bottle_stock, purchase_price, is_returnable, empty_bottle_price, sort_order, supplier_id')
+      .eq('company_id', companyId);
+    setProducts(productsData || []);
+    
     const { data: paymentsData } = await supabase
       .from('financial_transactions')
       .select('amount, transaction_date, proof_url, payment_method:payment_method_id(method_name, account_name)')
@@ -203,42 +226,57 @@ const CentralOrderFormPage = () => {
     setPayments(paymentsData || []);
     
     setOrderDate(orderData.order_date);
-    setOrderItems(orderData.items.map(item => ({
-      ...item,
-      product_name: item.products.name,
-      current_stock: item.products.stock,
-      current_empty_bottle_stock: item.products.empty_bottle_stock,
-      price: item.products.purchase_price,
-      is_returnable: item.products.is_returnable,
-      returned_to_central: orderData.returned_to_central?.[item.product_id] || 0,
-      borrowed_from_central: orderData.borrowed_from_central?.[item.product_id] || 0,
-      sold_empty_to_central: orderData.sold_empty_to_central?.[item.product_id] || 0,
-      sold_empty_price: item.sold_empty_price || 0,
-    })));
-    setReceivedItems(orderData.items.map(item => ({
-      product_id: item.product_id,
-      product_name: item.products.name,
-      ordered_qty: item.qty,
-      received_qty: item.received_qty || 0,
-    })));
+    setOrderItems(orderData.items.map(item => {
+      const product = productsData?.find(p => p.id === item.product_id) || {};
+      return {
+        ...item,
+        product_name: product.name,
+        is_returnable: product.is_returnable,
+        qty: item.qty || '',
+        price: item.price || '',
+        sold_empty_price: item.sold_empty_price || '',
+      };
+    }));
+    
+    setReceivedItems(orderData.items.map(item => {
+      const product = productsData?.find(p => p.id === item.product_id) || {};
+      return {
+        product_id: item.product_id,
+        product_name: product.name,
+        ordered_qty: item.qty,
+        received_qty: item.received_qty || '',
+      };
+    }));
+    
+    setGallonDetails(orderData.items.reduce((acc, item) => {
+      const product = productsData?.find(p => p.id === item.product_id) || {};
+      if (product.is_returnable) {
+        acc[item.product_id] = {
+          returned_to_central: orderData.returned_to_central?.[item.product_id] || '',
+          borrowed_from_central: orderData.borrowed_from_central?.[item.product_id] || '',
+          sold_empty_to_central: orderData.sold_empty_to_central?.[item.product_id] || '',
+          sold_empty_price: item.sold_empty_price || '',
+        };
+      }
+      return acc;
+    }, {}));
     
     setTransactionDetails({
-      total_transaction: orderData.total_transaction ?? '',
-      driver_tip: orderData.driver_tip ?? '',
-      notes: orderData.notes ?? '',
+      driver_tip: orderData.driver_tip || '',
+      notes: orderData.notes || '',
       attachments: orderData.attachments || [],
-      admin_fee: orderData.admin_fee || 0,
-    });
-    setDeliveryDetails({
-      arrival_date: orderData.arrival_date ?? '',
-      central_note_number: orderData.central_note_number ?? '',
-      delivery_notes_url: orderData.attachments?.filter(a => a.file_type === 'delivery_note').map(a => a.file_url) || [],
+      admin_fee: orderData.admin_fee || '',
     });
     
+    setDeliveryDetails({
+      arrival_date: orderData.arrival_date || '',
+      central_note_number: orderData.central_note_number || '',
+      delivery_notes_url: orderData.attachments?.filter(a => a.file_type === 'delivery_note').map(a => a.file_url) || [],
+    });
+
     setLoading(false);
   };
 
-  // Tab 1 Logic
   const handleItemChange = (index, field, value) => {
     const newItems = [...orderItems];
     newItems[index][field] = value;
@@ -249,23 +287,27 @@ const CentralOrderFormPage = () => {
             newItems[index].price = selectedProduct.purchase_price;
             newItems[index].is_returnable = selectedProduct.is_returnable;
             newItems[index].sold_empty_price = selectedProduct.empty_bottle_price;
+            if (selectedProduct.is_returnable) {
+                setGallonDetails(prev => ({
+                    ...prev,
+                    [value]: {
+                        returned_to_central: '',
+                        borrowed_from_central: '',
+                        sold_empty_to_central: '',
+                        sold_empty_price: selectedProduct.empty_bottle_price,
+                    }
+                }));
+            }
         } else {
             newItems[index].is_returnable = false;
-            newItems[index].sold_empty_price = 0;
         }
     }
     
     setOrderItems(newItems);
   };
 
-  const handleGalonDetailChange = (index, field, value) => {
-    const newItems = [...orderItems];
-    newItems[index][field] = value;
-    setOrderItems(newItems);
-  };
-
   const handleAddItem = () => {
-    setOrderItems([...orderItems, { product_id: '', qty: 1, price: 0, is_returnable: false, returned_to_central: 0, borrowed_from_central: 0, sold_empty_to_central: 0, sold_empty_price: 0 }]);
+    setOrderItems([...orderItems, { product_id: '', qty: '', price: '', is_returnable: false }]);
   };
 
   const handleRemoveItem = (index) => {
@@ -281,18 +323,6 @@ const CentralOrderFormPage = () => {
         return;
     }
     
-    const returnedToCentral = {};
-    const borrowedFromCentral = {};
-    const soldEmptyToCentral = {};
-
-    orderItems.forEach(item => {
-      if(item.is_returnable){
-        returnedToCentral[item.product_id] = parseFloat(item.returned_to_central) || 0;
-        borrowedFromCentral[item.product_id] = parseFloat(item.borrowed_from_central) || 0;
-        soldEmptyToCentral[item.product_id] = parseFloat(item.sold_empty_to_central) || 0;
-      }
-    });
-
     try {
       if (isNewOrder) {
         const { data, error } = await supabase
@@ -302,10 +332,7 @@ const CentralOrderFormPage = () => {
             company_id: userProfile.company_id,
             user_id: userProfile.id,
             status: 'draft',
-            attachments: [],
-            returned_to_central: returnedToCentral,
-            borrowed_from_central: borrowedFromCentral,
-            sold_empty_to_central: soldEmptyToCentral,
+            notes: transactionDetails.notes,
           })
           .select()
           .single();
@@ -316,9 +343,9 @@ const CentralOrderFormPage = () => {
           .insert(orderItems.map(item => ({
             central_order_id: data.id,
             product_id: item.product_id,
-            qty: item.qty,
-            price: item.price,
-            sold_empty_price: item.sold_empty_price,
+            qty: parseFloat(item.qty) || 0,
+            price: parseFloat(item.price) || 0,
+            sold_empty_price: parseFloat(item.sold_empty_price) || 0,
           })));
         if (itemsError) throw itemsError;
         
@@ -326,7 +353,7 @@ const CentralOrderFormPage = () => {
           .from('central_order_prices')
           .upsert(orderItems.map(item => ({
             product_id: item.product_id,
-            price: item.price,
+            price: parseFloat(item.price) || 0,
             order_date: orderDate,
             company_id: userProfile.company_id,
           })));
@@ -339,9 +366,7 @@ const CentralOrderFormPage = () => {
           .from('central_orders')
           .update({
             order_date: orderDate,
-            returned_to_central: returnedToCentral,
-            borrowed_from_central: borrowedFromCentral,
-            sold_empty_to_central: soldEmptyToCentral,
+            notes: transactionDetails.notes,
           })
           .eq('id', id);
         if (error) throw error;
@@ -352,9 +377,9 @@ const CentralOrderFormPage = () => {
           .insert(orderItems.map(item => ({
             central_order_id: id,
             product_id: item.product_id,
-            qty: item.qty,
-            price: item.price,
-            sold_empty_price: item.sold_empty_price,
+            qty: parseFloat(item.qty) || 0,
+            price: parseFloat(item.price) || 0,
+            sold_empty_price: parseFloat(item.sold_empty_price) || 0,
           })));
         if (itemsError) throw itemsError;
         
@@ -362,7 +387,7 @@ const CentralOrderFormPage = () => {
           .from('central_order_prices')
           .upsert(orderItems.map(item => ({
             product_id: item.product_id,
-            price: item.price,
+            price: parseFloat(item.price) || 0,
             order_date: orderDate,
             company_id: userProfile.company_id,
           })));
@@ -379,53 +404,6 @@ const CentralOrderFormPage = () => {
     }
   };
 
-  const handleDeliveryNotesUpload = async (e) => {
-    const files = e.target.files;
-    if (files.length === 0 || !id) {
-      if (!id) toast.error('Harap simpan pesanan terlebih dahulu.');
-      return;
-    }
-    
-    setUploading(true);
-    const newDeliveryNotes = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${userProfile.company_id}/${id}/delivery_note_${Date.now()}_${i}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage.from('proofs').upload(filePath, file);
-      if (uploadError) {
-        console.error('Error uploading delivery note:', uploadError);
-        toast.error(`Gagal mengunggah file ${i + 1}: ${uploadError.message}`);
-        setUploading(false);
-        return;
-      }
-      const { data: publicUrlData } = supabase.storage.from('proofs').getPublicUrl(filePath);
-      newDeliveryNotes.push({ file_type: 'delivery_note', file_url: publicUrlData.publicUrl });
-    }
-
-    const updatedAttachments = [...transactionDetails.attachments, ...newDeliveryNotes];
-
-    try {
-      const { error: dbError } = await supabase
-        .from('central_orders')
-        .update({ attachments: updatedAttachments })
-        .eq('id', id);
-
-      if (dbError) throw dbError;
-
-      setTransactionDetails(prev => ({ ...prev, attachments: updatedAttachments }));
-      toast.success('Surat jalan berhasil diunggah!');
-    } catch (error) {
-      console.error('Error saving delivery note URLs to DB:', error);
-      toast.error('Gagal menyimpan tautan surat jalan.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // Tab 2 Logic
   const handleFileUpload = async (e, type) => {
     const files = e.target.files;
     if (files.length === 0 || !id) {
@@ -449,7 +427,7 @@ const CentralOrderFormPage = () => {
           .then(({ data, error }) => {
             if (error) {
               console.error('Error uploading file:', error);
-              return null; // Return null to handle the error gracefully
+              return null;
             }
             const { data: publicUrlData } = supabase.storage
               .from('proofs')
@@ -461,7 +439,7 @@ const CentralOrderFormPage = () => {
 
     try {
       const uploadedFiles = await Promise.all(uploadPromises);
-      const validUploads = uploadedFiles.filter(Boolean); // Filter out any failed uploads
+      const validUploads = uploadedFiles.filter(Boolean);
 
       const updatedAttachments = [...newAttachments, ...validUploads];
 
@@ -490,8 +468,9 @@ const CentralOrderFormPage = () => {
         .from('central_orders')
         .update({
           total_transaction: totalOrderValue,
-          driver_tip: transactionDetails.driver_tip || null,
+          driver_tip: parseFloat(transactionDetails.driver_tip) || null,
           notes: transactionDetails.notes || '',
+          admin_fee: parseFloat(transactionDetails.admin_fee) || null,
         })
         .eq('id', id);
       if (error) throw error;
@@ -510,7 +489,7 @@ const CentralOrderFormPage = () => {
   
   const handleRecordPayment = async (e) => {
     e.preventDefault();
-    if (!newPayment.amount || !newPayment.payment_method_id) {
+    if (!newPayment.amount || parseFloat(newPayment.amount) <= 0 || !newPayment.payment_method_id) {
         toast.error('Jumlah dan metode pembayaran harus diisi.');
         return;
     }
@@ -565,26 +544,34 @@ const CentralOrderFormPage = () => {
     setReceivedItems(newReceivedItems);
   };
   
+  const handleGallonDetailsChange = (productId, field, value) => {
+    setGallonDetails(prev => ({
+        ...prev,
+        [productId]: {
+            ...prev[productId],
+            [field]: value,
+        }
+    }));
+  };
+
   const handleFinalizeReceipt = async () => {
     setLoading(true);
 
-    const galonDetails = orderItems.reduce((acc, item) => {
-      if (item.is_returnable){
-        acc[item.product_id] = {
-          returned_to_central: parseFloat(item.returned_to_central) || 0,
-          borrowed_from_central: parseFloat(item.borrowed_from_central) || 0,
-          sold_empty_to_central: parseFloat(item.sold_empty_to_central) || 0,
-          sold_empty_price: parseFloat(item.sold_empty_price) || 0,
+    const galonDetailsPayload = {};
+    for (const productId in gallonDetails) {
+        galonDetailsPayload[productId] = {
+            returned_to_central: parseFloat(gallonDetails[productId].returned_to_central) || 0,
+            borrowed_from_central: parseFloat(gallonDetails[productId].borrowed_from_central) || 0,
+            sold_empty_to_central: parseFloat(gallonDetails[productId].sold_empty_to_central) || 0,
+            sold_empty_price: parseFloat(gallonDetails[productId].sold_empty_price) || 0,
         };
-      }
-      return acc;
-    }, {});
+    }
     
     const payload = {
       orderId: id,
       receivedItems,
       orderItems, 
-      galonDetails,
+      galonDetails: galonDetailsPayload,
       deliveryDetails,
       companyId,
       userId: userProfile.id,
@@ -629,7 +616,18 @@ const CentralOrderFormPage = () => {
     <div className="container mx-auto p-4 md:p-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold">{isNewOrder ? 'Pesanan Baru dari Pusat' : `Detail Pesanan #${id?.slice(0, 8)}`}</h1>
-        <Button onClick={() => navigate('/central-orders')} variant="outline">Kembali</Button>
+        <div className="flex flex-wrap gap-2">
+            <Button onClick={() => navigate('/central-orders')} variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Kembali
+            </Button>
+            <Button
+                variant="outline"
+                onClick={() => setIsWhatsappModalOpen(true)}
+                disabled={isNewOrder}
+            >
+                <MessageSquareText className="h-4 w-4 mr-2" /> Kirim Pesan
+            </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -674,6 +672,7 @@ const CentralOrderFormPage = () => {
                   onChange={(e) => setOrderDate(e.target.value)}
                 />
               </div>
+
               <h3 className="font-semibold mt-6">Daftar Item</h3>
               <div className="space-y-4">
                 {orderItems.map((item, index) => (
@@ -705,7 +704,6 @@ const CentralOrderFormPage = () => {
                           value={item.qty}
                           onChange={(e) => handleItemChange(index, 'qty', e.target.value)}
                           onWheel={handleInputWheel}
-                          min="1"
                         />
                       </div>
                       <div className="w-full sm:w-32">
@@ -731,58 +729,6 @@ const CentralOrderFormPage = () => {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    {item.is_returnable && (
-                        <div className="space-y-4 col-span-full mt-4 p-4 border rounded-md bg-gray-50">
-                          <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
-                            <Package className="h-4 w-4" />
-                            Detail Galon ({products.find(p => p.id === item.product_id)?.name})
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor={`galon-returned-${index}`}>Galon Dikembalikan ke Pusat</Label>
-                              <Input
-                                id={`galon-returned-${index}`}
-                                type="number"
-                                placeholder="0"
-                                value={item.returned_to_central}
-                                onChange={(e) => handleGalonDetailChange(index, 'returned_to_central', e.target.value)}
-                                onWheel={handleInputWheel}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`galon-borrowed-${index}`}>Galon Dipinjam dari Pusat</Label>
-                              <Input
-                                id={`galon-borrowed-${index}`}
-                                type="number"
-                                placeholder="0"
-                                value={item.borrowed_from_central}
-                                onChange={(e) => handleGalonDetailChange(index, 'borrowed_from_central', e.target.value)}
-                                onWheel={handleInputWheel}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`galon-sold-${index}`}>Galon Kosong Dibeli dari Pusat</Label>
-                              <Input
-                                id={`galon-sold-${index}`}
-                                type="number"
-                                placeholder="0"
-                                value={item.sold_empty_to_central}
-                                onChange={(e) => handleGalonDetailChange(index, 'sold_empty_to_central', e.target.value)}
-                                onWheel={handleInputWheel}
-                              />
-                              <Label htmlFor={`price-sold-${index}`}>Harga Galon Kosong</Label>
-                              <Input
-                                id={`price-sold-${index}`}
-                                type="number"
-                                placeholder="0"
-                                value={item.sold_empty_price}
-                                onChange={(e) => handleGalonDetailChange(index, 'sold_empty_price', e.target.value)}
-                                onWheel={handleInputWheel}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -854,7 +800,22 @@ const CentralOrderFormPage = () => {
                         type="number"
                         placeholder="Masukkan biaya admin"
                         value={transactionDetails.admin_fee}
-                        onChange={(e) => setTransactionDetails({...transactionDetails, admin_fee: parseFloat(e.target.value) || 0})}
+                        onChange={(e) => setTransactionDetails({...transactionDetails, admin_fee: e.target.value})}
+                        onWheel={handleInputWheel}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Galon Kosong Dibeli dari Pusat</Label>
+                      <p className="text-lg font-bold">{formatCurrency(totalOrderValue - totalItemsValue - (parseFloat(transactionDetails.admin_fee) || 0) - (parseFloat(transactionDetails.driver_tip) || 0))}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="driver_tip">Tip Supir</Label>
+                      <Input
+                        id="driver_tip"
+                        type="number"
+                        placeholder="Masukkan tip supir"
+                        value={transactionDetails.driver_tip}
+                        onChange={(e) => setTransactionDetails({...transactionDetails, driver_tip: e.target.value})}
                         onWheel={handleInputWheel}
                       />
                     </div>
@@ -866,10 +827,6 @@ const CentralOrderFormPage = () => {
                   <div className="space-y-2">
                     <Label>Total Dibayar</Label>
                     <p className="text-xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Sisa Pembayaran</Label>
-                    <p className="text-xl font-bold text-red-600">{formatCurrency(remainingDue)}</p>
                   </div>
 
                   <Separator />
@@ -978,14 +935,6 @@ const CentralOrderFormPage = () => {
                 <div className="space-y-4">
                   <Label>Detail Transaksi Lainnya</Label>
                   <Input
-                    label="Tip Supir"
-                    type="number"
-                    placeholder="Tip Supir"
-                    value={transactionDetails.driver_tip}
-                    onChange={(e) => setTransactionDetails({...transactionDetails, driver_tip: parseFloat(e.target.value) || 0})}
-                    onWheel={handleInputWheel}
-                  />
-                  <Input
                     label="Catatan"
                     type="text"
                     placeholder="Catatan"
@@ -1077,6 +1026,59 @@ const CentralOrderFormPage = () => {
                     </TableBody>
                   </Table>
                 </div>
+                
+                {orderItems.filter(item => item.is_returnable).map(item => (
+                    <div key={item.product_id} className="space-y-4 col-span-full mt-4 p-4 border rounded-md bg-gray-50">
+                        <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
+                            <Package className="h-4 w-4" />
+                            Detail Galon ({item.product_name})
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor={`galon-returned-${item.product_id}`}>Galon Dikembalikan ke Pusat</Label>
+                                <Input
+                                    id={`galon-returned-${item.product_id}`}
+                                    type="number"
+                                    placeholder="0"
+                                    value={gallonDetails[item.product_id]?.returned_to_central || ''}
+                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'returned_to_central', e.target.value)}
+                                    onWheel={handleInputWheel}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor={`galon-borrowed-${item.product_id}`}>Galon Dipinjam dari Pusat</Label>
+                                <Input
+                                    id={`galon-borrowed-${item.product_id}`}
+                                    type="number"
+                                    placeholder="0"
+                                    value={gallonDetails[item.product_id]?.borrowed_from_central || ''}
+                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'borrowed_from_central', e.target.value)}
+                                    onWheel={handleInputWheel}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor={`galon-sold-${item.product_id}`}>Galon Kosong Dibeli dari Pusat</Label>
+                                <Input
+                                    id={`galon-sold-${item.product_id}`}
+                                    type="number"
+                                    placeholder="0"
+                                    value={gallonDetails[item.product_id]?.sold_empty_to_central || ''}
+                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_to_central', e.target.value)}
+                                    onWheel={handleInputWheel}
+                                />
+                                <Label htmlFor={`price-sold-${item.product_id}`}>Harga Galon Kosong</Label>
+                                <Input
+                                    id={`price-sold-${item.product_id}`}
+                                    type="number"
+                                    placeholder="0"
+                                    value={gallonDetails[item.product_id]?.sold_empty_price || ''}
+                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_price', e.target.value)}
+                                    onWheel={handleInputWheel}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ))}
               
               <Button onClick={handleFinalizeReceipt} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pengecekan & Perbarui Stok'}
@@ -1086,6 +1088,15 @@ const CentralOrderFormPage = () => {
           </TabsContent>
         )}
       </Tabs>
+      <WhatsappOrderModal
+        isOpen={isWhatsappModalOpen}
+        onOpenChange={setIsWhatsappModalOpen}
+        orderId={id}
+        orderDate={orderDate}
+        orderItems={orderItems}
+        products={products}
+        suppliers={suppliers}
+      />
     </div>
   );
 };

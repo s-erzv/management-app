@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash, Eye, FileText, Calendar, User, CreditCard, CheckCircle, Clock, Send } from 'lucide-react';
+import { Loader2, Plus, Trash, Eye, FileText, Calendar, User, CreditCard, CheckCircle, Clock, Send, Pencil, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -42,6 +42,7 @@ const ExpenseReportsPage = () => {
   ]);
   const [employees, setEmployees] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [adminPhone, setAdminPhone] = useState(null);
   
   const [submitterId, setSubmitterId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -49,6 +50,7 @@ const ExpenseReportsPage = () => {
   
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isMarkAsPaidModalOpen, setIsMarkAsPaidModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [selectedAdminPaymentMethodId, setSelectedAdminPaymentMethodId] = useState('');
   const [adminFee, setAdminFee] = useState(0);
@@ -58,6 +60,24 @@ const ExpenseReportsPage = () => {
       fetchData();
     }
   }, [companyId]);
+
+  useEffect(() => {
+    const fetchAdminPhone = async () => {
+        if (!companyId) return;
+        const { data: adminProfile, error } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('company_id', companyId)
+            .eq('role', 'admin')
+            .single();
+        if (error) {
+            console.error('Error fetching admin phone:', error);
+        } else {
+            setAdminPhone(adminProfile?.phone);
+        }
+    };
+    fetchAdminPhone();
+}, [companyId]);
   
   const fetchData = async () => {
     setLoading(true);
@@ -83,7 +103,6 @@ const ExpenseReportsPage = () => {
       .from('profiles')
       .select('id, full_name, rekening, role')
       .eq('company_id', companyId)
-      .eq('role', 'user')
       .order('full_name', { ascending: true });
 
     if (!employeesError) {
@@ -131,36 +150,39 @@ const ExpenseReportsPage = () => {
     }
   };
 
+  const handleTransferClick = (report) => {
+    if (!adminPhone) {
+        toast.error('Nomor telepon admin tidak ditemukan.');
+        return;
+    }
+    
+    const nama = report?.user?.full_name || 'Karyawan';
+    const rekening = report?.user?.rekening || '-';
+    const formattedAmount = new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      maximumFractionDigits: 0,
+    }).format(Number(report?.total_amount || 0));
 
-const handleTransferClick = (report) => {
-  const nama = report?.user?.full_name || 'Karyawan';
-  const rekening = report?.user?.rekening || '-';
-  const formattedAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(Number(report?.total_amount || 0));
+    const tanggal = new Intl.DateTimeFormat('id-ID', {
+      dateStyle: 'long',
+      timeZone: 'Asia/Jakarta',
+    }).format(new Date(report?.report_date || Date.now()));
 
-  const tanggal = new Intl.DateTimeFormat('id-ID', {
-    dateStyle: 'long',
-    timeZone: 'Asia/Jakarta',
-  }).format(new Date(report?.report_date || Date.now()));
+    const metode = report?.payment_method || '-';
 
-  const metode = report?.payment_method || '-';
+    const message = `Halo bang, saya mau ngajuin reimburesement untuk laporan pengeluaran berikut:
+- Tanggal: ${tanggal}
+- Karyawan: ${nama}
+- Jumlah: ${formattedAmount}
+- Metode: ${metode}
+- Rekening: ${rekening}
 
-  const message = `Halo bang, saya mau ngajuin reimburesement untuk laporan pengeluaran berikut:
-  - Tanggal: ${tanggal}
-  - Karyawan: ${nama}
-  - Jumlah: ${formattedAmount}
-  - Metode: ${metode}
-  - Rekening: ${rekening}
+Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
 
-Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
-
-  const whatsappUrl = `https://wa.me/6281911797724?text=${encodeURIComponent(message)}`;
-  window.open(whatsappUrl, '_blank');
-};
-
+    const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   const handleMarkAsPaid = (report) => {
     setSelectedReport(report);
@@ -212,6 +234,95 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
           setSelectedAdminPaymentMethodId('');
       }
   };
+
+  const handleEditReport = (report) => {
+    setSelectedReport(report);
+    setExpenseItems(report.items);
+    setSubmitterId(report.user_id);
+    setPaymentMethod(report.payment_method);
+    setPaymentTo(report.payment_to_account);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateReport = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const totalAmount = expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+    try {
+      const payload = {
+        reportId: selectedReport.id,
+        expenseReport: {
+          user_id: submitterId,
+          total_amount: totalAmount,
+          payment_method: paymentMethod,
+          payment_to_account: paymentTo,
+        },
+        expenseItems: expenseItems.map(item => ({
+          type: item.type,
+          description: item.description,
+          amount: parseFloat(item.amount) || 0,
+        })),
+      };
+
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/manage-expense-report', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error('Server returned an error: ' + errorText);
+      }
+
+      toast.success('Laporan pengeluaran berhasil diperbarui!');
+      setIsEditModalOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error updating expense report:', error.message);
+      toast.error('Gagal memperbarui laporan: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus laporan ini? Jika statusnya sudah Lunas, transaksi keuangan akan dibatalkan.')) return;
+    setLoading(true);
+    try {
+      const payload = {
+        reportId: reportId,
+        companyId: companyId
+      };
+      
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/manage-expense-report', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error('Server returned an error: ' + errorText);
+      }
+      
+      toast.success('Laporan berhasil dihapus!');
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting expense report:', error.message);
+      toast.error('Gagal menghapus laporan: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -279,7 +390,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
   }
 
   const expenseTypes = ['Bongkar', 'Bensin', 'Makan', 'Kasbon', 'Lainnya'];
-  const totalAmount = calculateTotal();
+  const totalAmount = expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const currentSubmitter = employees.find(emp => emp.id === submitterId);
   const finalAmountDisplay = selectedReport ? selectedReport.total_amount + parseFloat(adminFee) : 0;
   
@@ -553,6 +664,20 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
                                 <Eye className="h-4 w-4 mr-1" />
                                 Lihat Detail
                               </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={(e) => { e.stopPropagation(); handleEditReport(report); }}
+                              >
+                                <Pencil className="h-4 w-4 text-blue-500" />
+                              </Button>
+                              <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
+                              >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
@@ -622,6 +747,13 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 剌`;
                               >
                                 <Eye className="h-4 w-4 mr-1" />
                                 Lihat Detail
+                              </Button>
+                              <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
+                              >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
                             </div>
                           </div>

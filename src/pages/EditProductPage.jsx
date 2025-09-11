@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'react-hot-toast';
-import { Loader2, ArrowLeft, Plus, Tags, ShoppingBag } from 'lucide-react';
+import { Loader2, ArrowLeft, Plus, Tags, ShoppingBag, Pencil } from 'lucide-react';
 import {
   Select,
   SelectContent,
