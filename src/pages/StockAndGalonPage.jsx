@@ -170,8 +170,8 @@ const StockAndGalonPage = () => {
       .eq('order.company_id', companyId);
 
     if (error) {
-      console.error('Error fetching galon debts:', error);
-      toast.error('Gagal memuat data utang galon.');
+      console.error('Error fetching Product Returnable debts:', error);
+      toast.error('Gagal memuat data utang Product Returnable.');
       setDebts([]);
       setRefreshing(false);
       return;
@@ -317,7 +317,7 @@ const StockAndGalonPage = () => {
     
     return {
       returnedFromCustomer: movementsByType['pengembalian'] || 0,
-      purchasedFromCustomer: (movementsByType['galon_dibeli'] || 0),
+      purchasedFromCustomer: (movementsByType['Product Returnable_dibeli'] || 0),
       borrowed: (movementsByType['pinjam_kembali'] || 0) + (movementsByType['keluar_pinjam_dari_pusat'] || 0),
     };
   }, [movements, isReturnable]);
@@ -334,7 +334,7 @@ const StockAndGalonPage = () => {
     <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
       <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
         <Package className="h-8 w-8" />
-        Manajemen Stok & Utang Galon
+        Manajemen Stok & Utang Product Returnable
       </h1>
 
       <Card className="border-0 shadow-sm bg-white">
@@ -395,7 +395,7 @@ const StockAndGalonPage = () => {
           {isReturnable && (
             <Card className="border-0 shadow-sm bg-white">
               <CardHeader>
-                <CardTitle className="text-[#10182b]">Ringkasan Pergerakan Galon</CardTitle>
+                <CardTitle className="text-[#10182b]">Ringkasan Pergerakan Product Returnable</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">

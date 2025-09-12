@@ -12,7 +12,7 @@ const AuthPage = () => {
             Login
           </CardTitle>
           <CardDescription className="text-center">
-            Akses Dashboard Distribusi Galon
+            Akses Dashboard Distribusi
           </CardDescription>
         </CardHeader>
         <CardContent>

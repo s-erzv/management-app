@@ -329,7 +329,7 @@ const AddProductPage = () => {
                 checked={productForm.is_returnable}
                 onCheckedChange={(checked) => setProductForm(prev => ({ ...prev, is_returnable: checked }))}
                 />
-                <Label htmlFor="is_returnable">Produk ini dapat dikembalikan (misal: galon)</Label>
+                <Label htmlFor="is_returnable">Produk ini dapat dikembalikan (misal: galon, gas)</Label>
             </div>
 
             {productForm.is_returnable && (

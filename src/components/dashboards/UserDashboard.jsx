@@ -158,7 +158,7 @@ const updateOrderStatus = async (order, newStatus) => {
                 .insert({
                   type: 'keluar',
                   qty: item.qty,
-                  notes: `Galon keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
+                  notes: `Kemasan Returnable keluar untuk pesanan #${order.id.slice(0, 8)} (dibeli)`,
                   order_id: order.id,
                   user_id: userId,
                   product_id: item.product_id,

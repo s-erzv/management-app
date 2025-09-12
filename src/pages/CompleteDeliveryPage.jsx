@@ -518,13 +518,13 @@ const CompleteDeliveryPage = () => {
               <>
                 <Separator />
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold">Galon</h3>
+                  <h3 className="text-xl font-bold">Product Returnable</h3>
                   {returnableItemsInOrder.map(item => (
                     <div key={item.product_id} className="space-y-2 border-l-4 pl-4">
                       <h4 className="font-semibold text-[#10182b]">{item.products.name}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor={`returnedQty-${item.product_id}`}>Galon Kembali</Label>
+                          <Label htmlFor={`returnedQty-${item.product_id}`}>Product Returnable Kembali</Label>
                           <Input
                             id={`returnedQty-${item.product_id}`}
                             type="number"
@@ -551,7 +551,7 @@ const CompleteDeliveryPage = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`borrowedQty-${item.product_id}`}>Galon Dipinjam</Label>
+                        <Label htmlFor={`borrowedQty-${item.product_id}`}>Product Returnable Dipinjam</Label>
                         <Input
                           id={`borrowedQty-${item.product_id}`}
                           type="number"

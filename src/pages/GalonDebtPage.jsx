@@ -68,8 +68,8 @@ const GalonDebtPage = () => {
       .eq('order.company_id', companyId); // Perbaikan: Tambah filter company_id
 
     if (error) {
-      console.error('Error fetching galon debts:', error);
-      toast.error('Gagal memuat data utang galon.');
+      console.error('Error fetching Product Returnable debts:', error);
+      toast.error('Gagal memuat data utang Product Returnable.');
       setDebts([]);
     } else {
         // Kelompokkan data per pelanggan dan per produk di frontend
@@ -109,7 +109,7 @@ const GalonDebtPage = () => {
   };
   
   const handleSettleDebt = async (customerId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menandai utang galon ini sebagai lunas? Tindakan ini tidak dapat diurungkan.')) {
+    if (!window.confirm('Apakah Anda yakin ingin menandai utang Product Returnable ini sebagai lunas? Tindakan ini tidak dapat diurungkan.')) {
       return;
     }
     
@@ -119,9 +119,9 @@ const GalonDebtPage = () => {
     
     if (error) {
       console.error('Error settling debt:', error);
-      toast.error('Gagal melunasi utang galon.');
+      toast.error('Gagal melunasi utang Product Returnable.');
     } else {
-      toast.success('Utang galon berhasil dilunasi!');
+      toast.success('Utang Product Returnable berhasil dilunasi!');
       fetchGalonDebts();
     }
     setLoading(false);
@@ -143,12 +143,12 @@ const GalonDebtPage = () => {
     <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
       <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
         <Package className="h-8 w-8" />
-        Manajemen Utang Galon
+        Manajemen Utang Product Returnable
       </h1>
 
       <Card className="border-0 shadow-sm bg-white">
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
+          <CardTitle className="text-[#10182b]">Daftar Utang Product Returnable Pelanggan</CardTitle>
           <Button onClick={fetchGalonDebts} disabled={loading || refreshing} variant="outline" className="text-[#10182b] hover:bg-gray-100">
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             <span className="ml-2">Refresh Data</span>
@@ -161,7 +161,7 @@ const GalonDebtPage = () => {
                 <TableRow>
                   <TableHead className="min-w-[150px] text-[#10182b]">Pelanggan</TableHead>
                   <TableHead className="min-w-[150px] text-[#10182b]">Nomor Telepon</TableHead>
-                  <TableHead className="min-w-[150px] text-[#10182b]">Total Utang Galon</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Total Utang Product Returnable</TableHead>
                   <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
@@ -177,7 +177,7 @@ const GalonDebtPage = () => {
                         <TableCell>{debt.phone}</TableCell>
                         <TableCell>
                            <Badge variant="destructive" className="bg-red-500 text-white font-semibold">
-                             {debt.total_debt} galon
+                             {debt.total_debt} Product Returnable
                            </Badge>
                         </TableCell>
                         <TableCell>
@@ -200,7 +200,7 @@ const GalonDebtPage = () => {
                               {Object.values(debt.products_debt).map(productDebt => (
                                 <div key={productDebt.product_id} className="flex justify-between items-center py-1">
                                   <span className="font-medium">{productDebt.product_name}</span>
-                                  <Badge className="bg-red-500 text-white">{productDebt.total_debt_qty} galon</Badge>
+                                  <Badge className="bg-red-500 text-white">{productDebt.total_debt_qty} Product Returnable</Badge>
                                 </div>
                               ))}
                             </div>
@@ -212,7 +212,7 @@ const GalonDebtPage = () => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                      Tidak ada utang galon saat ini.
+                      Tidak ada utang Product Returnable saat ini.
                     </TableCell>
                   </TableRow>
                 )}

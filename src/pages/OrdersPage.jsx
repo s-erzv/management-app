@@ -214,8 +214,8 @@ const OrdersPage = () => {
     const header = [
       "ID Pesanan", "Nomor Invoice", "Nama Pelanggan", "Alamat Pelanggan", "Telepon Pelanggan",
       "Tanggal Order", "Status Pengiriman", "Status Pembayaran", "Nama Petugas",
-      "Total Harga", "Pembayaran Diterima", "Sisa Tagihan", "Galon Dikembalikan", 
-      "Galon Dipinjam", "Kemasan Returnable Dibeli", "Biaya Transportasi", "Detail Produk", 
+      "Total Harga", "Pembayaran Diterima", "Sisa Tagihan", "Product Returnable Dikembalikan", 
+      "Product Returnable Dipinjam", "Kemasan Returnable Dibeli", "Biaya Transportasi", "Detail Produk", 
       "Bukti Pengiriman", "Riwayat Pembayaran"
     ];
     

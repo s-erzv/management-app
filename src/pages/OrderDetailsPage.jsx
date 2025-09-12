@@ -649,11 +649,11 @@ ${companyName}`;
       });
   }
   
-  // Perubahan: Menambahkan item galon yang dipinjam dan dikembalikan
+  // Perubahan: Menambahkan item Product Returnable yang dipinjam dan dikembalikan
   if (order.returned_qty > 0) {
     allItems.push({
       id: 'returned-gallon',
-      products: { name: 'Galon Kembali' },
+      products: { name: 'Product Returnable Kembali' },
       qty: order.returned_qty,
       price: 0, // Tidak ada harga
       item_type: 'pengembalian'
@@ -662,7 +662,7 @@ ${companyName}`;
   if (order.borrowed_qty > 0) {
     allItems.push({
       id: 'borrowed-gallon',
-      products: { name: 'Galon Dipinjam' },
+      products: { name: 'Product Returnable Dipinjam' },
       qty: order.borrowed_qty,
       price: 0, // Tidak ada harga
       item_type: 'pinjam'

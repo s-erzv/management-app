@@ -425,9 +425,9 @@ const selectDisplayColumns = (data, type) => {
 
       'transport_cost_formatted': 'Biaya Transportasi',
 
-      'returned_qty': 'Galon Kembali',
+      'returned_qty': 'Product Returnable Kembali',
 
-      'borrowed_qty': 'Galon Dipinjam',
+      'borrowed_qty': 'Product Returnable Dipinjam',
 
       'purchased_empty_qty': 'Kemasan Returnable Dibeli',
 
