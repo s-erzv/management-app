@@ -55,7 +55,7 @@ serve(async (req) => {
           product_id: productId,
           qty: returnedQty,
           type: 'galon_dikembalikan_ke_pusat',
-          notes: 'Pengembalian galon kosong ke pusat.',
+          notes: 'Pengembalian Kemasan Returnable ke pusat.',
           company_id: companyId,
           user_id: userId,
           central_order_id: orderId,
@@ -80,23 +80,23 @@ serve(async (req) => {
         });
       }
 
-      // Galon kosong dibeli → catat saja (stok tidak berubah)
+      // Kemasan Returnable dibeli → catat saja (stok tidak berubah)
       if (soldEmptyQty > 0) {
         movementsToInsert.push({
           product_id: productId,
           qty: soldEmptyQty,
           type: 'galon_kosong_dibeli_dari_pusat',
-          notes: 'Galon kosong dibeli dari pusat (tidak memengaruhi stok).',
+          notes: 'Kemasan Returnable dibeli dari pusat (tidak memengaruhi stok).',
           company_id: companyId,
           user_id: userId,
           central_order_id: orderId,
         });
-        // Tambahkan transaksi finansial untuk pembelian galon kosong
+        // Tambahkan transaksi finansial untuk pembelian Kemasan Returnable
         await supabase.from('financial_transactions').insert({
           company_id: companyId,
           type: 'expense',
           amount: soldEmptyQty * soldEmptyPrice,
-          description: `Pembelian galon kosong dari pusat pesanan #${orderId.slice(0, 8)}`,
+          description: `Pembelian Kemasan Returnable dari pusat pesanan #${orderId.slice(0, 8)}`,
           source_table: 'central_orders',
           source_id: orderId,
         });
@@ -121,7 +121,7 @@ serve(async (req) => {
       const originalItem = orderItems.find(
         (item) => item.product_id === receivedItem.product_id
       );
-      // Dapatkan harga galon kosong dari galonDetails
+      // Dapatkan harga Kemasan Returnable dari galonDetails
       const galonDetail = galonDetails[receivedItem.product_id];
       const soldEmptyPrice = galonDetail ? (parseFloat(galonDetail.sold_empty_price) || 0) : 0;
       

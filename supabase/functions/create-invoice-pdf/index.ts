@@ -156,11 +156,11 @@ serve(async (req) => {
         page.drawText(`Rp${transport_cost.toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${transport_cost.toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });
     }
     
-    // Tambahkan baris untuk pembelian galon kosong
+    // Tambahkan baris untuk pembelian Kemasan Returnable
     const emptyBottlePrice = order_items.find(item => item.products?.is_returnable)?.products?.empty_bottle_price || 0;
     if (purchased_empty_qty > 0) {
         y -= 25;
-        page.drawText('Beli Galon Kosong', { x: margin + 5, y: y, size: 12, font: helveticaFont });
+        page.drawText('Beli Kemasan Returnable', { x: margin + 5, y: y, size: 12, font: helveticaFont });
         page.drawText(`${purchased_empty_qty}`, { x: margin + 200, y: y, size: 12, font: helveticaFont });
         page.drawText(`Rp${emptyBottlePrice.toLocaleString('id-ID')}`, { x: margin + 300, y: y, size: 12, font: helveticaFont });
         page.drawText(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, { x: width - margin - helveticaFont.widthOfTextAtSize(`Rp${(purchased_empty_qty * emptyBottlePrice).toLocaleString('id-ID')}`, 12) - 5, y: y, size: 12, font: helveticaFont });

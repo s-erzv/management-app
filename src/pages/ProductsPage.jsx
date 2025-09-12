@@ -170,7 +170,7 @@ const ProductsPage = () => {
                     <TableHead className="min-w-[150px]">Subkategori</TableHead>
                     <TableHead className="min-w-[100px]">Stok</TableHead>
                     <TableHead className="min-w-[150px]">Harga Beli</TableHead>
-                    <TableHead className="min-w-[150px]">Harga Galon Kosong</TableHead>
+                    <TableHead className="min-w-[150px]">Harga Kemasan Returnable</TableHead>
                     <TableHead className="min-w-[150px]">Dapat Dikembalikan</TableHead>
                     <TableHead className="min-w-[120px]">Aksi</TableHead>
                   </TableRow>

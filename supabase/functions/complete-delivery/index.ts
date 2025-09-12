@@ -50,7 +50,7 @@ serve(async (req) => {
     const orderItemsTotal = order.order_items.reduce((sum, item) => sum + (item.qty * item.price), 0);
     let totalPurchaseCost = 0;
 
-    // --- LOGIC FOR UPDATING GALON MOVEMENTS ONLY ---
+    // --- LOGIC FOR UPDATING STOCKS AND GALON MOVEMENTS ---
     // Logika pengurangan stok produk yang terjual dihapus dari sini.
     // Ini sekarang harus ditangani oleh database trigger saat pesanan berstatus 'sent'.
 
@@ -69,13 +69,18 @@ serve(async (req) => {
 
         const diff_returned = parseFloat(item.returnedQty) || 0;
         if (diff_returned > 0) {
-          // Hanya mencatat pergerakan, tidak mengubah stok
+          // Perbaikan: Menambahkan stok galon kosong ketika galon dikembalikan oleh pelanggan
+          await supabase.rpc('update_empty_bottle_stock', {
+            product_id: item.product_id,
+            qty_to_add: diff_returned,
+          });
+          
           await supabase.from('stock_movements').insert({
             type: 'pengembalian',
             qty: diff_returned,
             order_id: orderId,
             product_id: item.product_id,
-            notes: 'Pengembalian galon kosong dari pelanggan.',
+            notes: 'Pengembalian Kemasan Returnable dari pelanggan.',
             company_id: company_id,
           });
         }
@@ -88,7 +93,7 @@ serve(async (req) => {
             qty: diff_purchased,
             order_id: orderId,
             product_id: item.product_id,
-            notes: 'Galon kosong dibeli oleh perusahaan.',
+            notes: 'Kemasan Returnable dibeli oleh perusahaan.',
             company_id: company_id,
           });
         }
@@ -131,7 +136,7 @@ serve(async (req) => {
           company_id: company_id,
           type: 'income',
           amount: totalPurchaseCost,
-          description: `Pemasukan dari pembelian galon kosong dari pelanggan pesanan #${orderId.slice(0, 8)}`,
+          description: `Pemasukan dari pembelian Kemasan Returnable dari pelanggan pesanan #${orderId.slice(0, 8)}`,
           payment_method_id: paymentMethodId,
           source_table: 'orders',
           source_id: orderId,

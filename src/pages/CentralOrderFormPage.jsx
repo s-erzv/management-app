@@ -805,7 +805,7 @@ const CentralOrderFormPage = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Galon Kosong Dibeli dari Pusat</Label>
+                      <Label>Kemasan Returnable Dibeli dari Pusat</Label>
                       <p className="text-lg font-bold">{formatCurrency(totalOrderValue - totalItemsValue - (parseFloat(transactionDetails.admin_fee) || 0) - (parseFloat(transactionDetails.driver_tip) || 0))}</p>
                     </div>
                     <div className="space-y-2">
@@ -1027,58 +1027,68 @@ const CentralOrderFormPage = () => {
                   </Table>
                 </div>
                 
-                {orderItems.filter(item => item.is_returnable).map(item => (
-                    <div key={item.product_id} className="space-y-4 col-span-full mt-4 p-4 border rounded-md bg-gray-50">
-                        <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
-                            <Package className="h-4 w-4" />
-                            Detail Galon ({item.product_name})
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor={`galon-returned-${item.product_id}`}>Galon Dikembalikan ke Pusat</Label>
-                                <Input
-                                    id={`galon-returned-${item.product_id}`}
-                                    type="number"
-                                    placeholder="0"
-                                    value={gallonDetails[item.product_id]?.returned_to_central || ''}
-                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'returned_to_central', e.target.value)}
-                                    onWheel={handleInputWheel}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor={`galon-borrowed-${item.product_id}`}>Galon Dipinjam dari Pusat</Label>
-                                <Input
-                                    id={`galon-borrowed-${item.product_id}`}
-                                    type="number"
-                                    placeholder="0"
-                                    value={gallonDetails[item.product_id]?.borrowed_from_central || ''}
-                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'borrowed_from_central', e.target.value)}
-                                    onWheel={handleInputWheel}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor={`galon-sold-${item.product_id}`}>Galon Kosong Dibeli dari Pusat</Label>
-                                <Input
-                                    id={`galon-sold-${item.product_id}`}
-                                    type="number"
-                                    placeholder="0"
-                                    value={gallonDetails[item.product_id]?.sold_empty_to_central || ''}
-                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_to_central', e.target.value)}
-                                    onWheel={handleInputWheel}
-                                />
-                                <Label htmlFor={`price-sold-${item.product_id}`}>Harga Galon Kosong</Label>
-                                <Input
-                                    id={`price-sold-${item.product_id}`}
-                                    type="number"
-                                    placeholder="0"
-                                    value={gallonDetails[item.product_id]?.sold_empty_price || ''}
-                                    onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_price', e.target.value)}
-                                    onWheel={handleInputWheel}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                {orderItems.filter(item => item.is_returnable).map(item => {
+                  const productDetail = products.find(p => p.id === item.product_id);
+                  const currentEmptyStock = productDetail ? productDetail.empty_bottle_stock : 0;
+
+                  return (
+                      <div key={item.product_id} className="space-y-4 col-span-full mt-4 p-4 border rounded-md bg-gray-50">
+                          <h4 className="font-semibold text-[#10182b] flex items-center gap-2">
+                              <Package className="h-4 w-4" />
+                              Detail Galon ({item.product_name})
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-2">
+                                  <Label htmlFor={`galon-returned-${item.product_id}`}>
+                                      Galon Dikembalikan ke Pusat
+                                      <span className="ml-2 font-normal text-gray-500">
+                                        (Stok saat ini: {currentEmptyStock} pcs)
+                                      </span>
+                                  </Label>
+                                  <Input
+                                      id={`galon-returned-${item.product_id}`}
+                                      type="number"
+                                      placeholder="0"
+                                      value={gallonDetails[item.product_id]?.returned_to_central || ''}
+                                      onChange={(e) => handleGallonDetailsChange(item.product_id, 'returned_to_central', e.target.value)}
+                                      onWheel={handleInputWheel}
+                                  />
+                              </div>
+                              <div className="space-y-2">
+                                  <Label htmlFor={`galon-borrowed-${item.product_id}`}>Galon Dipinjam dari Pusat</Label>
+                                  <Input
+                                      id={`galon-borrowed-${item.product_id}`}
+                                      type="number"
+                                      placeholder="0"
+                                      value={gallonDetails[item.product_id]?.borrowed_from_central || ''}
+                                      onChange={(e) => handleGallonDetailsChange(item.product_id, 'borrowed_from_central', e.target.value)}
+                                      onWheel={handleInputWheel}
+                                  />
+                              </div>
+                              <div className="space-y-2">
+                                  <Label htmlFor={`galon-sold-${item.product_id}`}>Kemasan Returnable Dibeli dari Pusat</Label>
+                                  <Input
+                                      id={`galon-sold-${item.product_id}`}
+                                      type="number"
+                                      placeholder="0"
+                                      value={gallonDetails[item.product_id]?.sold_empty_to_central || ''}
+                                      onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_to_central', e.target.value)}
+                                      onWheel={handleInputWheel}
+                                  />
+                                  <Label htmlFor={`price-sold-${item.product_id}`}>Harga Kemasan Returnable</Label>
+                                  <Input
+                                      id={`price-sold-${item.product_id}`}
+                                      type="number"
+                                      placeholder="0"
+                                      value={gallonDetails[item.product_id]?.sold_empty_price || ''}
+                                      onChange={(e) => handleGallonDetailsChange(item.product_id, 'sold_empty_price', e.target.value)}
+                                      onWheel={handleInputWheel}
+                                  />
+                              </div>
+                          </div>
+                      </div>
+                  );
+              })}
               
               <Button onClick={handleFinalizeReceipt} className="w-full bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Selesaikan Pengecekan & Perbarui Stok'}

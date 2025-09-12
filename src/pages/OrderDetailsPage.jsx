@@ -642,7 +642,7 @@ ${companyName}`;
   if (order.purchased_empty_qty > 0) {
       allItems.push({
           id: 'purchased-empty',
-          products: { name: 'Beli Galon Kosong' },
+          products: { name: 'Beli Kemasan Returnable' },
           qty: order.purchased_empty_qty,
           price: purchasedEmptyPrice,
           item_type: 'pembelian'

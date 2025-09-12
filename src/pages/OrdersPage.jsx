@@ -215,7 +215,7 @@ const OrdersPage = () => {
       "ID Pesanan", "Nomor Invoice", "Nama Pelanggan", "Alamat Pelanggan", "Telepon Pelanggan",
       "Tanggal Order", "Status Pengiriman", "Status Pembayaran", "Nama Petugas",
       "Total Harga", "Pembayaran Diterima", "Sisa Tagihan", "Galon Dikembalikan", 
-      "Galon Dipinjam", "Galon Kosong Dibeli", "Biaya Transportasi", "Detail Produk", 
+      "Galon Dipinjam", "Kemasan Returnable Dibeli", "Biaya Transportasi", "Detail Produk", 
       "Bukti Pengiriman", "Riwayat Pembayaran"
     ];
     

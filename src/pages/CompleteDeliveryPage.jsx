@@ -537,7 +537,7 @@ const CompleteDeliveryPage = () => {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor={`purchasedEmptyQty-${item.product_id}`}>Beli Galon Kosong</Label>
+                          <Label htmlFor={`purchasedEmptyQty-${item.product_id}`}>Beli Kemasan Returnable</Label>
                           <Input
                             id={`purchasedEmptyQty-${item.product_id}`}
                             type="number"

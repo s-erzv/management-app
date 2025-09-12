@@ -46,6 +46,25 @@ const ReportsPage = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('all');
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleResize);
+      handleResize(); // Set initial value
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', handleResize);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (companyId) {
       fetchCategories();
@@ -170,7 +189,7 @@ const ReportsPage = () => {
           stock: p.empty_bottle_stock,
           demand: (demandByEmptyBottle[p.id] || 0),
           diff: p.empty_bottle_stock - (demandByEmptyBottle[p.id] || 0),
-          type: 'Galon Kosong',
+          type: 'Kemasan Returnable',
         };
       });
 
@@ -354,6 +373,7 @@ const ReportsPage = () => {
                     textAnchor="end"
                     tickMargin={12}
                     tickFormatter={formatTick}
+                    style={{ fontSize: isMobile ? '8px' : '10px' }}
                     minTickGap={0}
                   />
                   <YAxis allowDecimals={false} />
@@ -375,11 +395,8 @@ const ReportsPage = () => {
       <Card className="border-0 shadow-lg bg-white">
         <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
           <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok Galon Kosong vs Permintaan
+            <TrendingUp className="h-6 w-6" /> Stok produk returnable
           </CardTitle>
-          <CardDescription className="text-gray-200">
-            Perbandingan visual stok galon kosong dengan total permintaan dari pesanan aktif.
-          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           {reportData.galonChartData && reportData.galonChartData.length > 0 ? (
@@ -398,6 +415,7 @@ const ReportsPage = () => {
                     textAnchor="end"
                     tickMargin={12}
                     tickFormatter={formatTick}
+                    style={{ fontSize: isMobile ? '8px' : '10px' }}
                     minTickGap={0}
                   />
                   <YAxis allowDecimals={false} />
@@ -410,7 +428,7 @@ const ReportsPage = () => {
             </div>
           ) : (
             <div className="flex justify-center items-center h-40">
-              <p className="text-muted-foreground">Tidak ada data untuk grafik galon kosong.</p>
+              <p className="text-muted-foreground">Tidak ada data untuk grafik Kemasan Returnable.</p>
             </div>
           )}
         </CardContent>

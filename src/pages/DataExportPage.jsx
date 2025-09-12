@@ -385,7 +385,7 @@ const selectDisplayColumns = (data, type) => {
 
       'is_returnable_formatted': 'Dapat Dikembalikan',
 
-      'empty_bottle_price_formatted': 'Harga Galon Kosong',
+      'empty_bottle_price_formatted': 'Harga Kemasan Returnable',
 
       'category_name': 'Kategori',
 
@@ -404,8 +404,8 @@ const selectDisplayColumns = (data, type) => {
     empty_bottle_stock: {
       'id': 'ID Produk',
       'name': 'Nama Produk',
-      'empty_bottle_stock': 'Stok Galon Kosong',
-      'empty_bottle_price_formatted': 'Harga Galon Kosong',
+      'empty_bottle_stock': 'Stok Kemasan Returnable',
+      'empty_bottle_price_formatted': 'Harga Kemasan Returnable',
       'company_name': 'Nama Perusahaan',
     },
 
@@ -429,7 +429,7 @@ const selectDisplayColumns = (data, type) => {
 
       'borrowed_qty': 'Galon Dipinjam',
 
-      'purchased_empty_qty': 'Galon Kosong Dibeli',
+      'purchased_empty_qty': 'Kemasan Returnable Dibeli',
 
       'planned_date_formatted': 'Tanggal Rencana',
 
@@ -977,7 +977,7 @@ const DataExportPage = () => {
         // Map internal table names to more readable sheet names
         switch(tableName) {
             case 'empty_bottle_stock':
-                sheetName = 'Stok Galon Kosong';
+                sheetName = 'Stok Kemasan Returnable';
                 break;
             case 'stock_movements':
                 sheetName = 'Pergerakan Stok';
@@ -1037,7 +1037,7 @@ const DataExportPage = () => {
   const filteredTables = (processedData[activeTab] && Object.keys(processedData[activeTab]).length > 0)
     ? Object.keys(processedData[activeTab]).map(key => {
         let name = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        if (key === 'empty_bottle_stock') name = 'Stok Galon Kosong';
+        if (key === 'empty_bottle_stock') name = 'Stok Kemasan Returnable';
         if (key === 'products') name = 'Produk';
         if (key === 'stock_movements') name = 'Pergerakan Stok';
         
@@ -1053,7 +1053,7 @@ const DataExportPage = () => {
     ...(userProfile?.role === 'super_admin' ? [{ name: 'Perusahaan', data: processedData[activeTab]?.companies, fileName: 'companies' }] : []),
     { name: 'Pelanggan', data: processedData[activeTab]?.customers, fileName: 'customers' },
     { name: 'Produk', data: processedData[activeTab]?.products, fileName: 'products' },
-    { name: 'Stok Galon Kosong', data: processedData[activeTab]?.empty_bottle_stock, fileName: 'empty_bottle_stock' },
+    { name: 'Stok Kemasan Returnable', data: processedData[activeTab]?.empty_bottle_stock, fileName: 'empty_bottle_stock' },
     { name: 'Pesanan', data: processedData[activeTab]?.orders, fileName: 'orders' },
     { name: 'Order Pusat', data: processedData[activeTab]?.central_orders, fileName: 'central_orders' },
     { name: 'Laporan Pengeluaran', data: processedData[activeTab]?.expense_reports, fileName: 'expense_reports' },

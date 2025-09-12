@@ -270,7 +270,7 @@ const StockAndGalonPage = () => {
       
       if (rpcError) {
         console.error('Error updating empty bottle stock:', rpcError);
-        toast.error('Gagal memperbarui stok galon kosong.');
+        toast.error('Gagal memperbarui stok Kemasan Returnable.');
         setLoading(false);
         return;
       }
@@ -383,7 +383,7 @@ const StockAndGalonPage = () => {
             {isReturnable && (
                 <Card className="border-0 shadow-sm bg-white">
                   <CardHeader>
-                    <CardTitle className="text-[#10182b]">Stok Galon Kosong</CardTitle>
+                    <CardTitle className="text-[#10182b]">Stok Kemasan Returnable</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-4xl font-bold text-gray-500">{currentEmptyBottleStock}</p>
@@ -551,7 +551,7 @@ const StockAndGalonPage = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="product_stock">Stok Produk</SelectItem>
-                      {isReturnable && <SelectItem value="empty_bottle_stock">Stok Galon Kosong</SelectItem>}
+                      {isReturnable && <SelectItem value="empty_bottle_stock">Stok Kemasan Returnable</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
