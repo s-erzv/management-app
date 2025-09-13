@@ -20,13 +20,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const movementsToInsert = [];
-
     // Logika untuk mencatat pergerakan stok produk utama
     for (const item of receivedItems) {
       const receivedQty = parseFloat(item.received_qty) || 0;
       if (receivedQty > 0) {
-        movementsToInsert.push({
+        // Catat pergerakan stok masuk dari pusat
+        await supabase.from('stock_movements').insert({
           product_id: item.product_id,
           qty: receivedQty,
           type: 'masuk_dari_pusat',
@@ -35,6 +34,8 @@ serve(async (req) => {
           user_id: userId,
           central_order_id: orderId,
         });
+
+        // Perbarui stok produk
         await supabase.rpc('update_product_stock', {
           product_id: item.product_id,
           qty_to_add: receivedQty,
@@ -47,11 +48,12 @@ serve(async (req) => {
       const returnedQty = parseFloat(details.returned_to_central) || 0;
       const borrowedQty = parseFloat(details.borrowed_from_central) || 0;
       const soldEmptyQty = parseFloat(details.sold_empty_to_central) || 0;
-      const soldEmptyPrice = parseFloat(details.sold_empty_price) || 0; // Ambil harga dari payload
+      const soldEmptyPrice = parseFloat(details.sold_empty_price) || 0;
 
       // Galon dikembalikan → stok berkurang
       if (returnedQty > 0) {
-        movementsToInsert.push({
+        // Catat pergerakan stok galon dikembalikan ke pusat
+        await supabase.from('stock_movements').insert({
           product_id: productId,
           qty: returnedQty,
           type: 'galon_dikembalikan_ke_pusat',
@@ -61,6 +63,7 @@ serve(async (req) => {
           central_order_id: orderId,
         });
 
+        // Perbarui stok Kemasan Returnable
         await supabase.rpc('update_empty_bottle_stock', {
           product_id: productId,
           qty_to_add: -returnedQty,
@@ -69,7 +72,8 @@ serve(async (req) => {
 
       // Galon dipinjam → catat saja (stok tidak berubah)
       if (borrowedQty > 0) {
-        movementsToInsert.push({
+        // Catat pergerakan galon dipinjam dari pusat
+        await supabase.from('stock_movements').insert({
           product_id: productId,
           qty: borrowedQty,
           type: 'galon_dipinjam_dari_pusat',
@@ -80,9 +84,10 @@ serve(async (req) => {
         });
       }
 
-      // Kemasan Returnable dibeli → catat saja (stok tidak berubah)
+      // Kemasan Returnable dibeli → catat pergerakan dan transaksi
       if (soldEmptyQty > 0) {
-        movementsToInsert.push({
+        // Catat pergerakan galon dibeli dari pusat
+        await supabase.from('stock_movements').insert({
           product_id: productId,
           qty: soldEmptyQty,
           type: 'galon_kosong_dibeli_dari_pusat',
@@ -91,6 +96,7 @@ serve(async (req) => {
           user_id: userId,
           central_order_id: orderId,
         });
+        
         // Tambahkan transaksi finansial untuk pembelian Kemasan Returnable
         await supabase.from('financial_transactions').insert({
           company_id: companyId,
@@ -103,11 +109,6 @@ serve(async (req) => {
       }
     }
 
-
-    // Masukkan semua pergerakan stok dalam satu operasi
-    if (movementsToInsert.length > 0) {
-      await supabase.from('stock_movements').insert(movementsToInsert);
-    }
 
     // Perbarui status pesanan pusat
     await supabase.from('central_orders').update({

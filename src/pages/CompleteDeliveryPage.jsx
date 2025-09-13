@@ -315,7 +315,6 @@ const CompleteDeliveryPage = () => {
   
   const combinedPaymentMethods = [
     ...paymentMethods,
-    { id: 'hybrid', method_name: 'Tunai & Transfer', type: 'hybrid' }
   ];
   
   const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);

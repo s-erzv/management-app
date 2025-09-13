@@ -128,21 +128,6 @@ serve(async (req) => {
         });
       if (paymentInsertError) throw paymentInsertError;
     }
-
-    if (totalPurchaseCost > 0) {
-       const { error: emptyBottlePurchaseError } = await supabase
-        .from('financial_transactions')
-        .insert({
-          company_id: company_id,
-          type: 'income',
-          amount: totalPurchaseCost,
-          description: `Pemasukan dari pembelian Kemasan Returnable dari pelanggan pesanan #${orderId.slice(0, 8)}`,
-          payment_method_id: paymentMethodId,
-          source_table: 'orders',
-          source_id: orderId,
-        });
-      if (emptyBottlePurchaseError) throw emptyBottlePurchaseError;
-    }
     
     const totalReturnedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.returnedQty) || 0), 0);
     const totalBorrowedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.borrowedQty) || 0), 0);

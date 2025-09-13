@@ -317,7 +317,7 @@ const StockAndGalonPage = () => {
     
     return {
       returnedFromCustomer: movementsByType['pengembalian'] || 0,
-      purchasedFromCustomer: (movementsByType['Product Returnable_dibeli'] || 0),
+      purchasedFromCustomer: (movementsByType['galon_dibeli'] || 0),
       borrowed: (movementsByType['pinjam_kembali'] || 0) + (movementsByType['keluar_pinjam_dari_pusat'] || 0),
     };
   }, [movements, isReturnable]);
@@ -422,10 +422,10 @@ const StockAndGalonPage = () => {
             </Card>
           )}
 
-          {/* {isReturnable && (
+          {isReturnable && (
             <Card className="border-0 shadow-sm bg-white">
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <CardTitle className="text-[#10182b]">Daftar Utang Galon Pelanggan</CardTitle>
+                <CardTitle className="text-[#10182b]">Daftar Utang Kemasan Pelanggan</CardTitle>
                 <Button onClick={() => fetchGalonDebts(selectedProductId)} disabled={loading || refreshing} variant="outline" className="text-[#10182b] hover:bg-gray-100">
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                   <span className="ml-2">Refresh Data</span>
@@ -447,25 +447,24 @@ const StockAndGalonPage = () => {
                             debts.map((debt) => {
                                 const pd = debt.products_debt[selectedProductId];
                                 
-                                // Logika yang diperbaiki: hanya tampilkan baris jika ada data utang untuk produk ini
                                 if (!pd) {
                                     return null;
                                 }
 
-                                const isSettled = pd.outstanding === 0;
+                                const isSettled = pd.outstanding <= 0;
                                 
                                 return (
                                     <TableRow
                                         key={debt.id}
-                                        className={`cursor-pointer hover:bg-gray-50`}
+                                        className={`${isSettled ? 'bg-gray-100 text-gray-500' : 'cursor-pointer hover:bg-gray-50'}`}
                                     >
-                                        <TableCell className={`font-medium text-[#10182b]`}>
+                                        <TableCell className={`font-medium ${isSettled ? 'text-gray-500' : 'text-[#10182b]'}`}>
                                             {debt.name}
                                         </TableCell>
                                         <TableCell>{debt.phone}</TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className={`${isSettled ? 'border-gray-300 text-gray-600' : 'border-red-300 text-red-700'}`}>
-                                                {pd.outstanding} galon
+                                            <Badge variant="outline" className={`${isSettled ? 'border-gray-300 text-gray-600' : 'border-red-300 text-red-700 bg-red-100'}`}>
+                                                {pd.outstanding} kemasan
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
@@ -479,7 +478,7 @@ const StockAndGalonPage = () => {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                                    Tidak ada utang galon untuk produk ini.
+                                    Tidak ada utang kemasan untuk produk ini.
                                 </TableCell>
                             </TableRow>
                         )}
@@ -488,7 +487,7 @@ const StockAndGalonPage = () => {
                 </div>
               </CardContent>
             </Card>
-          )} */}
+          )}
 
           <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
