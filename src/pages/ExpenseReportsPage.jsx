@@ -328,7 +328,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
     e.preventDefault();
     setIsSubmitting(true);
     
-    const totalAmount = calculateTotal();
+    const totalAmount = expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     
     const expenseReport = {
       company_id: companyId,
@@ -390,7 +390,6 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
   }
 
   const expenseTypes = ['Bongkar', 'Bensin', 'Makan', 'Kasbon', 'Lainnya'];
-  const totalAmount = expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const currentSubmitter = employees.find(emp => emp.id === submitterId);
   const finalAmountDisplay = selectedReport ? selectedReport.total_amount + parseFloat(adminFee) : 0;
   
@@ -506,7 +505,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                   <div className="flex justify-between items-center">
                     <span className="text-xl font-semibold">Total Pengeluaran:</span>
                     <span className="text-2xl lg:text-3xl font-bold">
-                      Rp{totalAmount.toLocaleString('id-ID')}
+                      Rp{calculateTotal().toLocaleString('id-ID')}
                     </span>
                   </div>
                 </CardContent>
@@ -987,6 +986,124 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                           {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Konfirmasi Pembayaran'}
                       </Button>
                   </DialogFooter>
+              </DialogContent>
+          </Dialog>
+      )}
+
+      {/* Modal Edit Laporan Pengeluaran */}
+      {selectedReport && (
+          <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+              <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                      <DialogTitle>Edit Laporan Pengeluaran</DialogTitle>
+                      <DialogDescription>
+                          Perbarui item pengeluaran dan detail laporan.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleUpdateReport} className="space-y-6">
+                      <div className="space-y-4">
+                          <Label className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
+                              <FileText className="h-5 w-5" />
+                              Daftar Pengeluaran
+                          </Label>
+                          <div className="space-y-4">
+                              {expenseItems.map((item, index) => (
+                                  <Card key={index} className="border border-gray-200 bg-gray-50">
+                                      <CardContent className="p-4">
+                                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                                              <div className="space-y-2">
+                                                  <Label className="text-sm font-medium text-gray-700">Jenis Pengeluaran</Label>
+                                                  <Select
+                                                      value={item.type}
+                                                      onValueChange={(value) => handleItemChange(index, 'type', value)}
+                                                  >
+                                                      <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b]">
+                                                          <SelectValue placeholder="Pilih jenis" />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                          {expenseTypes.map(type => (
+                                                              <SelectItem key={type} value={type.toLowerCase()}>{type}</SelectItem>
+                                                          ))}
+                                                      </SelectContent>
+                                                  </Select>
+                                              </div>
+                                              <div className="md:col-span-1 xl:col-span-2 space-y-2">
+                                                  <Label className="text-sm font-medium text-gray-700">Deskripsi Keperluan</Label>
+                                                  <Input
+                                                      type="text"
+                                                      placeholder="Contoh: Pembelian bensin untuk pengiriman ke Jakarta"
+                                                      value={item.description}
+                                                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                                      className="bg-white border-gray-300 focus:border-[#10182b]"
+                                                      required
+                                                  />
+                                              </div>
+                                              <div className="space-y-2">
+                                                  <Label className="text-sm font-medium text-gray-700">Nominal (Rp)</Label>
+                                                  <div className="flex gap-2">
+                                                      <Input
+                                                          type="number"
+                                                          placeholder="0"
+                                                          value={item.amount}
+                                                          onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
+                                                          className="bg-white border-gray-300 focus:border-[#10182b]"
+                                                          required
+                                                      />
+                                                      {expenseItems.length > 1 && (
+                                                          <Button 
+                                                              type="button" 
+                                                              variant="destructive" 
+                                                              size="icon" 
+                                                              onClick={() => handleRemoveItem(index)}
+                                                              className="shrink-0"
+                                                          >
+                                                              <Trash className="h-4 w-4" />
+                                                          </Button>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </CardContent>
+                                  </Card>
+                              ))}
+                          </div>
+                          <Button 
+                              type="button" 
+                              variant="outline" 
+                              className="w-full border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white transition-colors" 
+                              onClick={handleAddItem}
+                          >
+                              <Plus className="h-4 w-4 mr-2" /> Tambah Item Pengeluaran
+                          </Button>
+                      </div>
+                      <Card className="border-[#10182b] bg-gradient-to-r from-[#10182b] to-[#1a2542] text-white">
+                          <CardContent className="p-6">
+                              <div className="flex justify-between items-center">
+                                  <span className="text-xl font-semibold">Total Pengeluaran:</span>
+                                  <span className="text-2xl lg:text-3xl font-bold">
+                                      Rp{expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('id-ID')}
+                                  </span>
+                              </div>
+                          </CardContent>
+                      </Card>
+                      <Button 
+                          type="submit" 
+                          className="w-full bg-[#10182b] text-white hover:bg-[#1a2542] h-12 text-lg font-semibold" 
+                          disabled={isSubmitting}
+                      >
+                          {isSubmitting ? (
+                              <>
+                                  <Loader2 className="h-5 w-5 animate-spin mr-2" /> 
+                                  Memperbarui Laporan...
+                              </>
+                          ) : (
+                              <>
+                                  <Pencil className="h-5 w-5 mr-2" />
+                                  Perbarui Laporan
+                              </>
+                          )}
+                      </Button>
+                  </form>
               </DialogContent>
           </Dialog>
       )}

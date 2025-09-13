@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package, ArrowLeft, MessageSquareText } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package, ArrowLeft, MessageSquareText, Pencil } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -36,7 +36,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import WhatsappOrderModal from '@/components/WhatsappOrderModal';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 const CentralOrderFormPage = () => {
   const { id } = useParams();
@@ -70,6 +70,14 @@ const CentralOrderFormPage = () => {
   });
   const [payments, setPayments] = useState([]);
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
+
+  // States untuk edit pembayaran
+  const [isEditPaymentModalOpen, setIsEditPaymentModalOpen] = useState(false);
+  const [paymentToEdit, setPaymentToEdit] = useState(null);
+  const [editPaymentForm, setEditPaymentForm] = useState({
+      amount: '',
+      payment_method_id: '',
+  });
 
   // Tab 3 State
   const [deliveryDetails, setDeliveryDetails] = useState({
@@ -218,7 +226,7 @@ const CentralOrderFormPage = () => {
     
     const { data: paymentsData } = await supabase
       .from('financial_transactions')
-      .select('amount, transaction_date, proof_url, payment_method:payment_method_id(method_name, account_name)')
+      .select('*, payment_method:payment_method_id(method_name, account_name)')
       .eq('source_table', 'central_orders')
       .eq('source_id', orderId)
       .eq('type', 'expense');
@@ -538,6 +546,60 @@ const CentralOrderFormPage = () => {
     }
   };
 
+  const handleEditPaymentClick = (payment) => {
+      setPaymentToEdit(payment);
+      setEditPaymentForm({
+          amount: payment.amount,
+          payment_method_id: payment.payment_method_id,
+      });
+      setIsEditPaymentModalOpen(true);
+  };
+  
+  const handleUpdatePayment = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+          const { error } = await supabase
+              .from('financial_transactions')
+              .update({
+                  amount: parseFloat(editPaymentForm.amount),
+                  payment_method_id: editPaymentForm.payment_method_id,
+              })
+              .eq('id', paymentToEdit.id);
+          if (error) throw error;
+          
+          toast.success('Pembayaran berhasil diperbarui!');
+          setIsEditPaymentModalOpen(false);
+          setPaymentToEdit(null);
+          fetchCentralOrder(id);
+      } catch (error) {
+          console.error('Error updating payment:', error);
+          toast.error('Gagal memperbarui pembayaran: ' + error.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+  
+  const handleDeletePayment = async (paymentId) => {
+      if (!window.confirm('Apakah Anda yakin ingin menghapus pembayaran ini?')) return;
+      setLoading(true);
+      try {
+          const { error } = await supabase
+              .from('financial_transactions')
+              .delete()
+              .eq('id', paymentId);
+          if (error) throw error;
+
+          toast.success('Pembayaran berhasil dihapus!');
+          fetchCentralOrder(id);
+      } catch (error) {
+          console.error('Error deleting payment:', error);
+          toast.error('Gagal menghapus pembayaran: ' + error.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleReceivedQtyChange = (index, value) => {
     const newReceivedItems = [...receivedItems];
     newReceivedItems[index].received_qty = value;
@@ -552,6 +614,34 @@ const CentralOrderFormPage = () => {
             [field]: value,
         }
     }));
+  };
+  
+  const handleDeleteOrder = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus pesanan pusat ini? Semua data terkait akan dihapus dan stok akan dikembalikan.')) return;
+    setLoading(true);
+    try {
+        const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/manage-central-order-galons', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ orderId: id, companyId }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Gagal menghapus pesanan.');
+        }
+
+        toast.success('Pesanan berhasil dihapus dan stok dikembalikan!');
+        navigate('/central-orders');
+    } catch (error) {
+        console.error('Error deleting central order:', error);
+        toast.error('Gagal menghapus pesanan: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleFinalizeReceipt = async () => {
@@ -627,6 +717,17 @@ const CentralOrderFormPage = () => {
             >
                 <MessageSquareText className="h-4 w-4 mr-2" /> Kirim Pesan
             </Button>
+            {!isNewOrder && (
+              <>
+                <Button
+                  onClick={handleDeleteOrder}
+                  variant="destructive"
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Hapus Pesanan
+                </Button>
+              </>
+            )}
         </div>
       </div>
 
@@ -736,7 +837,7 @@ const CentralOrderFormPage = () => {
                 <Plus className="h-4 w-4 mr-2" /> Tambah Item
               </Button>
               <Button onClick={handleSaveOrder} className="w-full mt-4 bg-[#10182b] text-white hover:bg-[#10182b]/90" disabled={loading || authLoading}>
-                {loading || authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Pesanan'}
+                {loading || authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : isNewOrder ? 'Simpan Pesanan' : 'Perbarui Pesanan'}
               </Button>
             </CardContent>
           </Card>
@@ -899,6 +1000,7 @@ const CentralOrderFormPage = () => {
                             <TableHead>Jumlah</TableHead>
                             <TableHead>Metode</TableHead>
                             <TableHead>Bukti</TableHead>
+                            <TableHead>Aksi</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -916,11 +1018,19 @@ const CentralOrderFormPage = () => {
                                   '-'
                                 )}
                               </TableCell>
+                              <TableCell className="flex gap-2">
+                                  <Button variant="ghost" size="icon" onClick={() => handleEditPaymentClick(p)}>
+                                      <Pencil className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDeletePayment(p.id)}>
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                              </TableCell>
                             </TableRow>
                           ))}
                           {payments.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              <TableCell colSpan={5} className="text-center text-muted-foreground">
                                 Belum ada riwayat pembayaran.
                               </TableCell>
                             </TableRow>
@@ -1110,6 +1220,52 @@ const CentralOrderFormPage = () => {
         products={products}
         suppliers={suppliers}
       />
+      
+      {/* Modal Edit Pembayaran */}
+      <Dialog open={isEditPaymentModalOpen} onOpenChange={setIsEditPaymentModalOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Edit Pembayaran</DialogTitle>
+                <DialogDescription>Perbarui nominal atau metode pembayaran.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUpdatePayment} className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="edit-amount">Nominal Pembayaran</Label>
+                    <Input
+                        id="edit-amount"
+                        type="number"
+                        value={editPaymentForm.amount}
+                        onChange={(e) => setEditPaymentForm({...editPaymentForm, amount: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="edit-method">Metode Pembayaran</Label>
+                    <Select
+                        value={editPaymentForm.payment_method_id}
+                        onValueChange={(value) => setEditPaymentForm({...editPaymentForm, payment_method_id: value})}
+                        required
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Pilih metode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {paymentMethods.map(method => (
+                                <SelectItem key={method.id} value={method.id}>
+                                    {method.method_name} ({method.account_name})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button type="submit" disabled={loading}>
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Perbarui Pembayaran'}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

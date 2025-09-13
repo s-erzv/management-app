@@ -421,8 +421,8 @@ const ReportsPage = () => {
                   <YAxis allowDecimals={false} />
                   <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
                   <Legend verticalAlign="top" align="right" height={36} />
-                  <Line type="monotone" dataKey="stock" name="Stok Galon" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="demand" name="Permintaan" stroke="#ff6b6b" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="stock" name="Stok product returnable kosong" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
+                  {/* <Line type="monotone" dataKey="demand" name="Permintaan" stroke="#ff6b6b" strokeWidth={2} dot={{ r: 2 }} /> */}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
