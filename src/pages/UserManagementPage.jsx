@@ -113,13 +113,31 @@ const UserManagementPage = () => {
       return;
     }
 
-    const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (error) {
-      console.error('Error deleting user:', error);
-      toast.error('Gagal menghapus pengguna.');
-    } else {
+    setLoadingUsers(true);
+    try {
+      // Panggil Edge Function 'delete-user'
+      const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`, // Kirim JWT untuk otorisasi
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+
       toast.success('Pengguna berhasil dihapus.');
       setUsers((prev) => prev.filter(u => u.id !== userId));
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Gagal menghapus pengguna: ' + error.message);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
