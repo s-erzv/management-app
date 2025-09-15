@@ -100,7 +100,7 @@ const AdminDashboard = ({ profile, data }) => {
 
             <Card className="hover:shadow-lg transition-shadow duration-300">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Order Pendingpm </CardTitle>
+                <CardTitle className="text-sm font-medium">Order Pending</CardTitle>
                 <AlertCircle className="h-4 w-4 text-yellow-500" />
               </CardHeader>
               <CardContent>
