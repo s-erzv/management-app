@@ -1,3 +1,4 @@
+// src/components/CentralOrderFormPage.jsx
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package, ArrowLeft, MessageSquareText, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileIcon, DollarSign, Wallet, Package, ArrowLeft, MessageSquareText, Pencil, ChevronsUpDown } from 'lucide-react';
 import {
   Tabs,
   TabsContent,
@@ -37,6 +38,9 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import WhatsappOrderModal from '@/components/WhatsappOrderModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils'; // Pastikan Anda memiliki utilitas ini
 
 const CentralOrderFormPage = () => {
   const { id } = useParams();
@@ -53,6 +57,9 @@ const CentralOrderFormPage = () => {
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
   const [orderItems, setOrderItems] = useState([]);
   const [activeTab, setActiveTab] = useState('order-items');
+
+  // States baru untuk popover produk
+  const [isProductPopoverOpen, setIsProductPopoverOpen] = useState({});
 
   // Tab 2 State
   const [transactionDetails, setTransactionDetails] = useState({
@@ -702,6 +709,11 @@ const CentralOrderFormPage = () => {
     );
   }
 
+  const handleProductSelectChange = (index, productId) => {
+    handleItemChange(index, 'product_id', productId);
+    setIsProductPopoverOpen(prev => ({ ...prev, [index]: false }));
+  };
+
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -776,26 +788,47 @@ const CentralOrderFormPage = () => {
 
               <h3 className="font-semibold mt-6">Daftar Item</h3>
               <div className="space-y-4">
-                {orderItems.map((item, index) => (
+                {orderItems.map((item, index) => {
+                  const selectedProductName = products.find(p => p.id === item.product_id)?.name || 'Pilih Produk';
+                  return (
                   <div key={index} className="space-y-4 p-4 border rounded-md">
                     <div className="flex flex-col sm:flex-row gap-2 items-end">
                       <div className="w-full sm:w-auto flex-1">
                         <Label htmlFor={`product-${index}`}>Produk</Label>
-                        <Select
-                          value={item.product_id}
-                          onValueChange={(val) => handleItemChange(index, 'product_id', val)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Pilih Produk" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map(product => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {/* POP OVER PRODUCT START */}
+                        <Popover open={isProductPopoverOpen[index]} onOpenChange={(open) => setIsProductPopoverOpen(prev => ({...prev, [index]: open}))}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={isProductPopoverOpen[index]}
+                              className="w-full justify-between"
+                            >
+                              {selectedProductName}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0">
+                            <Command>
+                              <CommandInput placeholder="Cari produk..." />
+                              <CommandList>
+                                <CommandEmpty>Produk tidak ditemukan.</CommandEmpty>
+                                <CommandGroup>
+                                  {products.map(product => (
+                                    <CommandItem
+                                      key={product.id}
+                                      value={product.name}
+                                      onSelect={() => handleProductSelectChange(index, product.id)}
+                                    >
+                                      {product.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        {/* POP OVER PRODUCT END */}
                       </div>
                       <div className="w-full sm:w-24">
                         <Label htmlFor={`qty-${index}`}>Jumlah</Label>
@@ -831,7 +864,7 @@ const CentralOrderFormPage = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
               <Button type="button" variant="outline" className="w-full" onClick={handleAddItem}>
                 <Plus className="h-4 w-4 mr-2" /> Tambah Item
