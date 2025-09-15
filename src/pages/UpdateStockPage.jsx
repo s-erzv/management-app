@@ -1,3 +1,4 @@
+// src/pages/UpdateStockPage.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,7 +22,14 @@ import {
 } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { Loader2, Box, Save, History } from 'lucide-react';
+import { Loader2, Box, Save, History, Filter } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 
 const UpdateStockPage = () => {
@@ -29,29 +37,58 @@ const UpdateStockPage = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [reconciliations, setReconciliations] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualCounts, setManualCounts] = useState({});
   const [stockDifferences, setStockDifferences] = useState([]);
   const [reconciliationId, setReconciliationId] = useState(null);
   
-  // Perubahan di sini: menyertakan 'user' sebagai peran yang bisa menyesuaikan stok
   const canAdjustStock = userProfile?.role === 'admin' || userProfile?.role === 'super_admin' || userProfile?.role === 'user';
 
   useEffect(() => {
     if (companyId) {
+      fetchCategories();
       fetchProducts();
       fetchReconciliationsHistory();
     }
   }, [companyId]);
 
+  useEffect(() => {
+    if (companyId) {
+      fetchProducts();
+    }
+  }, [companyId, selectedCategory]);
+  
+  const fetchCategories = async () => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Gagal memuat kategori.');
+    } else {
+      setCategories(data);
+    }
+  };
+
   const fetchProducts = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('products')
       .select('id, name, stock')
       .eq('company_id', companyId)
       .order('name', { ascending: true });
+
+    if (selectedCategory !== 'all') {
+      query = query.eq('category_id', selectedCategory);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching products:', error);
@@ -170,6 +207,25 @@ const UpdateStockPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="flex items-center gap-2 mb-4">
+              <Label className="text-sm font-medium text-gray-700">Filter Kategori:</Label>
+              <Select
+                value={selectedCategory}
+                onValueChange={setSelectedCategory}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Semua Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kategori</SelectItem>
+                  {categories.map(category => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="overflow-x-auto">
               <Table className="table-auto min-w-max">
                 <TableHeader>
@@ -198,7 +254,6 @@ const UpdateStockPage = () => {
                           onChange={(e) => handleManualCountChange(product.id, e.target.value)}
                           
                           className="max-w-[100px]"
-                          required
                         />
                       </TableCell>
                     ))}

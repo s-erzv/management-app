@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Users, MessageSquareText } from 'lucide-react';
+import { Loader2, Plus, Users, MessageSquareText, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Select,
@@ -38,6 +38,8 @@ const CustomersPage = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [formData, setFormData] = useState({ 
     name: '', 
     phone: '', 
@@ -70,6 +72,22 @@ const CustomersPage = () => {
     }
     setLoading(false);
   };
+
+  const filteredCustomers = customers.filter((customer) => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        customer.name?.toLowerCase().includes(query) ||
+        customer.phone?.toLowerCase().includes(query) ||
+        customer.address?.toLowerCase().includes(query) ||
+        customer.customer_statuses?.status_name?.toLowerCase().includes(query);
+
+      const matchesStatus =
+        statusFilter === "all" || customer.customer_statuses?.status_name === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+
   
   const fetchCustomerStatuses = async () => {
     if (!companyId) return;
@@ -283,6 +301,35 @@ Jazaakumullahu khayran wa baarakallahu fiikum.`;
             Daftar Pelanggan
           </CardTitle>
         </CardHeader>
+        <div className="flex flex-col sm:flex-row gap-2 mb-4 items-center">
+          {/* Search */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Search className="h-5 w-5 text-gray-500" />
+            <Input
+              type="text"
+              placeholder="Cari pelanggan..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+
+          {/* Filter Status */}
+          <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              {customerStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <CardContent className="p-0">
           <div className="rounded-md border-t overflow-x-auto">
             <Table>
@@ -296,7 +343,7 @@ Jazaakumullahu khayran wa baarakallahu fiikum.`;
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.map((customer) => (
+                 {filteredCustomers.map((customer) => (
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium text-[#10182b]">{customer.name}</TableCell>
                     <TableCell>{customer.phone}</TableCell>

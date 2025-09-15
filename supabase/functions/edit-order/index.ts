@@ -1,3 +1,4 @@
+// supabase/functions/edit-order/index.ts
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -16,7 +17,6 @@ serve(async (req) => {
   try {
     const { orderId, orderDetails, orderItems } = await req.json()
     
-    // Pisahkan courier_ids dari orderDetails
     const { courier_ids, ...restOfOrderDetails } = orderDetails;
 
     const supabase = createClient(
@@ -41,23 +41,25 @@ serve(async (req) => {
         .eq('id', orderId)
         .single();
     if (oldOrderError) throw oldOrderError;
-
-    // 2. Update tabel orders
+    
+    // Hitung ulang total harga dari item pesanan yang baru
+    const newSubtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.qty) * parseFloat(item.price)), 0);
+    
+    // === PERBAIKAN DI SINI: PERBARUI JUGA GRAND_TOTAL DI TABEL 'orders' ===
     const { error: orderUpdateError } = await supabase
       .from('orders')
-      .update(restOfOrderDetails) // Gunakan objek yang sudah dipisahkan
+      .update({ ...restOfOrderDetails, grand_total: newSubtotal }) // Sertakan grand_total yang diperbarui
       .eq('id', orderId);
     if (orderUpdateError) throw orderUpdateError;
+    // ======================================================================
     
-    // 3. Update tabel order_couriers
-    // Hapus semua entri lama
+    // 2. Update tabel order_couriers
     const { error: deleteCouriersError } = await supabase
         .from('order_couriers')
         .delete()
         .eq('order_id', orderId);
     if (deleteCouriersError) throw deleteCouriersError;
 
-    // Masukkan entri baru jika ada
     if (courier_ids && courier_ids.length > 0) {
         const couriersToInsert = courier_ids.map(courier_id => ({
             order_id: orderId,
@@ -69,15 +71,13 @@ serve(async (req) => {
         if (insertCouriersError) throw insertCouriersError;
     }
 
-    // 4. Update tabel order_items
-    // Hapus item-item lama
+    // 3. Update tabel order_items
     const { error: deleteItemsError } = await supabase
       .from('order_items')
       .delete()
       .eq('order_id', orderId);
     if (deleteItemsError) throw deleteItemsError;
     
-    // Masukkan item-item baru
     const itemsToInsert = orderItems.map(item => ({
       ...item,
       order_id: orderId,
@@ -88,8 +88,7 @@ serve(async (req) => {
       .insert(itemsToInsert);
     if (insertItemsError) throw insertItemsError;
     
-    // 5. Update tabel invoices
-    const newSubtotal = orderItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    // 4. Update tabel invoices
     const { error: invoiceUpdateError } = await supabase
         .from('invoices')
         .update({
@@ -101,11 +100,10 @@ serve(async (req) => {
         .eq('order_id', orderId);
     if (invoiceUpdateError) throw invoiceUpdateError;
 
-    // 6. Hitung dan catat pergerakan stok
+    // 5. Hitung dan catat pergerakan stok (logika ini sudah benar)
     for (const oldItem of oldOrder.order_items) {
       const newItem = orderItems.find(i => i.product_id === oldItem.product_id);
       if (!newItem) {
-        // Item dihapus, kembalikan stok
         const { error: movementError } = await supabase
           .from('stock_movements')
           .insert({
