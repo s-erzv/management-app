@@ -13,13 +13,18 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, X, ChevronsUpDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CustomerForm from './CustomerForm';
 import { Separator } from '@/components/ui/separator';
+
+// Import komponen tambahan dari Shadcn UI
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils'; // Pastikan Anda memiliki utilitas ini untuk mengelola classnames
 
 const AddOrderForm = () => {
   const { session, companyId, userProfile } = useAuth();
@@ -31,9 +36,12 @@ const AddOrderForm = () => {
   const [loading, setLoading] = useState(true);
 
   const [orderItems, setOrderItems] = useState([]);
-  // Perbaikan: Ubah nilai awal `qty` menjadi string kosong
   const [newItem, setNewItem] = useState({ product_id: '', qty: '', price: 0 });
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+
+  // States baru untuk dropdown pencarian
+  const [isCustomerPopoverOpen, setIsCustomerPopoverOpen] = useState(false);
+  const [isProductPopoverOpen, setIsProductPopoverOpen] = useState(false);
 
   // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -109,6 +117,7 @@ const AddOrderForm = () => {
   const handleCustomerChange = (val) => {
     setSelectedCustomerId(val);
     setOrderForm({ ...orderForm, customer_id: val });
+    setIsCustomerPopoverOpen(false); // Tutup popover setelah memilih
   };
   
   const handleCourierCheckboxChange = (courierId, checked) => {
@@ -126,6 +135,7 @@ const AddOrderForm = () => {
   };
 
   const handleProductSelectChange = async (val) => {
+    setIsProductPopoverOpen(false); // Tutup popover setelah memilih
     if (!selectedCustomerId) {
       toast.error('Pilih pelanggan terlebih dahulu.');
       setNewItem({ product_id: '', qty: '', price: 0 });
@@ -176,7 +186,6 @@ const AddOrderForm = () => {
     };
 
     setOrderItems([...orderItems, itemToAdd]);
-    // Perbaikan: Ubah nilai awal `qty` menjadi string kosong
     setNewItem({ product_id: '', qty: '', price: 0 });
   };
 
@@ -249,6 +258,9 @@ const AddOrderForm = () => {
     toast.success('Pelanggan baru berhasil ditambahkan dan dipilih.');
   };
 
+  const selectedCustomerName = customers.find(c => c.id === selectedCustomerId)?.name || 'Pilih Pelanggan';
+  const selectedProductName = products.find(p => p.id === newItem.product_id)?.name || 'Pilih Produk';
+
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-2xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -264,33 +276,53 @@ const AddOrderForm = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="customer_id">Pelanggan</Label>
-                <Select
-                  name="customer_id"
-                  value={selectedCustomerId}
-                  onValueChange={handleCustomerChange}
-                  required
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih Pelanggan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                    <div className="p-1">
-                      <Button
-                        type="button"
-                        className="w-full justify-start gap-2"
-                        variant="ghost"
-                        onClick={() => setIsCustomerModalOpen(true)}
-                      >
-                        <Plus className="h-4 w-4" /> Tambah Pelanggan Baru
-                      </Button>
-                    </div>
-                  </SelectContent>
-                </Select>
+                {/* POP OVER CUSTOMER START */}
+                <Popover open={isCustomerPopoverOpen} onOpenChange={setIsCustomerPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={isCustomerPopoverOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedCustomerName}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari pelanggan..." />
+                      <CommandList>
+                        <CommandEmpty>Pelanggan tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {customers.map((customer) => (
+                            <CommandItem
+                              key={customer.id}
+                              value={customer.name}
+                              onSelect={() => handleCustomerChange(customer.id)}
+                            >
+                              {customer.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        <div className="p-1">
+                          <Button
+                            type="button"
+                            className="w-full justify-start gap-2"
+                            variant="ghost"
+                            onClick={() => {
+                              setIsCustomerPopoverOpen(false);
+                              setIsCustomerModalOpen(true);
+                            }}
+                          >
+                            <Plus className="h-4 w-4" /> Tambah Pelanggan Baru
+                          </Button>
+                        </div>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {/* POP OVER CUSTOMER END */}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="planned_date">Tanggal Order</Label>
@@ -337,22 +369,41 @@ const AddOrderForm = () => {
             <div className="space-y-4">
               <Label>Item Pesanan</Label>
               <div className="flex flex-col sm:flex-row gap-2">
-                <Select
-                  value={newItem.product_id}
-                  onValueChange={handleProductSelectChange}
-                  disabled={!selectedCustomerId}
-                >
-                  <SelectTrigger className="w-full sm:w-1/2">
-                    <SelectValue placeholder="Pilih Produk" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* POP OVER PRODUCT START */}
+                <Popover open={isProductPopoverOpen} onOpenChange={setIsProductPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={isProductPopoverOpen}
+                      disabled={!selectedCustomerId}
+                      className="w-full sm:w-1/2 justify-between"
+                    >
+                      {selectedProductName}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Cari produk..." />
+                      <CommandList>
+                        <CommandEmpty>Produk tidak ditemukan.</CommandEmpty>
+                        <CommandGroup>
+                          {products.map((product) => (
+                            <CommandItem
+                              key={product.id}
+                              value={product.name}
+                              onSelect={() => handleProductSelectChange(product.id)}
+                            >
+                              {product.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {/* POP OVER PRODUCT END */}
                 <div className="flex gap-2 w-full sm:w-1/2">
                   <Input
                     type="number"
@@ -360,7 +411,7 @@ const AddOrderForm = () => {
                     name="qty"
                     value={newItem.qty}
                     onChange={(e) => setNewItem({ ...newItem, qty: e.target.value })}
-                     onWheel={handleInputWheel}
+                    onWheel={handleInputWheel}
                     disabled={!newItem.product_id}
                   />
                   <Button type="button" onClick={handleItemAdd} disabled={loading || !newItem.product_id || newItem.qty <= 0} size="icon">
