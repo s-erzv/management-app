@@ -55,8 +55,8 @@ serve(async (req) => {
       order_items,
       transport_cost,
       purchased_empty_qty,
-      returned_qty, // Menambahkan ini
-      borrowed_qty, // Menambahkan ini
+      returned_qty,
+      borrowed_qty,
       grand_total,
       proof_public_url,
     } = orderData;
@@ -74,26 +74,48 @@ serve(async (req) => {
     
     // --- Header ---
     if (companyLogoUrl) {
-        const imageBytes = await fetchImage(companyLogoUrl);
-        const image = await pdfDoc.embedPng(imageBytes);
-        
-        const logoMaxWidth = 180;
-        const logoMaxHeight = 100;
+        try {
+            const imageBytes = await fetchImage(companyLogoUrl);
+            const urlParts = companyLogoUrl.split('.');
+            const fileExtension = urlParts[urlParts.length - 1].toLowerCase();
 
-        let scale = 1;
-        if (image.width > logoMaxWidth || image.height > logoMaxHeight) {
-            scale = Math.min(logoMaxWidth / image.width, logoMaxHeight / image.height);
+            let image;
+            if (fileExtension === 'png') {
+                image = await pdfDoc.embedPng(imageBytes);
+            } else if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
+                image = await pdfDoc.embedJpg(imageBytes);
+            } else {
+                throw new Error('Tipe file logo perusahaan tidak didukung.');
+            }
+            
+            const logoMaxWidth = 180;
+            const logoMaxHeight = 100;
+
+            let scale = 1;
+            if (image.width > logoMaxWidth || image.height > logoMaxHeight) {
+                scale = Math.min(logoMaxWidth / image.width, logoMaxHeight / image.height);
+            }
+
+            const imageDims = image.scale(scale);
+
+            page.drawImage(image, {
+                x: margin,
+                y: y - imageDims.height / 2 - 20,
+                width: imageDims.width,
+                height: imageDims.height,
+            });
+            y -= imageDims.height / 2 + 10;
+        } catch (imageError) {
+            console.error('Failed to embed company logo:', imageError);
+            page.drawText('Gagal memuat logo perusahaan.', {
+                x: margin,
+                y: y - 20,
+                size: 10,
+                font: helveticaFont,
+                color: rgb(1, 0, 0),
+            });
+            y -= 30;
         }
-
-        const imageDims = image.scale(scale);
-
-        page.drawImage(image, {
-            x: margin,
-            y: y - imageDims.height / 2 - 20,
-            width: imageDims.width,
-            height: imageDims.height,
-        });
-        y -= imageDims.height / 2 + 10;
     } else {
         y -= 20; 
     }
@@ -208,10 +230,21 @@ serve(async (req) => {
         y -= 40;
         page.drawText('Bukti Pengiriman:', { x: margin, y: y, size: 12, font: helveticaBoldFont, color: rgb(0, 0, 0) });
         y -= 160;
-        
+
         try {
             const imageBytes = await fetchImage(proof_public_url);
-            const image = await pdfDoc.embedJpg(imageBytes);
+            const urlParts = proof_public_url.split('.');
+            const fileExtension = urlParts[urlParts.length - 1].toLowerCase();
+
+            let image;
+            if (fileExtension === 'png') {
+                image = await pdfDoc.embedPng(imageBytes);
+            } else if (fileExtension === 'jpg' || fileExtension === 'jpeg') {
+                image = await pdfDoc.embedJpg(imageBytes);
+            } else {
+                throw new Error('Tipe file bukti pengiriman tidak didukung (hanya PNG dan JPG).');
+            }
+            
             const imageDims = image.scale(0.2);
             
             page.drawImage(image, {
@@ -223,7 +256,7 @@ serve(async (req) => {
             y -= imageDims.height;
         } catch (imageError) {
             console.error('Failed to embed delivery proof image:', imageError);
-            page.drawText('Gagal memuat gambar bukti pengiriman.', {
+            page.drawText(`Gagal memuat gambar bukti pengiriman. Pesan error: ${imageError.message}`, {
                 x: margin,
                 y: y + 80,
                 size: 10,

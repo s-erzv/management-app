@@ -89,10 +89,21 @@ const OrderDetailsPage = () => {
     return rows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   }, []);
   
+  const calculateTotal = (items) => {
+    return items?.reduce((total, item) => total + (item.qty * item.price), 0) || 0;
+  };
+  
   const totalPaid = useMemo(() => calculatePaymentsTotal(payments), [payments, calculatePaymentsTotal]);
   
-  const grandTotal = order?.grand_total || 0;
-  const remainingDue = Math.max(0, grandTotal - totalPaid);
+  const calculatedGrandTotal = useMemo(() => {
+    if (!order) return 0;
+    const itemsTotal = calculateTotal(order.order_items);
+    const purchasedEmptyPrice = order.order_items.find(item => item.products?.is_returnable)?.products?.empty_bottle_price || 0;
+    const totalPurchaseCost = (order.purchased_empty_qty || 0) * purchasedEmptyPrice;
+    return itemsTotal + (order.transport_cost || 0) + totalPurchaseCost;
+  }, [order]);
+
+  const remainingDue = Math.max(0, calculatedGrandTotal - totalPaid);
   const isPaid = remainingDue <= 0.0001;
 
   useEffect(() => {
@@ -106,9 +117,6 @@ const OrderDetailsPage = () => {
     };
   }, []);
   
-  const calculateTotal = (items) => {
-    return items?.reduce((total, item) => total + (item.qty * item.price), 0) || 0;
-  };
 
   const handleConfirmOrder = () => {
     if (!order || !order.order_items || !order.customers) {
@@ -282,11 +290,10 @@ ${companyName}`;
   }, [id, isAuthenticated, fetchData]);
 
   const derivedPaymentStatus = useMemo(() => {
-    const gt = Number(order?.grand_total) || 0;
     if (totalPaid <= 0) return 'unpaid';
-    if (totalPaid >= gt - 0.0001) return 'paid';
+    if (totalPaid >= calculatedGrandTotal - 0.0001) return 'paid';
     return 'partial';
-  }, [order?.grand_total, totalPaid]);
+  }, [calculatedGrandTotal, totalPaid]);
 
   const paymentStatusMap = {
     paid: { variant: 'default', label: 'Lunas', icon: <CheckCircle2 className="h-3 w-3" /> },
@@ -429,7 +436,7 @@ ${companyName}`;
 
       if (delErr) throw delErr;
 
-      await recomputeAndUpdateOrderStatus(order.id, grandTotal);
+      await recomputeAndUpdateOrderStatus(order.id, calculatedGrandTotal);
 
       toast.success('Pembayaran dihapus.');
       handleDataUpdate();
@@ -479,7 +486,7 @@ ${companyName}`;
 
       if (updateError) throw updateError;
       
-      await recomputeAndUpdateOrderStatus(order.id, grandTotal);
+      await recomputeAndUpdateOrderStatus(order.id, calculatedGrandTotal);
 
       toast.success('Pembayaran berhasil diperbarui.');
       setIsEditing(false);
@@ -503,7 +510,7 @@ ${companyName}`;
         orderData: {
           ...order,
           payments: payments,
-          grand_total: grandTotal,
+          grand_total: calculatedGrandTotal,
           remaining_due: remainingDue,
         }
       };
@@ -532,7 +539,7 @@ ${companyName}`;
 Yth. Bapak/Ibu ${order.customers.name},
 
 Berikut adalah invoice untuk pesanan Anda:
-Invoice No. ${order.invoice_number} senilai ${formatCurrency(grandTotal)}.
+Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
 Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodName}.
 Tautan invoice: ${pdfUrl}.
 
@@ -546,7 +553,7 @@ ${companyName}`;
 Yth. Bapak/Ibu ${order.customers.name},
 
 Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
-Invoice No. ${order.invoice_number} senilai ${formatCurrency(grandTotal)}.
+Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
 Tautan invoice: ${pdfUrl}.
 
 Mohon segera selesaikan pembayaran melalui ${paymentMethodName}. 
@@ -719,7 +726,7 @@ ${companyName}`;
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-500">Total</p>
-            <p className="font-bold text-lg text-[#10182b]">{formatCurrency(grandTotal)}</p>
+            <p className="font-bold text-lg text-[#10182b]">{formatCurrency(calculatedGrandTotal)}</p>
           </div>
         </CardContent>
       </Card>
