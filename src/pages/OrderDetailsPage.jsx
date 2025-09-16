@@ -504,6 +504,12 @@ ${companyName}`;
     if (!order) return;
     setIsSendingInvoice(true);
     toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
+
+    // Buat daftar produk yang diformat
+    const productsList = order.order_items
+      .map(item => `* ${item.products.name} (${item.qty} pcs)`)
+      .join('\n');
+      
     try {
       const payload = {
         order_id: order.id,
@@ -540,6 +546,8 @@ Yth. Bapak/Ibu ${order.customers.name},
 
 Berikut adalah invoice untuk pesanan Anda:
 Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
+Rincian Produk:
+${productsList}
 Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodName}.
 Tautan invoice: ${pdfUrl}.
 
@@ -554,6 +562,8 @@ Yth. Bapak/Ibu ${order.customers.name},
 
 Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
 Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
+Rincian Produk:
+${productsList}
 Tautan invoice: ${pdfUrl}.
 
 Mohon segera selesaikan pembayaran melalui ${paymentMethodName}. 

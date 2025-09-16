@@ -63,7 +63,7 @@ serve(async (req) => {
     
     // Membuat PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
+    let page = pdfDoc.addPage([595.28, 841.89]); // A4 size
     const { width, height } = page.getSize();
     const margin = 30;
     let y = height - margin;
@@ -229,8 +229,8 @@ serve(async (req) => {
     if (proof_public_url) {
         y -= 40;
         page.drawText('Bukti Pengiriman:', { x: margin, y: y, size: 12, font: helveticaBoldFont, color: rgb(0, 0, 0) });
-        y -= 160;
-
+        y -= 10;
+        
         try {
             const imageBytes = await fetchImage(proof_public_url);
             const urlParts = proof_public_url.split('.');
@@ -245,11 +245,23 @@ serve(async (req) => {
                 throw new Error('Tipe file bukti pengiriman tidak didukung (hanya PNG dan JPG).');
             }
             
-            const imageDims = image.scale(0.2);
+            const proofMaxWidth = width - 2 * margin; // Lebar maksimum gambar
+            let scale = 1;
+
+            if (image.width > proofMaxWidth) {
+                scale = proofMaxWidth / image.width;
+            }
+            const imageDims = image.scale(scale);
+
+            // Periksa apakah masih ada cukup ruang di halaman
+            if (y - imageDims.height < margin) {
+                page = pdfDoc.addPage([595.28, 841.89]);
+                y = page.getHeight() - margin;
+            }
             
             page.drawImage(image, {
                 x: margin,
-                y: y,
+                y: y - imageDims.height,
                 width: imageDims.width,
                 height: imageDims.height,
             });
@@ -258,11 +270,12 @@ serve(async (req) => {
             console.error('Failed to embed delivery proof image:', imageError);
             page.drawText(`Gagal memuat gambar bukti pengiriman. Pesan error: ${imageError.message}`, {
                 x: margin,
-                y: y + 80,
+                y: y,
                 size: 10,
                 font: helveticaFont,
                 color: rgb(1, 0, 0),
             });
+            y -= 20;
         }
     }
 
