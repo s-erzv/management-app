@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'; // <-- TAMBAHKAN useLocation
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'; 
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
@@ -30,7 +30,7 @@ import EditOrderPage from './pages/EditOrderPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
-  const location = useLocation(); // <-- PANGGIL HOOK useLocation
+  const location = useLocation(); 
   
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -57,7 +57,7 @@ const App = () => {
   const isCourier = userProfile?.role === 'user';
 
   return (
-    <BrowserRouter>
+    <> {/* <-- GANTI <BrowserRouter> DENGAN FRAGMENT */}
       {userProfile && <Sidebar />}
       <main className="min-h-screen bg-white md:ml-16 transition-all duration-300">
         <div className="p-4 md:p-8">
@@ -162,7 +162,7 @@ const App = () => {
         </div>
       </main>
       <Toaster />
-    </BrowserRouter>
+    </>  
   );
 };
 
