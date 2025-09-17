@@ -536,9 +536,19 @@ ${companyName}`;
       const { pdfUrl } = await response.json();
 
     let whatsappMessage;
-      const paymentMethodName = payments.length > 0 && payments[0].payment_method
-        ? `${payments[0].payment_method.method_name} (${[payments[0].payment_method.account_name, payments[0].payment_method.account_number].filter(Boolean).join(' / ')})`
-        : 'N/A';
+      
+    // REVISED LOGIC FOR PAYMENT METHOD NAME FOR WHATSAPP
+    const paymentMethodData = payments.length > 0 ? payments[0].payment_method : null;
+    let paymentMethodDisplay = 'N/A';
+    
+    if (paymentMethodData) {
+        if (paymentMethodData.type === 'transfer') {
+            const accDetails = [paymentMethodData.account_name, paymentMethodData.account_number].filter(Boolean).join(' / ');
+            paymentMethodDisplay = `${paymentMethodData.method_name}${accDetails ? ` (${accDetails})` : ''}`;
+        } else {
+            paymentMethodDisplay = paymentMethodData.method_name;
+        }
+    }
         
       if (derivedPaymentStatus === 'paid') {
         whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.
@@ -548,7 +558,7 @@ Berikut adalah invoice untuk pesanan Anda:
 Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
 Rincian Produk:
 ${productsList}
-Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodName}.
+Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodDisplay}.
 Tautan invoice: ${pdfUrl}.
 
 Jazaakumullaahu khairan atas perhatian dan kerja samanya.
@@ -566,12 +576,12 @@ Rincian Produk:
 ${productsList}
 Tautan invoice: ${pdfUrl}.
 
-Mohon segera selesaikan pembayaran melalui ${paymentMethodName}. 
+Mohon segera selesaikan pembayaran melalui ${paymentMethodDisplay}. 
 Terima kasih.
 
 Jazaakumullaahu khairan wa baarakallahu fiikum.
 Wassalamualaikum warahmatullahi wabarakatuh.
-np
+
 Hormat kami,
 ${companyName}`;
       }
