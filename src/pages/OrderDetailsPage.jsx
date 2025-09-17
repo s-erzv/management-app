@@ -571,10 +571,15 @@ ${companyName}`;
 Yth. Bapak/Ibu ${order.customers.name},
 
 Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
-Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
+
+Invoice No. ${order.invoice_number} 
+senilai ${formatCurrency(calculatedGrandTotal)}.
+
 Rincian Produk:
 ${productsList}
-Tautan invoice: ${pdfUrl}.
+
+invoice dapat diunduh pada link berikut: 
+s${pdfUrl}.
 
 Mohon segera selesaikan pembayaran melalui ${paymentMethodDisplay}. 
 Terima kasih.

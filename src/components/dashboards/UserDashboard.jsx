@@ -29,13 +29,24 @@ import {
   PackageCheck,
   Banknote,
   Box,
-  Pencil, // Ditambahkan
-  Trash2, // Ditambahkan
-  Plus // Ditambahkan
+  Pencil, 
+  Trash2, 
+  Plus,
+  Search, // Ditambahkan
+  Info // Ditambahkan
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import AddPaymentModal from '@/components/AddPaymentModal';
+import { Input } from '@/components/ui/input'; // Ditambahkan
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'; // Ditambahkan
+
 
 const UserDashboard = ({ userId }) => {
   const navigate = useNavigate();
@@ -47,6 +58,12 @@ const UserDashboard = ({ userId }) => {
   const [activeTab, setActiveTab] = useState('active');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
+  
+  // --- States Baru untuk Filter ---
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  // ---------------------------------
 
   const fetchData = useCallback(async (id) => {
     if (!id) return;
@@ -231,12 +248,29 @@ const UserDashboard = ({ userId }) => {
     fetchData(userId);
   };
 
-  const incompleteTasks = tasks.filter(task => 
-    task.status !== 'completed' || task.payment_status !== 'paid'
+  // --- Filter Logic ---
+  const filteredTasks = tasks.filter(task => {
+    // Filter by Name/ID
+    const matchesSearch = task.customers?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          String(task.id).slice(0, 8).includes(searchQuery);
+
+    // Filter by Delivery Status
+    const matchesDeliveryStatus = deliveryFilter === 'all' || task.status === deliveryFilter;
+
+    // Filter by Payment Status (using derived status based on remaining_due)
+    const derivedPaymentStatus = task.remaining_due <= 0.0001 ? 'paid' : (task.total_paid > 0 ? 'partial' : 'unpaid');
+    const matchesPaymentStatus = paymentFilter === 'all' || derivedPaymentStatus === paymentFilter;
+
+    return matchesSearch && matchesDeliveryStatus && matchesPaymentStatus;
+  });
+
+  const incompleteTasks = filteredTasks.filter(task => 
+    task.status !== 'completed' || task.remaining_due > 0.0001
   );
-  const completedTasks = tasks.filter(task => 
-    task.status === 'completed' && task.payment_status === 'paid'
+  const completedTasks = filteredTasks.filter(task => 
+    task.status === 'completed' && task.remaining_due <= 0.0001
   );
+  // --------------------
   
   const todayTasks = incompleteTasks.filter(task => {
     const taskDate = new Date(task.planned_date);
@@ -340,6 +374,19 @@ const UserDashboard = ({ userId }) => {
             </div>
           )}
         </div>
+        
+        {/* Catatan Pesanan (Ditambahkan) */}
+        {task.notes && (
+          <div className="space-y-2">
+              <p className="text-sm font-medium flex items-center gap-2 text-[#10182b]">
+                  <Info className="h-4 w-4" />
+                  Catatan
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-700 italic">{task.notes}</p>
+              </div>
+          </div>
+        )}
 
         {/* Order Items */}
         <div className="space-y-2">
@@ -476,6 +523,48 @@ const UserDashboard = ({ userId }) => {
             <Plus className="h-4 w-4 mr-2" /> Tambah Pesanan
         </Button>
       </div>
+
+      {/* --- Filter Section (Ditambahkan) --- */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Cari nama pelanggan / ID pesanan"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-10 w-full"
+          />
+        </div>
+
+        {/* Delivery Status Filter */}
+        <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
+          <SelectTrigger className="w-full md:w-[200px]">
+            <SelectValue placeholder="Status Pengiriman" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Pengiriman</SelectItem>
+            <SelectItem value="draft">Menunggu (Draft)</SelectItem>
+            <SelectItem value="sent">Dikirim (Sent)</SelectItem>
+            <SelectItem value="completed">Selesai (Completed)</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Payment Status Filter */}
+        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+          <SelectTrigger className="w-full md:w-[200px]">
+            <SelectValue placeholder="Status Pembayaran" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua Pembayaran</SelectItem>
+            <SelectItem value="paid">Lunas</SelectItem>
+            <SelectItem value="partial">Sebagian</SelectItem>
+            <SelectItem value="unpaid">Belum Bayar</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {/* ------------------------------------ */}
 
       {/* Stats Cards */}
       {/* Bagian ini hanya ditampilkan jika user adalah Petugas yang sedang login */}

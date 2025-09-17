@@ -1,4 +1,3 @@
-// src/pages/StockAndGalonPage.jsx
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -65,6 +64,7 @@ const StockAndGalonPage = () => {
     if (companyId) {
       fetchProducts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
   useEffect(() => {
@@ -78,6 +78,7 @@ const StockAndGalonPage = () => {
         setDebts([]);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductId, products]);
 
   const fetchProducts = async () => {
@@ -143,7 +144,7 @@ const StockAndGalonPage = () => {
     setLoading(false);
   };
   
-  const fetchGalonDebts = async (productId) => {
+  const fetchGalonDebts = async (productId) => { 
     if (!productId) {
       setDebts([]);
       setRefreshing(false);
@@ -158,16 +159,17 @@ const StockAndGalonPage = () => {
           id,
           created_at,
           delivered_at,
-          customer:customer_id(id, name, phone)
+          customer:customer_id(id, name, phone),
+          order_items(qty, product_id)
         ),
         product:product_id(id, name),
         returned_qty,
         borrowed_qty,
         purchased_empty_qty
       `)
-      .or('borrowed_qty.gt.0,returned_qty.gt.0,purchased_empty_qty.gt.0')
-      .eq('product_id', productId)
-      .eq('order.company_id', companyId);
+      .eq('product_id', productId) 
+      .eq('order.company_id', companyId)
+      .or('borrowed_qty.gt.0,returned_qty.gt.0,purchased_empty_qty.gt.0');
 
     if (error) {
       console.error('Error fetching Product Returnable debts:', error);
@@ -178,62 +180,98 @@ const StockAndGalonPage = () => {
     }
 
     const grouped = (data || []).reduce((acc, row) => {
-      const c = row.order.customer;
-      const p = row.product;
+        const customerId = row.order.customer.id;
+        const customerName = row.order.customer.name;
+        const customerPhone = row.order.customer.phone;
+        const prodId = row.product.id;
+        const productName = row.product.name;
+        
+        // Dapatkan kuantitas produk yang dipesan (`orderedQty`)
+        const orderedItem = Array.isArray(row.order.order_items) 
+            ? row.order.order_items.find(item => item.product_id === prodId)
+            : row.order.order_items;
+        
+        const orderedQty = Number(orderedItem?.qty || 0);
 
-      if (!acc[c.id]) {
-        acc[c.id] = { id: c.id, name: c.name, phone: c.phone, products_debt: {} };
-      }
-      if (!acc[c.id].products_debt[p.id]) {
-        acc[c.id].products_debt[p.id] = {
-          product_id: p.id,
-          product_name: p.name,
-          total_borrowed_qty: 0,
-          total_returned_qty: 0,
-          total_purchased_qty: 0,
-          _events: [],
-          outstanding: 0,
-        };
-      }
+        if (!acc[customerId]) {
+            acc[customerId] = {
+                id: customerId,
+                name: customerName,
+                phone: customerPhone,
+                products_debt: {},
+                total_debt: 0,
+            };
+        }
+        if (!acc[customerId].products_debt[prodId]) {
+            acc[customerId].products_debt[prodId] = {
+                product_id: prodId,
+                product_name: productName,
+                _events: [],
+                outstanding: 0,
+            };
+        }
 
-      const pd = acc[c.id].products_debt[p.id];
-      const borrowed = Number(row.borrowed_qty || 0);
-      const returned = Number(row.returned_qty || 0);
-      const purchased = Number(row.purchased_empty_qty || 0);
+        const pd = acc[customerId].products_debt[prodId];
+        const returned = Number(row.returned_qty || 0);
+        const purchased = Number(row.purchased_empty_qty || 0);
+        
+        // HITUNG PERUBAHAN UTANG NETTO
+        const netCustomerSupply = returned + purchased;
+        const netChange = orderedQty - netCustomerSupply; 
+        
+        let netDebtChange = 0;
+        
+        if (netChange > 0) {
+            netDebtChange = netChange; 
+        } else if (netChange < 0) {
+            netDebtChange = netChange; 
+        }
+        
+        pd._events.push({
+            date: row.order.delivered_at || row.order.created_at || '',
+            id: row.order.id,
+            net_change: netDebtChange,
+        });
 
-      pd.total_borrowed_qty += borrowed;
-      pd.total_returned_qty += returned;
-      pd.total_purchased_qty += purchased;
-
-      pd._events.push({
-        date: row.order.delivered_at || row.order.created_at || '',
-        id: row.order.id,
-        borrowed,
-        returned,
-        purchased,
-      });
-
-      return acc;
+        return acc;
     }, {});
+    
+    // --- AKUMULASI UTANG DAN CLAMPING ---
+    const finalDebts = [];
 
     Object.values(grouped).forEach((cust) => {
-      Object.values(cust.products_debt).forEach((pd) => {
-        pd._events.sort((a, b) => {
-          const ta = a.date ? new Date(a.date).getTime() : 0;
-          const tb = b.date ? new Date(b.date).getTime() : 0;
-          if (ta !== tb) return ta - tb;
-          return String(a.id).localeCompare(String(b.id));
+        let cumulativeDebtForCustomer = 0; 
+        Object.values(cust.products_debt).forEach((pd) => {
+            // Urutkan events secara kronologis
+            pd._events.sort((a, b) => {
+                const ta = a.date ? new Date(a.date).getTime() : 0;
+                const tb = b.date ? new Date(b.date).getTime() : 0;
+                if (ta !== tb) return ta - tb;
+                return String(a.id).localeCompare(String(b.id)); 
+            });
+            
+            let balance = 0;
+            for (const ev of pd._events) {
+                balance += ev.net_change; 
+                // CLAMPING: Utang tidak pernah boleh negatif.
+                balance = Math.max(0, balance);
+            }
+            
+            pd.outstanding = balance;
+            cumulativeDebtForCustomer += pd.outstanding;
+            
+            delete pd._events;
         });
-        let balance = 0;
-        for (const ev of pd._events) {
-          balance += ev.borrowed - ev.returned - ev.purchased;
+
+        cust.total_debt = cumulativeDebtForCustomer;
+        
+        // Filter hanya pelanggan dengan utang > 0
+        if (cust.total_debt > 0) {
+             finalDebts.push(cust);
         }
-        pd.outstanding = balance;
-        delete pd._events;
-      });
     });
 
-    setDebts(Object.values(grouped));
+    setDebts(finalDebts);
     setRefreshing(false);
   };
   

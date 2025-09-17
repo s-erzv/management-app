@@ -1,3 +1,5 @@
+// supabase/functions/delete-order/index.ts
+
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -27,14 +29,6 @@ serve(async (req) => {
         status: 400,
       })
     }
-    
-    // --- LUNASIKAN UTANG GALON SEBELUM MENGHAPUS ---
-    const { error: galonSettleError } = await supabase.rpc('settle_galon_debt', { p_order_id: orderId, p_company_id: companyId });
-    if (galonSettleError) {
-        console.warn('Gagal melunasi utang galon sebelum menghapus, melanjutkan penghapusan order:', galonSettleError);
-    }
-    
-    // --- LANGKAH BARU: KEMBALIKAN STOK PRODUK SEBELUM DIHAPUS ---
     // 1. Ambil item-item pesanan untuk mengetahui produk dan jumlah yang terlibat
     const { data: orderItemsData, error: orderItemsFetchError } = await supabase
         .from('order_items')

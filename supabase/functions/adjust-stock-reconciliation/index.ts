@@ -1,3 +1,4 @@
+// supabase/functions/adjust-stock-reconciliation/index.ts
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -13,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { reconciliationItems, companyId, userId } = await req.json()
+    const { reconciliationItems, companyId, userId, stockType } = await req.json()
     
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -37,28 +38,26 @@ serve(async (req) => {
     // 2. Perbarui stok produk dan buat pergerakan stok
     for (const item of reconciliationItems) {
       if (item.difference !== 0) {
-        // Ambil stok saat ini dari database untuk menghindari race condition
-        const { data: productData, error: productError } = await supabase
-          .from('products')
-          .select('stock')
-          .eq('id', item.product_id)
-          .single();
-          
-        if (productError) throw productError;
+        
+        // Tentukan kolom yang akan diupdate
+        const updateColumn = stockType === 'empty_bottle_stock' ? 'empty_bottle_stock' : 'stock';
         
         const newStock = parseFloat(item.physical_count);
         
         // Perbarui stok produk
         const { error: updateError } = await supabase
           .from('products')
-          .update({ stock: newStock })
+          .update({ [updateColumn]: newStock })
           .eq('id', item.product_id);
           
         if (updateError) throw updateError;
 
         // Tambahkan catatan pergerakan stok
-        const movementType = item.difference > 0 ? 'masuk_rekonsiliasi' : 'keluar_rekonsiliasi';
-        const notes = `Penyesuaian otomatis dari rekonsiliasi stok. Selisih: ${item.difference}`;
+        const movementTypeBase = item.difference > 0 ? 'masuk' : 'keluar';
+        const movementType = `${movementTypeBase}_rekonsiliasi`;
+        
+        // Deskripsi yang lebih informatif, mencatat jenis stok yang disesuaikan
+        const notes = `Penyesuaian otomatis dari rekonsiliasi stok (${updateColumn.replace('_', ' ')}). Selisih: ${item.difference}`;
         
         const { error: movementError } = await supabase
           .from('stock_movements')
@@ -69,7 +68,7 @@ serve(async (req) => {
             notes: notes,
             company_id: companyId,
             user_id: userId,
-            reconciliation_id: reconciliationRecord.id // **Perbaikan di sini**
+            reconciliation_id: reconciliationRecord.id
           });
           
         if (movementError) throw movementError;

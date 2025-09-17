@@ -44,6 +44,7 @@ const UpdateStockPage = () => {
   const [manualCounts, setManualCounts] = useState({});
   const [stockDifferences, setStockDifferences] = useState([]);
   const [reconciliationId, setReconciliationId] = useState(null);
+  const [stockTypeToReconcile, setStockTypeToReconcile] = useState('product_stock'); 
   
   const canAdjustStock = userProfile?.role === 'admin' || userProfile?.role === 'super_admin' || userProfile?.role === 'user';
 
@@ -59,7 +60,8 @@ const UpdateStockPage = () => {
     if (companyId) {
       fetchProducts();
     }
-  }, [companyId, selectedCategory]);
+  }, [companyId, selectedCategory, stockTypeToReconcile]);
+
   
   const fetchCategories = async () => {
     const { data, error } = await supabase
@@ -80,7 +82,7 @@ const UpdateStockPage = () => {
     setLoading(true);
     let query = supabase
       .from('products')
-      .select('id, name, stock')
+      .select('id, name, stock, empty_bottle_stock, is_returnable')
       .eq('company_id', companyId)
       .order('name', { ascending: true });
 
@@ -100,6 +102,7 @@ const UpdateStockPage = () => {
         acc[product.id] = '';
         return acc;
       }, {});
+
       setManualCounts(initialCounts);
     }
     setLoading(false);
@@ -133,16 +136,23 @@ const UpdateStockPage = () => {
 
   const handleReconcile = (e) => {
     e.preventDefault();
-    const differences = products.map(product => {
+    const differences = products
+      .filter(p => stockTypeToReconcile === 'product_stock' || p.is_returnable)
+      .map(product => {
       const manualCount = parseFloat(manualCounts[product.id]) || 0;
-      const systemStock = parseFloat(product.stock) || 0;
-      const difference = manualCount - systemStock;
+      
+      const systemStockValue = stockTypeToReconcile === 'product_stock' 
+          ? parseFloat(product.stock) || 0
+          : parseFloat(product.empty_bottle_stock) || 0;
+          
+      const difference = manualCount - systemStockValue;
       return {
         product_id: product.id,
         name: product.name,
-        system_stock: systemStock,
+        system_stock: systemStockValue,
         physical_count: manualCount,
         difference,
+        stock_type: stockTypeToReconcile, 
       };
     });
     setStockDifferences(differences);
@@ -155,6 +165,7 @@ const UpdateStockPage = () => {
         reconciliationItems: stockDifferences,
         companyId: companyId,
         userId: userProfile.id,
+        stockType: stockTypeToReconcile, 
       };
 
       const response = await fetch('https://wzmgcainyratlwxttdau.supabase.co/functions/v1/adjust-stock-reconciliation', {
@@ -183,6 +194,14 @@ const UpdateStockPage = () => {
     }
   };
 
+  const displayProducts = products.filter(p => 
+    stockTypeToReconcile === 'product_stock' 
+      ? true 
+      : p.is_returnable ?? true 
+  );
+
+
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -207,31 +226,53 @@ const UpdateStockPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 mb-4">
-              <Label className="text-sm font-medium text-gray-700">Filter Kategori:</Label>
-              <Select
-                value={selectedCategory}
-                onValueChange={setSelectedCategory}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Semua Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Kategori</SelectItem>
-                  {categories.map(category => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+              {/* Filter Kategori */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium text-gray-700">Filter Kategori:</Label>
+                <Select
+                  value={selectedCategory}
+                  onValueChange={setSelectedCategory}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Semua Kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Kategori</SelectItem>
+                    {categories.map(category => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Pemilihan Tipe Stok */}
+              <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium text-gray-700">Tipe Stok:</Label>
+                  <Select
+                      value={stockTypeToReconcile}
+                      onValueChange={setStockTypeToReconcile}
+                  >
+                      <SelectTrigger className="w-[200px]">
+                          <SelectValue placeholder="Stok Produk" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="product_stock">Stok Produk</SelectItem>
+                          <SelectItem value="empty_bottle_stock">Stok Kemasan Returnable</SelectItem>
+                      </SelectContent>
+                  </Select>
+              </div>
             </div>
+
+            {/* TABEL INPUT DAN STOK */}
             <div className="overflow-x-auto">
               <Table className="table-auto min-w-max">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[150px]">Metrik</TableHead>
-                    {products.map(product => (
+                    {displayProducts.map(product => (
                       <TableHead className="min-w-[150px]" key={product.id}>{product.name}</TableHead>
                     ))}
                   </TableRow>
@@ -239,13 +280,16 @@ const UpdateStockPage = () => {
                 <TableBody>
                   <TableRow>
                     <TableCell className="font-medium">Stok Sistem</TableCell>
-                    {products.map(product => (
-                      <TableCell key={product.id}>{product.stock}</TableCell>
+                    {displayProducts.map(product => (
+                      <TableCell key={product.id}>
+                        {/* Tampilkan Stok Sistem yang benar */}
+                        {stockTypeToReconcile === 'product_stock' ? product.stock : product.empty_bottle_stock}
+                      </TableCell>
                     ))}
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium">Stok Fisik</TableCell>
-                    {products.map(product => (
+                    {displayProducts.map(product => (
                       <TableCell key={product.id}>
                         <Input
                           type="number"

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'; // <-- TAMBAHKAN useLocation
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
@@ -30,6 +30,7 @@ import EditOrderPage from './pages/EditOrderPage';
 
 const App = () => {
   const { session, loading, userProfile } = useAuth();
+  const location = useLocation(); // <-- PANGGIL HOOK useLocation
   
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -61,7 +62,14 @@ const App = () => {
       <main className="min-h-screen bg-white md:ml-16 transition-all duration-300">
         <div className="p-4 md:p-8">
           <Routes>
-            <Route path="/login" element={!userProfile ? <AuthPage /> : <Navigate to="/dashboard" />} />
+            <Route 
+                path="/login" 
+                element={!userProfile 
+                    ? <AuthPage /> 
+                    : <Navigate to={location.pathname === '/login' ? "/dashboard" : location.pathname} replace />
+                } 
+            />
+
             <Route
               path="/dashboard"
               element={session ? <DashboardPage /> : <Navigate to="/login" />}
@@ -86,7 +94,7 @@ const App = () => {
               path="/orders/:id"
               element={session && (isAdminOrSuperAdmin || isCourier) ? <OrderDetailsPage /> : <Navigate to="/dashboard" />}
             />
-            <Route path="/orders/edit/:orderId" element={<EditOrderPage />} />
+            <Route path="/orders/edit/:orderId" element={session && (isAdminOrSuperAdmin || isCourier) ? <EditOrderPage /> : <Navigate to="/dashboard" />} />
             <Route
               path="/stock"
              element={session && (isAdminOrSuperAdmin || isCourier) ? <StockAndGalonPage /> : <Navigate to="/dashboard" />}
