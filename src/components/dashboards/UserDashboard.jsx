@@ -28,7 +28,10 @@ import {
   History,
   PackageCheck,
   Banknote,
-  Box
+  Box,
+  Pencil, // Ditambahkan
+  Trash2, // Ditambahkan
+  Plus // Ditambahkan
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +39,7 @@ import AddPaymentModal from '@/components/AddPaymentModal';
 
 const UserDashboard = ({ userId }) => {
   const navigate = useNavigate();
-  const { session, userRole } = useAuth();
+  const { session, userRole, companyId } = useAuth();
   const currentUserId = session?.user?.id;
 
   const [tasks, setTasks] = useState([]);
@@ -99,7 +102,35 @@ const UserDashboard = ({ userId }) => {
     }
   }, [userId, fetchData]);
 
-const updateOrderStatus = async (order, newStatus) => {
+  const handleDeleteClick = async (orderId) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus pesanan ini?')) return;
+    setLoading(true);
+    
+    try {
+        const { data, error } = await supabase.functions.invoke('delete-order', {
+            method: 'DELETE',
+            body: { orderId: orderId, companyId: companyId },
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        toast.success('Pesanan berhasil dihapus.');
+        fetchData(userId);
+    } catch (error) {
+        console.error('Error deleting order:', error);
+        toast.error('Gagal menghapus pesanan: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const updateOrderStatus = async (order, newStatus) => {
     if (order.status === 'completed') {
       toast.error('Pesanan sudah selesai dan tidak bisa diperbarui lagi.');
       return;
@@ -260,9 +291,16 @@ const updateOrderStatus = async (order, newStatus) => {
       year: 'numeric'
     });
   };
+  
+  const handleCardClick = (orderId) => {
+    navigate(`/orders/${orderId}`);
+  };
 
   const TaskCard = ({ task, isCompleted = false }) => (
-    <Card className={`border-0 shadow-sm transition-all hover:shadow-lg ${isCompleted ? 'opacity-75' : ''}`}>
+    <Card 
+      className={`border-0 shadow-sm transition-all hover:shadow-lg ${isCompleted ? 'opacity-75' : 'cursor-pointer hover:border-[#10182b] border-2'}`}
+      onClick={() => handleCardClick(task.id)}
+    >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
@@ -306,7 +344,7 @@ const updateOrderStatus = async (order, newStatus) => {
         {/* Order Items */}
         <div className="space-y-2">
           <p className="text-sm font-medium flex items-center gap-2 text-[#10182b]">
-            <PackageCheck className="h-4 w-4 text-[#10182b]" />
+            <PackageCheck className="h-4 w-4" />
             Detail Pesanan
           </p>
           <div className="bg-white border rounded-lg p-3 space-y-1">
@@ -348,50 +386,66 @@ const updateOrderStatus = async (order, newStatus) => {
 
         {/* Action Buttons */}
         {(userId === currentUserId || userRole === 'admin') && !isCompleted && (
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap gap-2">
+            
+            {/* Tombol Edit */}
+            {(task.status === 'draft' || task.status === 'sent') && (
+              <Button 
+                onClick={(e) => { e.stopPropagation(); navigate(`/orders/edit/${task.id}`); }}
+                disabled={loading}
+                variant="outline"
+                size="sm"
+              >
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+            )}
+
+            {/* Tombol Hapus */}
+            {(task.status === 'draft' || task.status === 'sent') && (
+              <Button 
+                onClick={(e) => { e.stopPropagation(); handleDeleteClick(task.id); }}
+                disabled={loading}
+                variant="destructive"
+                size="sm"
+              >
+                <Trash2 className="h-4 w-4" /> Hapus
+              </Button>
+            )}
+            
+            {/* Primary Action Button (Start Delivery) */}
             {task.status === 'draft' && (
               <Button 
-                onClick={() => updateOrderStatus(task, 'sent')} 
+                onClick={(e) => { e.stopPropagation(); updateOrderStatus(task, 'sent'); }} 
                 className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
                 disabled={loading}
               >
-                <TruckIcon className="mr-2 h-4 w-4" />
-                Mulai Pengiriman
+                <TruckIcon className="mr-2 h-4 w-4" /> Mulai Pengiriman
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             )}
+
+            {/* Primary Action Button (Complete Order) */}
             {task.status === 'sent' && (
-              <>
-                <Button 
-                  onClick={() => handleNavigateToCompletionPage(task.id)}
-                  disabled={loading}
-                  className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
-                  variant="default"
-                >
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Selesaikan Pesanan
-                </Button>
-                <Button
-                  onClick={() => { setSelectedOrderForPayment(task); setIsPaymentModalOpen(true); }}
-                  disabled={loading}
-                  className="w-full mt-2 bg-green-500 text-white hover:bg-green-600"
-                  variant="default"
-                >
-                  <Banknote className="mr-2 h-4 w-4" />
-                  Tambah Pembayaran
-                </Button>
-              </>
+              <Button 
+                onClick={(e) => { e.stopPropagation(); handleNavigateToCompletionPage(task.id); }}
+                disabled={loading}
+                className="w-full bg-[#10182b] text-white hover:bg-[#20283b]"
+                variant="default"
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Selesaikan Pesanan
+              </Button>
             )}
-             {task.status === 'completed' && task.payment_status !== 'paid' && (
-                <Button
-                  onClick={() => { setSelectedOrderForPayment(task); setIsPaymentModalOpen(true); }}
-                  disabled={loading}
-                  className="w-full mt-2 bg-green-500 text-white hover:bg-green-600"
-                  variant="default"
-                >
-                  <Banknote className="mr-2 h-4 w-4" />
-                  Tambah Pembayaran
-                </Button>
+
+            {/* Tambah Pembayaran Button (Visible if remaining due > 0) */}
+            {task.remaining_due > 0.0001 && (
+              <Button
+                onClick={(e) => { e.stopPropagation(); setSelectedOrderForPayment(task); setIsPaymentModalOpen(true); }}
+                disabled={loading}
+                className="w-full bg-green-500 text-white hover:bg-green-600"
+                variant="default"
+              >
+                <Banknote className="mr-2 h-4 w-4" /> Tambah Pembayaran
+              </Button>
             )}
           </div>
         )}
@@ -417,7 +471,10 @@ const updateOrderStatus = async (order, newStatus) => {
           <TruckIcon className="h-8 w-8" />
           Dashboard Petugas
         </h1>
-        <p className="text-muted-foreground">Kelola pengiriman dan pesanan Anda</p>
+        {/* Tombol Tambah Pesanan */}
+        <Button onClick={() => navigate('/orders/add')} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#20283b]">
+            <Plus className="h-4 w-4 mr-2" /> Tambah Pesanan
+        </Button>
       </div>
 
       {/* Stats Cards */}

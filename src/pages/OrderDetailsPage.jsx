@@ -571,7 +571,7 @@ Terima kasih.
 
 Jazaakumullaahu khairan wa baarakallahu fiikum.
 Wassalamualaikum warahmatullahi wabarakatuh.
-
+np
 Hormat kami,
 ${companyName}`;
       }
