@@ -249,6 +249,7 @@ ${companyName}`;
         proof_public_url: proofPublicUrl || null,
       };
 
+      // Inisialisasi paymentMethodId dengan metode dari record pembayaran terbaru (termasuk yang 0)
       if (paymentsWithUrls.length > 0 && mountedRef.current) {
         const firstPaymentMethodId = paymentsWithUrls[0].payment_method_id;
         setPaymentMethodId(String(firstPaymentMethodId));
@@ -449,13 +450,6 @@ ${companyName}`;
       setOpLoading(false);
     }
   };
-
-  const handleOpenEditDialog = (payment) => {
-    setEditingPayment(payment);
-    setEditAmount(payment.amount.toString());
-    setEditMethodId(payment.payment_method_id.toString());
-    setIsEditing(true);
-  };
   
   const handleUpdatePayment = async (e) => {
     e.preventDefault();
@@ -506,7 +500,7 @@ ${companyName}`;
     toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
 
     // Buat daftar produk yang diformat
-    const productsList = order.order_items
+    const productsList = (order.order_items || [])
       .map(item => `* ${item.products.name} (${item.qty} pcs)`)
       .join('\n');
       
@@ -535,21 +529,23 @@ ${companyName}`;
       }
       const { pdfUrl } = await response.json();
 
-    let whatsappMessage;
-      
-    // REVISED LOGIC FOR PAYMENT METHOD NAME FOR WHATSAPP
-    const paymentMethodData = payments.length > 0 ? payments[0].payment_method : null;
-    let paymentMethodDisplay = 'N/A';
-    
-    if (paymentMethodData) {
-        if (paymentMethodData.type === 'transfer') {
-            const accDetails = [paymentMethodData.account_name, paymentMethodData.account_number].filter(Boolean).join(' / ');
-            paymentMethodDisplay = `${paymentMethodData.method_name}${accDetails ? ` (${accDetails})` : ''}`;
-        } else {
-            paymentMethodDisplay = paymentMethodData.method_name;
-        }
-    }
+      let whatsappMessage;
         
+      // --- START: LOGIKA MODIFIKASI UNTUK PESAN WHATSAPP ---
+      // Ambil metode pembayaran yang dipilih (yang sekarang mungkin bernilai 0 atau metode pembayaran sebenarnya)
+      const paymentMethodData = payments.length > 0 ? payments[0].payment_method : null;
+      let paymentMethodDisplay = 'N/A'; // Fallback
+
+      if (paymentMethodData) {
+          if (paymentMethodData.type === 'transfer') {
+              const accDetails = [paymentMethodData.account_name, paymentMethodData.account_number].filter(Boolean).join(' / ');
+              paymentMethodDisplay = `${paymentMethodData.method_name}${accDetails ? ` (${accDetails})` : ''}`;
+          } else {
+              paymentMethodDisplay = paymentMethodData.method_name;
+          }
+      }
+      
+      // Pesan WA untuk status LUNAS
       if (derivedPaymentStatus === 'paid') {
         whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.
 Yth. Bapak/Ibu ${order.customers.name},
@@ -563,13 +559,13 @@ ${productsList}
 Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodDisplay}.
 
 Tautan invoice: ${pdfUrl}.
-
-Jazaakumullaahu khairan atas perhatian dan kerja samanya.
+ 
 Wassalamualaikum warahmatullahi wabarakatuh.
 
 Hormat kami,
 ${companyName}`;
-      } else {
+      } 
+      else {
         whatsappMessage = `Assalamualaikum warahmatullahi wabarakatuh.
 Yth. Bapak/Ibu ${order.customers.name},
 
@@ -581,13 +577,11 @@ senilai ${formatCurrency(calculatedGrandTotal)}.
 Rincian Produk:
 ${productsList}
 
-invoice dapat diunduh pada link berikut: 
-s${pdfUrl}.
+Invoice dapat diunduh pada link berikut: 
+${pdfUrl}.
 
-Mohon segera selesaikan pembayaran melalui ${paymentMethodDisplay}. 
-Terima kasih.
-
-Jazaakumullaahu khairan wa baarakallahu fiikum.
+Mohon segera selesaikan pembayaran. Metode pembayaran yang dipiliih adalah: *${paymentMethodDisplay}*.
+ 
 Wassalamualaikum warahmatullahi wabarakatuh.
 
 Hormat kami,
@@ -606,6 +600,13 @@ ${companyName}`;
     }
   };
 
+  const handleOpenEditDialog = (payment) => {
+    setEditingPayment(payment);
+    setEditAmount(payment.amount.toString());
+    setEditMethodId(payment.payment_method_id.toString());
+    setIsEditing(true);
+  };
+  
   const handleOpenPaymentModal = (order) => {
     setSelectedOrderForPayment(order);
     setIsPaymentModalOpen(true);
@@ -619,7 +620,6 @@ ${companyName}`;
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="container mx-auto p-4 md:p-8 max-w-7xl">

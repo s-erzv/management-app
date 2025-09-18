@@ -126,7 +126,8 @@ const CompleteDeliveryPage = () => {
         console.error('Error fetching payment methods:', methodsError);
     } else {
         setPaymentMethods(methodsData || []);
-        setPaymentMethod('pending');
+        // Set paymentMethod ke yang pertama atau biarkan kosong/pending
+        setPaymentMethod(orderWithDetails.payment_status === 'paid' ? 'pending' : (methodsData[0]?.id || 'pending'));
     }
 
     setOrder(orderWithDetails);
@@ -219,8 +220,22 @@ const CompleteDeliveryPage = () => {
         throw new Error('Gagal mengunggah bukti pengiriman: ' + deliveryUploadError.message);
       }
       
-      const selectedMethodObj = paymentMethods.find(m => m.id === paymentMethod);
-      const isTransfer = selectedMethodObj?.type === 'transfer' || paymentMethod === 'hybrid';
+      // --- START: MODIFIKASI LOGIKA UNTUK PAYMENT AMOUNT/METHOD ---
+      let finalPaymentAmount = 0;
+      if (paymentStatus !== 'unpaid') {
+        // Hanya hitung amount jika status bukan 'unpaid'
+        finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
+      }
+      
+      let pmToSend = null;
+      if (paymentMethod && paymentMethod !== "pending") {
+          // Selalu ambil ID metode yang dipilih jika ada (bahkan jika status 'unpaid')
+          pmToSend = paymentMethod === "hybrid" ? transferMethod : paymentMethod;
+      }
+      // --- END: MODIFIKASI LOGIKA UNTUK PAYMENT AMOUNT/METHOD ---
+      
+      const selectedMethodObjForTransfer = paymentMethods.find(m => m.id === pmToSend);
+      const isTransfer = selectedMethodObjForTransfer?.type === 'transfer' || (paymentMethod === 'hybrid' && selectedMethodObjForTransfer?.type === 'transfer');
 
       if (paymentStatus !== 'unpaid' && isTransfer && transferProofFile) {
         const transferFileExt = transferProofFile.name.split('.').pop();
@@ -236,23 +251,11 @@ const CompleteDeliveryPage = () => {
         transferProofUrl = transferUploadData.path;
       }
       
-      let finalPaymentAmount = 0;
-      if (paymentStatus !== 'unpaid') {
-        finalPaymentAmount = (parseFloat(cashAmount) || 0) + (parseFloat(transferAmount) || 0);
-      }
-      
-      let pmToSend = null;
-      if (paymentStatus !== "unpaid") {
-          pmToSend = paymentMethod === "hybrid" ? transferMethod : paymentMethod;
-      } else if (paymentMethod && paymentMethod !== "pending") {
-          pmToSend = paymentMethod;
-      }
-
       // Perbaikan: Menambahkan logika untuk menghitung borrowedQty sebelum mengirim payload
       const payload = {
         orderId,
         paymentAmount: finalPaymentAmount,
-        paymentMethodId: pmToSend,
+        paymentMethodId: pmToSend, // Mengirim ID metode yang dipilih (bisa null/ID)
         returnableItems: returnableItemsInOrder.map(item => {
             const returnedQty = parseInt(itemQuantities[item.product_id]?.returnedQty, 10) || 0;
             const purchasedEmptyQty = parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty, 10) || 0;

@@ -113,12 +113,14 @@ serve(async (req) => {
 
     const newGrandTotal = orderItemsTotal + (parseFloat(transportCost) || 0) + totalPurchaseCost;
 
-    if (paymentStatus === 'paid' || paymentStatus === 'partial') {
+    // --- START: MODIFIKASI LOGIKA PENYIMPANAN PEMBAYARAN ---
+    // Simpan record pembayaran jika ada metode yang dipilih (amount bisa 0 jika status 'unpaid' di frontend)
+    if (paymentMethodId) {
       const { error: paymentInsertError } = await supabase
         .from('payments')
         .insert({
           order_id: orderId,
-          amount: paymentAmount,
+          amount: paymentAmount, // Menerima 0 jika status 'unpaid' di frontend
           payment_method_id: paymentMethodId,
           paid_at: new Date().toISOString(),
           company_id: company_id,
@@ -128,6 +130,7 @@ serve(async (req) => {
         });
       if (paymentInsertError) throw paymentInsertError;
     }
+    // --- END: MODIFIKASI LOGIKA PENYIMPANAN PEMBAYARAN ---
     
     const totalReturnedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.returnedQty) || 0), 0);
     const totalBorrowedQty = returnableItems.reduce((sum, item) => sum + (parseFloat(item.borrowedQty) || 0), 0);
@@ -141,6 +144,7 @@ serve(async (req) => {
     if (paymentsError) throw paymentsError;
     const totalPaid = currentPaymentsData.reduce((sum, p) => sum + p.amount, 0);
 
+    // Perbarui status pembayaran berdasarkan totalPaid yang sebenarnya
     let newPaymentStatus = 'unpaid';
     if (totalPaid >= newGrandTotal) {
       newPaymentStatus = 'paid';
