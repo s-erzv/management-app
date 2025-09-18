@@ -190,7 +190,7 @@ ${companyName}`;
         .select(`
           *,
           customers (name, phone, address),
-          courier_profile:profiles!orders_courier_id_fkey1(full_name),
+          order_couriers (courier:profiles(id, full_name)),
           order_items (id, qty, price, item_type, products(name, is_returnable, empty_bottle_price))
         `)
         .eq('id', id)
@@ -556,9 +556,12 @@ Yth. Bapak/Ibu ${order.customers.name},
 
 Berikut adalah invoice untuk pesanan Anda:
 Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTotal)}.
+
 Rincian Produk:
 ${productsList}
+
 Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodDisplay}.
+
 Tautan invoice: ${pdfUrl}.
 
 Jazaakumullaahu khairan atas perhatian dan kerja samanya.

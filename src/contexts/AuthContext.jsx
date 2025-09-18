@@ -21,7 +21,6 @@ export const AuthProvider = ({ children }) => {
 
     const applySession = async (nextSession) => {
       safeSet(() => setSession(nextSession))
-      // NOTE: profile will be loaded by a dedicated effect below when userId changes
       if (!nextSession?.user?.id) safeSet(() => setUserProfile(null))
     }
 
@@ -54,12 +53,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, [])
 
-  // Dedicated effect: load profile whenever userId changes.
   useEffect(() => {
     const userId = session?.user?.id
     if (!userId) return
 
-    if (profilePromiseRef.current) return // guard
+    if (profilePromiseRef.current) return
 
     let cancelled = false
     profilePromiseRef.current = (async () => {
@@ -73,7 +71,7 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error
         if (!cancelled) {
           setUserProfile(data);
-          setActiveCompanyId(data.company_id); // Inisialisasi activeCompanyId
+          setActiveCompanyId(data.company_id); 
         }
       } catch (err) {
         console.warn('[Auth] profile load failed, will retry on next auth change/focus:', err)
@@ -86,13 +84,11 @@ export const AuthProvider = ({ children }) => {
     return () => { cancelled = true }
   }, [session?.user?.id])
 
-  // Light re-check when tab becomes visible: only if we have a session but no profile yet.
   useEffect(() => {
     const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
       if (!session?.user?.id) return
       if (userProfile || profilePromiseRef.current) return
-      // Re-try profile fetch quietly
       const { data, error } = await supabase
         .from('profiles')
         .select(`id, role, company_id, full_name, companies(name, logo_url)`) 
@@ -100,7 +96,7 @@ export const AuthProvider = ({ children }) => {
         .single()
       if (!error) {
         setUserProfile(data);
-        setActiveCompanyId(data.company_id); // Inisialisasi activeCompanyId
+        setActiveCompanyId(data.company_id); 
       }
     }
     document.addEventListener('visibilitychange', onVisible)
