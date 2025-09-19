@@ -23,7 +23,16 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { Card } from './ui/card';
 
-const WhatsappOrderModal = ({ isOpen, onOpenChange, orderId, orderDate, orderItems, products, suppliers }) => {
+const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount ?? 0);
+};
+
+
+const WhatsappOrderModal = ({ isOpen, onOpenChange, orderId, orderDate, orderItems, products, suppliers, companyName }) => {
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [customPhoneNumber, setCustomPhoneNumber] = useState('');
 
@@ -42,12 +51,18 @@ const WhatsappOrderModal = ({ isOpen, onOpenChange, orderId, orderDate, orderIte
       return orderItems;
     }
     
-    // Filter items based on the selected supplier
     return orderItems.filter(item => {
       const product = products.find(p => p.id === item.product_id);
       return product?.supplier_id === selectedSupplier;
     });
   }, [selectedSupplier, orderItems, products]);
+
+  const totalTransaction = useMemo(() => {
+      return filteredOrderItems.reduce((sum, item) => {
+          return sum + ((item.qty || 0) * (item.price || 0));
+      }, 0);
+  }, [filteredOrderItems]);
+
 
   const generateOrderMessage = (isConfirm) => {
     if (!selectedSupplierData?.phone && !customPhoneNumber) {
@@ -57,9 +72,13 @@ const WhatsappOrderModal = ({ isOpen, onOpenChange, orderId, orderDate, orderIte
 
     const orderItemsList = filteredOrderItems
       .map(item => {
-        const productName = products.find(p => p.id === item.product_id)?.name || 'Produk';
+        const product = products.find(p => p.id === item.product_id);
+        const productName = product?.name || 'Produk';
         const qty = item.qty || 0;
-        return `- ${productName}: ${qty}`;
+        const price = item.price || 0; 
+        
+        // Format daftar barang: - Nama Produk: Qty x Harga Satuan
+        return `- ${productName}: ${qty} x ${formatCurrency(price)}`;
       })
       .join('\n');
       
@@ -71,15 +90,19 @@ const WhatsappOrderModal = ({ isOpen, onOpenChange, orderId, orderDate, orderIte
     } else {
       headerMessage = `*Pesan Final Order (Nomor Order: #${orderId?.slice(0, 8)})*`;
     }
-
+    
     return `${headerMessage}
 
-Kami ingin mengkonfirmasi pesanan dengan rincian berikut:
+Order ${companyName || 'Distributor'}
+(Nomor Order: #${orderId?.slice(0, 8)})
 Tanggal Order: ${formattedDate}
+
+Kami ingin memesan produk dengan rincian berikut:
 Daftar Barang:
 ${orderItemsList}
 
-Mohon konfirmasi ketersediaan barang dan harga terbaru.
+Dengan Total Transaksi: ${formatCurrency(totalTransaction)}
+
 Terima kasih.`;
   };
 
@@ -87,7 +110,9 @@ Terima kasih.`;
     const message = generateOrderMessage(isConfirm);
     if (message) {
       const phone = selectedSupplierData?.phone || customPhoneNumber;
-      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      const normalizedPhone = phone.replace(/[^\d]/g, '').startsWith('62') ? phone : `62${phone.replace(/[^\d]/g, '')}`;
+
+      const whatsappUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
       onOpenChange(false);
     }
@@ -142,20 +167,28 @@ Terima kasih.`;
                     const product = products.find(p => p.id === item.product_id);
                     return (
                         <li key={item.product_id}>
-                            {product?.name} ({item.qty})
+                            {product?.name} ({item.qty}) - {formatCurrency(item.price)}
                         </li>
                     );
                   })}
+                  <li className="font-bold mt-2">
+                    Total: {formatCurrency(totalTransaction)}
+                  </li>
                 </ul>
               </Card>
             </div>
           )}
+           {(!selectedSupplier || filteredOrderItems.length === 0) && (
+             <div className="space-y-2 mt-4 text-muted-foreground text-center">
+                Pilih Supplier untuk melihat rincian order yang terfilter.
+             </div>
+           )}
         </div>
         <DialogFooter className="flex flex-col sm:flex-row gap-2">
           <Button
             className="w-full sm:w-auto"
             onClick={() => handleSendMessage(true)}
-            disabled={!isFormValid}
+            disabled={!isFormValid || filteredOrderItems.length === 0}
           >
             <Send className="h-4 w-4 mr-2" />
             Konfirmasi Order
@@ -163,7 +196,7 @@ Terima kasih.`;
           <Button
             className="w-full sm:w-auto"
             onClick={() => handleSendMessage(false)}
-            disabled={!isFormValid}
+            disabled={!isFormValid || filteredOrderItems.length === 0}
             variant="ghost"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
