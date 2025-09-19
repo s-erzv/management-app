@@ -316,7 +316,6 @@ ${companyName}`;
       }
     }
   }, [id, isAuthenticated]);
-fix 
 
   useEffect(() => {
     let timeoutId;
