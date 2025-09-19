@@ -195,6 +195,7 @@ ${companyName}`;
         `)
         .eq('id', id)
         .abortSignal(abortControllerRef.current.signal)
+        .single();
 
       if (orderError) throw orderError;
       if (!orderData) throw new Error('Pesanan tidak ditemukan.');
