@@ -183,9 +183,12 @@ ${companyName}`;
       setError(null);
     }
 
+    let orderData = null;
+    let orderError = null;
+
     try {
-      // 1) Load order first
-      const { data: orderData, error: orderError } = await supabase
+      // 1) Load order first, forcing a single result or error
+      const { data, error } = await supabase
         .from('orders')
         .select(`
           *,
@@ -195,31 +198,71 @@ ${companyName}`;
         `)
         .eq('id', id)
         .abortSignal(abortControllerRef.current.signal)
-        .single();
+        .single(); // <--- Pastikan .single() ada di sini
+      
+      orderData = data;
+      orderError = error;
 
-      if (orderError) throw orderError;
-      if (!orderData) throw new Error('Pesanan tidak ditemukan.');
-
-      let proofPublicUrl;
-      if (orderData.proof_of_delivery_url) {
-        const { data: p } = supabase.storage
-          .from('proofs')
-          .getPublicUrl(orderData.proof_of_delivery_url);
-        proofPublicUrl = p?.publicUrl;
+    } catch (err) {
+      if (isAbortErr(err)) return;
+      
+      // PGRST116 (0 rows) adalah error yang paling sering terjadi. Kita tangani sebagai 'tidak ditemukan'.
+      if (err.code === 'PGRST116' || err.message === 'Cannot coerce the result to a single JSON object') {
+        orderError = { message: 'Pesanan tidak ditemukan.', code: '404' };
+      } else {
+        // Handle all other errors (like network or SQL error)
+        orderError = err;
       }
+    }
+    
+    // --- CHECK FOR FATAL ORDER ERROR/NOT FOUND ---
+    if (orderError) {
+        if (mountedRef.current) {
+            console.error('Final Order Fetch Error:', orderError);
+            setError({ message: orderError.message || 'Gagal memuat detail pesanan.' });
+            setOrder(null);
+            setPayments([]);
+            setPaymentMethods([]);
+            setLoading(false);
+        }
+        return; 
+    }
+    
+    // --- CHECK IF ORDER DATA WAS FOUND ---
+    if (!orderData) {
+        if (mountedRef.current) {
+            setError({ message: 'Pesanan tidak ditemukan.' });
+            setOrder(null);
+            setPayments([]);
+            setPaymentMethods([]);
+            setLoading(false);
+        }
+        return;
+    }
+    
+    // --- CONTINUE WITH DEPENDENT QUERIES (orderData dijamin valid) ---
+    
+    let proofPublicUrl;
+    if (orderData.proof_of_delivery_url) {
+      const { data: p } = supabase.storage
+        .from('proofs')
+        .getPublicUrl(orderData.proof_of_delivery_url);
+      proofPublicUrl = p?.publicUrl;
+    }
 
-     const [paymentsRes, methodsRes] = await Promise.all([
-        supabase
-          .from('payments')
-          .select(`*, received_by_name, received_by:profiles(full_name), payment_method:payment_methods(method_name, type, account_name, account_number)`)
-          .eq('order_id', orderData.id)
-          .order('created_at', { ascending: false })
-          .abortSignal(abortControllerRef.current.signal),
-        supabase
-          .from('payment_methods')
-          .select('*')
-          .eq('company_id', orderData.company_id)
-          .abortSignal(abortControllerRef.current.signal),
+    try {
+      const [paymentsRes, methodsRes] = await Promise.all([
+          supabase
+            .from('payments')
+            .select(`*, received_by_name, received_by:profiles(full_name), payment_method:payment_methods(method_name, type, account_name, account_number)`)
+            .eq('order_id', orderData.id) 
+            .order('created_at', { ascending: false })
+            .abortSignal(abortControllerRef.current.signal),
+          supabase
+            .from('payment_methods')
+            .select('*')
+            .eq('company_id', orderData.company_id) 
+            .abortSignal(abortControllerRef.current.signal),
       ]);
 
       if (paymentsRes.error && !isAbortErr(paymentsRes.error)) {
@@ -249,7 +292,6 @@ ${companyName}`;
         proof_public_url: proofPublicUrl || null,
       };
 
-      // Inisialisasi paymentMethodId dengan metode dari record pembayaran terbaru (termasuk yang 0)
       if (paymentsWithUrls.length > 0 && mountedRef.current) {
         const firstPaymentMethodId = paymentsWithUrls[0].payment_method_id;
         setPaymentMethodId(String(firstPaymentMethodId));
@@ -263,13 +305,10 @@ ${companyName}`;
         setPaymentMethods(methodsRes.data || []);
       }
     } catch (err) {
-      if (isAbortErr(err)) {
-        return;
-      }
-
+      if (isAbortErr(err)) return;
       if (mountedRef.current) {
-        console.error('fetchData error', err);
-        setError({ message: err.message || 'Terjadi kesalahan tidak terduga' });
+        console.error('fetchData dependent error', err);
+        setError({ message: err.message || 'Gagal memuat data terkait pesanan.' });
       }
     } finally {
       if (mountedRef.current && showLoading) {
@@ -277,6 +316,7 @@ ${companyName}`;
       }
     }
   }, [id, isAuthenticated]);
+fix 
 
   useEffect(() => {
     let timeoutId;
