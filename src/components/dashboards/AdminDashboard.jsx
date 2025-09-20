@@ -42,7 +42,7 @@ const AdminDashboard = ({ profile, data }) => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight">
-            Halo, {profile.full_name}! 👋
+            Halo, {profile.full_name}! 
           </h2>
           <p className="text-muted-foreground text-sm">
             Selamat datang kembali. Berikut adalah ringkasan operasional harian perusahaan Anda.

@@ -282,16 +282,19 @@ const ReportsPage = () => {
   const galonChartHeight = Math.max(300, reportData.galonChartData.length * 25);
 
   return (
-    <div className="container mx-auto p-4 md:p-8 space-y-8 max-w-7xl">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
-          <BarIcon className="h-8 w-8" />
+    // Mengurangi padding horizontal di mobile (p-4)
+    <div className="container mx-auto p-4 md:p-8 space-y-6 max-w-7xl"> {/* Mengurangi space-y-8 menjadi space-y-6 */}
+      
+      {/* Header Responsif */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3"> {/* Mengurangi mb-6 */}
+        <h1 className="text-2xl font-bold text-[#10182b] flex items-center gap-2"> {/* Mengurangi ukuran font */}
+          <BarIcon className="h-6 w-6" />
           Laporan & Analisis
         </h1>
         <Button 
           variant="outline"
           onClick={handleExportToCsv}
-          className="text-[#10182b] hover:bg-gray-100"
+          className="w-full sm:w-auto text-[#10182b] hover:bg-gray-100 text-sm" // Full width di mobile
           disabled={loading || reportData.diff.length === 0}
         >
           <FileDown className="mr-2 h-4 w-4" /> Export Excel
@@ -300,20 +303,21 @@ const ReportsPage = () => {
 
       {/* FILTER SECTIONS */}
       <Card className="border-0 shadow-lg bg-white">
-        <CardHeader className="bg-gray-50 rounded-t-lg">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Filter Laporan
+        <CardHeader className="bg-gray-50 rounded-t-lg p-4"> {/* Mengurangi padding */}
+          <CardTitle className="text-lg flex items-center gap-2"> {/* Mengurangi ukuran font */}
+            <TrendingUp className="h-5 w-5" /> Filter Laporan
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-sm">
             Pilih kategori atau subkategori untuk menyaring laporan.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 p-4"> {/* Mengurangi padding */}
+          {/* Filter diubah menjadi susunan vertikal di mobile */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category-filter">Filter Kategori</Label>
+            <div className="space-y-2 w-full"> {/* Full width di mobile */}
+              <Label htmlFor="category-filter" className="text-sm">Filter Kategori</Label>
               <Select value={selectedCategoryId} onValueChange={handleCategoryChange}>
-                <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectTrigger className="w-full text-sm"> {/* Full width */}
                   <SelectValue placeholder="Semua Kategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -326,10 +330,10 @@ const ReportsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="subcategory-filter">Filter Subkategori</Label>
+            <div className="space-y-2 w-full"> {/* Full width di mobile */}
+              <Label htmlFor="subcategory-filter" className="text-sm">Filter Subkategori</Label>
               <Select value={selectedSubCategoryId} onValueChange={handleSubCategoryChange} disabled={selectedCategoryId === 'all'}>
-                <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectTrigger className="w-full text-sm"> {/* Full width */}
                   <SelectValue placeholder="Semua Subkategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -348,26 +352,28 @@ const ReportsPage = () => {
       
       {/* GRAFIK 1: Stok Produk Non-Galon vs Permintaan */}
       <Card className="border-0 shadow-lg bg-white">
-        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok Produk (Semua) vs Permintaan
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg p-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" /> Stok Produk vs Permintaan
           </CardTitle>
-          <CardDescription className="text-gray-200">
-            Perbandingan visual stok produk yang tersedia dengan total permintaan dari pesanan aktif, untuk semua produk.
+          <CardDescription className="text-gray-200 text-xs">
+            Perbandingan stok produk yang tersedia dengan total permintaan dari pesanan aktif.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4"> {/* Mengurangi padding */}
           {reportData.productChartData && reportData.productChartData.length > 0 ? (
-            <div className="border rounded-lg p-2">
+            <div className="border rounded-lg p-1"> {/* Mengurangi padding */}
+              {/* ResponsiveContainer akan menyesuaikan dengan lebar 100% */}
               <ResponsiveContainer width="100%" height={chartHeight} className='p-1'>
                 <ComposedChart
                   data={reportData.productChartData}
-                  margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                  // Mengurangi margin agar grafik lebih besar
+                  margin={{ top: 10, right: 5, left: -10, bottom: isMobile ? 80 : 20 }} 
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="name"
-                    height={120}
+                    height={isMobile ? 100 : 120} // Tambah tinggi XAxis di mobile
                     interval={0}
                     angle={-90}
                     textAnchor="end"
@@ -376,9 +382,9 @@ const ReportsPage = () => {
                     style={{ fontSize: isMobile ? '8px' : '10px' }}
                     minTickGap={0}
                   />
-                  <YAxis allowDecimals={false} />
+                  <YAxis allowDecimals={false} style={{ fontSize: isMobile ? '10px' : '12px' }} />
                   <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                  <Legend verticalAlign="top" align="right" height={36} />
+                  <Legend verticalAlign="top" align="center" height={36} />
                   <Line type="monotone" dataKey="stock" name="Stok" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
                   <Line type="monotone" dataKey="demand" name="Permintaan" stroke="#ff6b6b" strokeWidth={2} dot={{ r: 2 }} />
                 </ComposedChart>
@@ -386,30 +392,32 @@ const ReportsPage = () => {
             </div>
           ) : (
             <div className="flex justify-center items-center h-40">
-              <p className="text-muted-foreground">Tidak ada data untuk grafik produk.</p>
+              <p className="text-muted-foreground text-sm">Tidak ada data untuk grafik produk.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* GRAFIK 2: Stok Produk Returnable */}
       <Card className="border-0 shadow-lg bg-white">
-        <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-6 w-6" /> Stok produk returnable
+        <CardHeader className="bg-[#10182b] text-white rounded-t-lg p-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" /> Stok Kemasan Returnable
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4">
           {reportData.galonChartData && reportData.galonChartData.length > 0 ? (
-            <div className="border rounded-lg p-2">
+            <div className="border rounded-lg p-1">
               <ResponsiveContainer width="100%" height={galonChartHeight} className='p-1'>
                 <ComposedChart
                   data={reportData.galonChartData}
-                  margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                  // Mengurangi margin agar grafik lebih besar
+                  margin={{ top: 10, right: 5, left: -10, bottom: isMobile ? 80 : 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="name"
-                    height={120}
+                    height={isMobile ? 100 : 120} // Tambah tinggi XAxis di mobile
                     interval={0}
                     angle={-90}
                     textAnchor="end"
@@ -418,17 +426,16 @@ const ReportsPage = () => {
                     style={{ fontSize: isMobile ? '8px' : '10px' }}
                     minTickGap={0}
                   />
-                  <YAxis allowDecimals={false} />
+                  <YAxis allowDecimals={false} style={{ fontSize: isMobile ? '10px' : '12px' }} />
                   <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                  <Legend verticalAlign="top" align="right" height={36} />
-                  <Line type="monotone" dataKey="stock" name="Stok product returnable kosong" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
-                  {/* <Line type="monotone" dataKey="demand" name="Permintaan" stroke="#ff6b6b" strokeWidth={2} dot={{ r: 2 }} /> */}
+                  <Legend verticalAlign="top" align="center" height={36} />
+                  <Line type="monotone" dataKey="stock" name="Stok Kemasan Kosong" stroke="#10182b" strokeWidth={2} dot={{ r: 2 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <div className="flex justify-center items-center h-40">
-              <p className="text-muted-foreground">Tidak ada data untuk grafik Kemasan Returnable.</p>
+              <p className="text-muted-foreground text-sm">Tidak ada data untuk grafik Kemasan Returnable.</p>
             </div>
           )}
         </CardContent>
@@ -436,45 +443,47 @@ const ReportsPage = () => {
 
       {/* DETAIL TABEL KOMPREHENSIF HORIZONTAL */}
       <Card className="border-0 shadow-lg bg-white">
-        <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Package className="h-6 w-6" /> Detail Stok & Permintaan
+        <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Package className="h-5 w-5" /> Detail Stok & Permintaan
             </CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 p-0"> {/* Padding dihilangkan, diberikan ke div di bawah */}
           <div className="overflow-x-auto whitespace-nowrap">
-            <table className="w-full min-w-full text-sm border-collapse rounded-lg">
+            <table className="w-full min-w-full text-xs border-collapse"> {/* Mengurangi ukuran font */}
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50">Produk</th>
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 min-w-[100px]">Metrik</th>
                   {reportData.diff.map(product => (
-                    <th key={product.name} className="text-center p-3 border-b border-r">{product.name}</th>
+                    <th key={product.name} className="text-center p-3 border-b border-r max-w-[80px] truncate">
+                        <span className="block max-w-[80px] mx-auto">{product.name}</span>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 <tr className="hover:bg-gray-50">
-                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Tipe Stok</th>
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal min-w-[100px]">Tipe Stok</th>
                   {reportData.diff.map(product => (
                     <td key={product.name} className="p-3 border-b border-r text-center">{product.type}</td>
                   ))}
                 </tr>
                 <tr className="hover:bg-gray-50">
-                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Stok</th>
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal min-w-[100px]">Stok</th>
                   {reportData.diff.map(product => (
                     <td key={product.name} className="p-3 border-b border-r text-center">{product.stock}</td>
                   ))}
                 </tr>
                 <tr className="hover:bg-gray-50">
-                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Permintaan</th>
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal min-w-[100px]">Permintaan</th>
                   {reportData.diff.map(product => (
                     <td key={product.name} className="p-3 border-b border-r text-center">{product.demand}</td>
                   ))}
                 </tr>
                 <tr className="hover:bg-gray-50">
-                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal">Selisih</th>
+                  <th className="text-left p-3 border-b border-r sticky left-0 bg-gray-50 font-normal min-w-[100px]">Selisih</th>
                   {reportData.diff.map(product => (
                     <td
                       key={product.name}
@@ -491,24 +500,25 @@ const ReportsPage = () => {
                 )}
               </tbody>
             </table>
-            <div className="text-xs text-muted-foreground mt-2">* Baris dengan nilai negatif berarti potensi kekurangan stok.</div>
+            <div className="text-xs text-muted-foreground mt-2 p-4">* Baris dengan nilai negatif berarti potensi kekurangan stok.</div>
           </div>
         </CardContent>
       </Card>
 
       {/* RIWAYAT */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-4"> {/* Mengurangi gap */}
         <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <History className="h-6 w-6" /> Riwayat Update Stok
+          <CardHeader className="bg-[#10182b] text-white rounded-t-lg p-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <History className="h-5 w-5" /> Riwayat Update Stok
             </CardTitle>
-            <CardDescription className="text-gray-200">
+            <CardDescription className="text-gray-200 text-xs">
               Catatan penyesuaian stok yang telah dilakukan.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0"> {/* Padding dihilangkan */}
             <div className="overflow-x-auto">
+              {/* Asumsi StockReconciliationHistoryTable sudah memiliki responsivitas internal */}
               <StockReconciliationHistoryTable reconciliations={reportData.reconciliations} products={reportData.products} />
             </div>
           </CardContent>

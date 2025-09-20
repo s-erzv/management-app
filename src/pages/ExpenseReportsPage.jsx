@@ -398,47 +398,47 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
 
   return (
     <div className="min-h-screen">
-      <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl lg:text-4xl font-bold text-[#10182b] mb-2 flex items-center justify-center gap-3">
-            <FileText className="h-8 w-8 lg:h-10 lg:w-10" />
+      <div className="container mx-auto p-4 lg:p-8 max-w-7xl space-y-6"> 
+        <div className="text-left mb-4 pt-4">
+          <h1 className="text-2xl lg:text-4xl font-bold text-[#10182b] mb-1 flex items-center justify-start gap-2"> 
+            <FileText className="h-6 w-6 lg:h-10 lg:w-10" />
             Laporan Pengeluaran
           </h1>
-          <p className="text-gray-600 text-lg">Kelola pengajuan reimbursement dengan mudah dan efisien</p>
+          <p className="text-gray-600 text-sm lg:text-lg">Kelola pengajuan reimbursement dengan mudah dan efisien</p>
         </div>
 
         {/* Form Pengajuan */}
-        <Card className="mb-8 border-0 shadow-lg bg-white">
-          <CardHeader className="bg-[#10182b] text-white rounded-t-lg">
-            <CardTitle className="text-xl lg:text-2xl flex items-center gap-2">
-              <Plus className="h-6 w-6" />
-              Buat Laporan Pengeluaran Baru
+        <Card className="mb-6 border-0 shadow-lg bg-white"> {/* Mengurangi margin mb-8 */}
+          <CardHeader className="bg-[#10182b] text-white rounded-t-lg p-4"> {/* Mengurangi padding p-4 */}
+            <CardTitle className="text-lg lg:text-2xl flex items-center gap-2"> {/* Mengurangi ukuran font */}
+              <Plus className="h-5 w-5" />
+              Buat Laporan Baru
             </CardTitle>
-            <CardDescription className="text-gray-200">
-              Isi formulir berikut untuk mengajukan pengeluaran yang akan diganti oleh perusahaan
+            <CardDescription className="text-gray-200 text-xs lg:text-sm">
+              Isi formulir untuk mengajukan pengeluaran
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 lg:p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Expense Items */}
               <div className="space-y-4">
-                <Label className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
+                <Label className="text-base font-semibold text-[#10182b] flex items-center gap-2">
+                  <FileText className="h-4 w-4" /> {/* Mengurangi ukuran ikon */}
                   Daftar Pengeluaran
                 </Label>
                 <div className="space-y-4">
                   {expenseItems.map((item, index) => (
                     <Card key={index} className="border border-gray-200 bg-gray-50">
-                      <CardContent className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-gray-700">Jenis Pengeluaran</Label>
+                      <CardContent className="p-3"> {/* Mengurangi padding p-3 */}
+                        {/* Mengubah grid menjadi 1 kolom di mobile, 2 di md */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3"> {/* Mengurangi gap */}
+                          <div className="space-y-1"> {/* Mengurangi space-y */}
+                            <Label className="text-xs font-medium text-gray-700">Jenis Pengeluaran</Label>
                             <Select
                               value={item.type}
                               onValueChange={(value) => handleItemChange(index, 'type', value)}
                             >
-                              <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b]">
+                              <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm">
                                 <SelectValue placeholder="Pilih jenis" />
                               </SelectTrigger>
                               <SelectContent>
@@ -448,27 +448,26 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="md:col-span-1 xl:col-span-2 space-y-2">
-                            <Label className="text-sm font-medium text-gray-700">Deskripsi Keperluan</Label>
+                          <div className="md:col-span-1 xl:col-span-2 space-y-1">
+                            <Label className="text-xs font-medium text-gray-700">Deskripsi Keperluan</Label>
                             <Input
                               type="text"
-                              placeholder="Contoh: Pembelian bensin untuk pengiriman ke Jakarta"
+                              placeholder="Pembelian bensin..."
                               value={item.description}
                               onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                              className="bg-white border-gray-300 focus:border-[#10182b]"
+                              className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm"
                               required
                             />
                           </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-gray-700">Nominal (Rp)</Label>
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium text-gray-700">Nominal (Rp)</Label>
                             <div className="flex gap-2">
                               <Input
                                 type="number"
                                 placeholder="0"
                                 value={item.amount}
                                 onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
-                                className="bg-white border-gray-300 focus:border-[#10182b]"
-                                
+                                className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm"
                                 required
                               />
                               {expenseItems.length > 1 && (
@@ -477,7 +476,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                                   variant="destructive" 
                                   size="icon" 
                                   onClick={() => handleRemoveItem(index)}
-                                  className="shrink-0"
+                                  className="shrink-0 h-9 w-9"
                                 >
                                   <Trash className="h-4 w-4" />
                                 </Button>
@@ -492,30 +491,30 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                 <Button 
                   type="button" 
                   variant="outline" 
-                  className="w-full border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white transition-colors" 
+                  className="w-full border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white transition-colors h-9 text-sm" 
                   onClick={handleAddItem}
                 >
-                  <Plus className="h-4 w-4 mr-2" /> Tambah Item Pengeluaran
+                  <Plus className="h-4 w-4 mr-2" /> Tambah Item
                 </Button>
               </div>
               
               {/* Total */}
               <Card className="border-[#10182b] bg-gradient-to-r from-[#10182b] to-[#1a2542] text-white">
-                <CardContent className="p-6">
+                <CardContent className="p-4"> {/* Mengurangi padding p-4 */}
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-semibold">Total Pengeluaran:</span>
-                    <span className="text-2xl lg:text-3xl font-bold">
+                    <span className="text-base font-semibold">Total Pengeluaran:</span>
+                    <span className="text-xl lg:text-3xl font-bold"> {/* Mengurangi ukuran font total */}
                       Rp{calculateTotal().toLocaleString('id-ID')}
                     </span>
                   </div>
                 </CardContent>
               </Card>
               
-              {/* Payment Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Payment Details - Diubah menjadi 1 kolom di mobile */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4"> {/* Mengurangi gap */}
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
-                    <User className="h-5 w-5" />
+                  <Label className="text-base font-semibold text-[#10182b] flex items-center gap-2">
+                    <User className="h-4 w-4" />
                     Karyawan Pengaju
                   </Label>
                   <Select
@@ -523,7 +522,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                     onValueChange={setSubmitterId}
                     required
                   >
-                    <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-12">
+                    <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-10 text-sm"> {/* Mengurangi tinggi */}
                       <SelectValue placeholder="Pilih nama karyawan" />
                     </SelectTrigger>
                     <SelectContent>
@@ -536,8 +535,8 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
+                  <Label className="text-base font-semibold text-[#10182b] flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
                     Metode Pembayaran
                   </Label>
                   <Select
@@ -546,7 +545,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                     disabled={!submitterId}
                     required
                   >
-                    <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-12">
+                    <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-10 text-sm">
                       <SelectValue placeholder="Pilih metode pembayaran" />
                     </SelectTrigger>
                     <SelectContent>
@@ -561,17 +560,17 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
 
               <Button 
                 type="submit" 
-                className="w-full bg-[#10182b] text-white hover:bg-[#1a2542] h-12 text-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl" 
+                className="w-full bg-[#10182b] text-white hover:bg-[#1a2542] h-10 text-base font-semibold transition-all duration-200 shadow-lg hover:shadow-xl" 
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> 
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> 
                     Mengirim Laporan...
                   </>
                 ) : (
                   <>
-                    <Send className="h-5 w-5 mr-2" />
+                    <Send className="h-4 w-4 mr-2" />
                     Kirim Laporan Pengeluaran
                   </>
                 )}
@@ -582,90 +581,91 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
         
         {/* History Section with Tabs */}
         <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b">
-            <CardTitle className="text-xl lg:text-2xl text-[#10182b] flex items-center gap-2">
-              <Calendar className="h-6 w-6" />
-              Riwayat Laporan Pengeluaran
+          <CardHeader className="bg-gradient-to-r from-gray-100 to-gray-50 rounded-t-lg border-b p-4">
+            <CardTitle className="text-lg lg:text-2xl text-[#10182b] flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Riwayat Laporan
             </CardTitle>
-            <CardDescription className="text-gray-600">
-              Pantau status dan detail semua pengajuan reimbursement
+            <CardDescription className="text-gray-600 text-sm">
+              Pantau status dan detail semua pengajuan
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 lg:p-6">
             <Tabs defaultValue="pending" className="space-y-4">
-              <TabsList className="grid w-full sm:w-auto grid-cols-2">
-                <TabsTrigger value="pending" className="gap-2">
+              <TabsList className="grid w-full grid-cols-2 h-10"> {/* Full width di mobile */}
+                <TabsTrigger value="pending" className="gap-1 text-sm">
                   <Clock className="h-4 w-4" /> Pending ({pendingReports.length})
                 </TabsTrigger>
-                <TabsTrigger value="paid" className="gap-2">
+                <TabsTrigger value="paid" className="gap-1 text-sm">
                   <CheckCircle className="h-4 w-4" /> Lunas ({paidReports.length})
                 </TabsTrigger>
               </TabsList>
               
               <TabsContent value="pending" className="space-y-4">
                 {pendingReports.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-600 mb-2">Tidak Ada Laporan Pending</h3>
-                    <p className="text-gray-500">Semua laporan sudah diselesaikan.</p>
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-gray-600 mb-1">Tidak Ada Laporan Pending</h3>
+                    <p className="text-sm text-gray-500">Semua laporan sudah diselesaikan.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> {/* Mengubah grid menjadi 1 di mobile */}
                     {pendingReports.map((report) => (
                       <Card 
                         key={report.id} 
                         className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-amber-500 hover:-translate-y-1" 
                         onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
                       >
-                        <CardHeader className="pb-3">
+                        <CardHeader className="pb-3 p-4"> {/* Padding p-4 */}
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <CardTitle className="text-xl lg:text-2xl text-[#10182b] mb-1">
+                              <CardTitle className="text-lg text-[#10182b] mb-1"> {/* Mengurangi ukuran font */}
                                 Rp{report.total_amount.toLocaleString('id-ID')}
                               </CardTitle>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <User className="h-4 w-4" />
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <User className="h-3 w-3" />
                                 {report.user?.full_name || '-'}
                               </div>
                             </div>
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 bg-amber-100 text-amber-800">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1 bg-amber-100 text-amber-800">
                               <Clock className="h-3 w-3" /> PENDING
                             </span>
                           </div>
                         </CardHeader>
-                        <CardContent className="pt-0">
+                        <CardContent className="pt-0 p-4"> {/* Padding p-4 */}
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="text-gray-600 flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
+                                <Calendar className="h-3 w-3" />
                                 Tanggal
                               </span>
                               <span className="font-medium">
                                 {new Date(report.report_date).toLocaleDateString('id-ID')}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="text-gray-600 flex items-center gap-1">
-                                <CreditCard className="h-4 w-4" />
+                                <CreditCard className="h-3 w-3" />
                                 Metode
                               </span>
                               <span className="font-medium capitalize">
                                 {report.payment_method === 'transfer' ? 'Transfer' : 'Tunai'}
                               </span>
                             </div>
-                            <div className="flex justify-end mt-4">
+                            <div className="flex justify-end mt-4 gap-1"> {/* Mengurangi gap tombol */}
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white"
+                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white text-xs px-2"
                                 onClick={(e) => { e.stopPropagation(); setSelectedReport(report); setIsDetailModalOpen(true); }}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                Lihat Detail
+                                Detail
                               </Button>
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
+                                className="h-8 w-8"
                                 onClick={(e) => { e.stopPropagation(); handleEditReport(report); }}
                               >
                                 <Pencil className="h-4 w-4 text-blue-500" />
@@ -673,6 +673,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                               <Button 
                                   variant="ghost" 
                                   size="icon" 
+                                  className="h-8 w-8"
                                   onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
                               >
                                   <Trash2 className="h-4 w-4 text-red-500" />
@@ -688,68 +689,69 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
 
               <TabsContent value="paid" className="space-y-4">
                  {paidReports.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-600 mb-2">Tidak Ada Laporan Lunas</h3>
-                    <p className="text-gray-500">Laporan yang sudah dibayar akan muncul di sini.</p>
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-gray-600 mb-1">Tidak Ada Laporan Lunas</h3>
+                    <p className="text-sm text-gray-500">Laporan yang sudah dibayar akan muncul di sini.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {paidReports.map((report) => (
                       <Card 
                         key={report.id} 
                         className="cursor-pointer hover:shadow-xl transition-all duration-300 border-l-4 border-l-green-500 hover:-translate-y-1" 
                         onClick={() => { setSelectedReport(report); setIsDetailModalOpen(true); }}
                       >
-                        <CardHeader className="pb-3">
+                        <CardHeader className="pb-3 p-4">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <CardTitle className="text-xl lg:text-2xl text-[#10182b] mb-1">
+                              <CardTitle className="text-lg text-[#10182b] mb-1">
                                 Rp{report.total_amount.toLocaleString('id-ID')}
                               </CardTitle>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <User className="h-4 w-4" />
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <User className="h-3 w-3" />
                                 {report.user?.full_name || '-'}
                               </div>
                             </div>
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 bg-green-100 text-green-800">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1 bg-green-100 text-green-800">
                               <CheckCircle className="h-3 w-3" /> LUNAS
                             </span>
                           </div>
                         </CardHeader>
-                        <CardContent className="pt-0">
+                        <CardContent className="pt-0 p-4">
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="text-gray-600 flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
+                                <Calendar className="h-3 w-3" />
                                 Tanggal
                               </span>
                               <span className="font-medium">
                                 {new Date(report.report_date).toLocaleDateString('id-ID')}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="text-gray-600 flex items-center gap-1">
-                                <CreditCard className="h-4 w-4" />
+                                <CreditCard className="h-3 w-3" />
                                 Metode
                               </span>
                               <span className="font-medium capitalize">
                                 {report.payment_method === 'transfer' ? 'Transfer' : 'Tunai'}
                               </span>
                             </div>
-                             <div className="flex justify-end mt-4">
+                             <div className="flex justify-end mt-4 gap-1">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white"
+                                className="text-[#10182b] hover:bg-[#10182b] hover:text-white text-xs px-2"
                                 onClick={(e) => { e.stopPropagation(); setSelectedReport(report); setIsDetailModalOpen(true); }}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                Lihat Detail
+                                Detail
                               </Button>
                               <Button 
                                   variant="ghost" 
                                   size="icon" 
+                                  className="h-8 w-8"
                                   onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
                               >
                                   <Trash2 className="h-4 w-4 text-red-500" />
@@ -770,57 +772,57 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
       {/* Detail Modal */}
       {selectedReport && (
         <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader className="border-b pb-4">
-              <DialogTitle className="text-xl lg:text-2xl text-[#10182b] flex items-center gap-2">
-                <FileText className="h-6 w-6" />
-                Detail Laporan Pengeluaran
+          <DialogContent className="sm:max-w-4xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
+            <DialogHeader className="border-b pb-3"> {/* Mengurangi padding */}
+              <DialogTitle className="text-lg lg:text-2xl text-[#10182b] flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Detail Laporan
               </DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Informasi lengkap pengajuan reimbursement dari <strong>{selectedReport.user?.full_name || '-'}</strong>
+              <DialogDescription className="text-gray-600 text-sm">
+                Informasi lengkap pengajuan dari <strong>{selectedReport.user?.full_name || '-'}</strong>
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-6 py-4">
+            <div className="space-y-4 py-4"> {/* Mengurangi space-y */}
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-[#10182b] bg-gradient-to-br from-[#10182b] to-[#1a2542] text-white">
-                  <CardContent className="p-4 text-center">
-                    <div className="text-sm opacity-90 mb-1">Total Nominal</div>
-                    <div className="text-xl lg:text-2xl font-bold">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3"> {/* Mengubah grid 1/2/4 menjadi 2/4 dan mengurangi gap */}
+                <Card className="border-[#10182b] bg-gradient-to-br from-[#10182b] to-[#1a2542] text-white col-span-2 lg:col-span-1">
+                  <CardContent className="p-3 text-center">
+                    <div className="text-xs opacity-90 mb-1">Total Nominal</div>
+                    <div className="text-lg lg:text-2xl font-bold">
                       Rp{selectedReport.total_amount.toLocaleString('id-ID')}
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="border-gray-200">
-                  <CardContent className="p-4 text-center">
-                    <User className="h-6 w-6 text-[#10182b] mx-auto mb-2" />
-                    <div className="text-sm text-gray-600 mb-1">Pengaju</div>
-                    <div className="font-semibold text-[#10182b]">
+                  <CardContent className="p-3 text-center">
+                    <User className="h-5 w-5 text-[#10182b] mx-auto mb-1" />
+                    <div className="text-xs text-gray-600 mb-1">Pengaju</div>
+                    <div className="font-semibold text-sm text-[#10182b] truncate">
                       {selectedReport.user?.full_name || '-'}
                     </div>
                   </CardContent>
                 </Card>
                 <Card className="border-gray-200">
-                  <CardContent className="p-4 text-center">
-                    <Calendar className="h-6 w-6 text-[#10182b] mx-auto mb-2" />
-                    <div className="text-sm text-gray-600 mb-1">Tanggal</div>
-                    <div className="font-semibold text-[#10182b]">
+                  <CardContent className="p-3 text-center">
+                    <Calendar className="h-5 w-5 text-[#10182b] mx-auto mb-1" />
+                    <div className="text-xs text-gray-600 mb-1">Tanggal</div>
+                    <div className="font-semibold text-sm text-[#10182b]">
                       {new Date(selectedReport.report_date).toLocaleDateString('id-ID')}
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="border-gray-200">
-                  <CardContent className="p-4 text-center">
-                    <div className="mb-2">
+                <Card className="border-gray-200 hidden lg:block"> {/* Sembunyikan status di ringkasan jika terlalu sempit */}
+                  <CardContent className="p-3 text-center">
+                    <div className="mb-1">
                       {selectedReport.status === 'paid' ? (
-                        <CheckCircle className="h-6 w-6 text-green-600 mx-auto" />
+                        <CheckCircle className="h-5 w-5 text-green-600 mx-auto" />
                       ) : (
-                        <Clock className="h-6 w-6 text-amber-600 mx-auto" />
+                        <Clock className="h-5 w-5 text-amber-600 mx-auto" />
                       )}
                     </div>
-                    <div className="text-sm text-gray-600 mb-1">Status</div>
-                    <div className={`font-semibold ${
+                    <div className="text-xs text-gray-600 mb-1">Status</div>
+                    <div className={`font-semibold text-sm ${
                       selectedReport.status === 'paid' ? 'text-green-600' : 'text-amber-600'
                     }`}>
                       {selectedReport.status === 'paid' ? 'LUNAS' : 'PENDING'}
@@ -830,26 +832,26 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
               </div>
               
               {/* Items Detail */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-[#10182b] flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
                   Rincian Pengeluaran
                 </h3>
                 
                 {/* Mobile View - Cards */}
-                <div className="block md:hidden space-y-3">
+                <div className="block md:hidden space-y-2">
                   {selectedReport.items.map((item, index) => (
                     <Card key={index} className="border-gray-200">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-sm font-medium text-[#10182b] uppercase">
+                      <CardContent className="p-3">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-xs font-medium text-[#10182b] uppercase">
                             {item.type}
                           </span>
-                          <span className="text-lg font-bold text-[#10182b]">
+                          <span className="text-base font-bold text-[#10182b]">
                             Rp{item.amount.toLocaleString('id-ID')}
                           </span>
                         </div>
-                        <p className="text-gray-700 text-sm">{item.description}</p>
+                        <p className="text-gray-700 text-xs">{item.description}</p>
                       </CardContent>
                     </Card>
                   ))}
@@ -859,13 +861,13 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                 <div className="hidden md:block rounded-lg border border-gray-200 overflow-hidden">
                   <Table>
                     <TableHeader className="bg-gray-50">
-                      <TableRow>
-                        <TableHead className="font-semibold text-[#10182b] w-[150px]">Jenis</TableHead>
+                      <TableRow className="text-sm">
+                        <TableHead className="font-semibold text-[#10182b] w-[120px]">Jenis</TableHead>
                         <TableHead className="font-semibold text-[#10182b]">Deskripsi</TableHead>
-                        <TableHead className="font-semibold text-[#10182b] text-right w-[150px]">Nominal</TableHead>
+                        <TableHead className="font-semibold text-[#10182b] text-right w-[120px]">Nominal</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="text-sm">
                       {selectedReport.items.map((item, index) => (
                         <TableRow key={index} className="hover:bg-gray-50">
                           <TableCell className="font-medium text-[#10182b] uppercase">
@@ -879,11 +881,11 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                           </TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-[#10182b] text-white font-semibold hover:bg-[#1a2542]">
-                        <TableCell colSpan={2} className="text-right">
+                      <TableRow className="bg-[#10182b] text-white font-semibold hover:bg-[#1a2542] text-base">
+                        <TableCell colSpan={2} className="text-right py-3">
                           Total Keseluruhan:
                         </TableCell>
-                        <TableCell className="text-right text-lg">
+                        <TableCell className="text-right py-3">
                           Rp{selectedReport.total_amount.toLocaleString('id-ID')}
                         </TableCell>
                       </TableRow>
@@ -895,22 +897,22 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
               {/* Admin Actions */}
               {userProfile?.role === 'admin' && selectedReport.status === 'pending' && (
                 <Card className="border-[#10182b] bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <CardContent className="p-6">
-                    <h4 className="font-semibold text-[#10182b] mb-4 flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold text-base text-[#10182b] mb-3 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
                       Aksi Administrator
                     </h4>
                     <div className="flex flex-col sm:flex-row gap-3">
                       <Button 
-                        className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                        className="bg-green-600 hover:bg-green-700 text-white flex-1 h-9 text-sm"
                         onClick={() => handleTransferClick(selectedReport)}
                       >
                         <Send className="h-4 w-4 mr-2" />
-                        Transfer & Kirim WhatsApp
+                        Transfer & WA
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white flex-1"
+                        className="border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white flex-1 h-9 text-sm"
                         onClick={() => handleMarkAsPaid(selectedReport)}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
@@ -925,47 +927,48 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
         </Dialog>
       )}
       
-      {/* Modal Tandai Lunas */}
+      {/* Modal Tandai Lunas (Disarankan untuk tetap menggunakan sm:max-w-[425px] agar fokus) */}
       {selectedReport && (
           <Dialog open={isMarkAsPaidModalOpen} onOpenChange={setIsMarkAsPaidModalOpen}>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[400px]">
                   <DialogHeader>
-                      <DialogTitle>Tandai Lunas Laporan</DialogTitle>
-                      <DialogDescription>
+                      <DialogTitle className="text-lg">Tandai Lunas Laporan</DialogTitle>
+                      <DialogDescription className="text-sm">
                           Pilih metode pembayaran yang digunakan untuk melunasi reimbursement ini.
                       </DialogDescription>
                   </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                          <Label>Total Reimbursement</Label>
+                  <div className="grid gap-3 py-4">
+                      <div className="space-y-1">
+                          <Label className="text-sm">Total Reimbursement</Label>
                           <p className="text-lg font-bold">
                               Rp{selectedReport?.total_amount.toLocaleString('id-ID')}
                           </p>
                       </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="admin-fee">Biaya Admin (Opsional)</Label>
+                      <div className="space-y-1">
+                          <Label className="text-sm" htmlFor="admin-fee">Biaya Admin (Opsional)</Label>
                           <Input
                               id="admin-fee"
                               type="number"
                               placeholder="Masukkan biaya admin"
                               value={adminFee}
                               onChange={(e) => setAdminFee(e.target.value)}
+                              className="text-sm h-9"
                           />
                       </div>
-                      <div className="space-y-2">
-                          <Label>Total Akhir</Label>
-                          <p className="text-2xl font-bold text-[#10182b]">
+                      <div className="space-y-1">
+                          <Label className="text-sm">Total Akhir</Label>
+                          <p className="text-xl font-bold text-[#10182b]">
                               Rp{(selectedReport.total_amount + parseFloat(adminFee)).toLocaleString('id-ID')}
                           </p>
                       </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="admin-payment-method">Metode Pembayaran Perusahaan</Label>
+                      <div className="space-y-1">
+                          <Label className="text-sm">Metode Pembayaran Perusahaan</Label>
                           <Select
                               value={selectedAdminPaymentMethodId}
                               onValueChange={setSelectedAdminPaymentMethodId}
                               required
                           >
-                              <SelectTrigger>
+                              <SelectTrigger className="h-9 text-sm">
                                   <SelectValue placeholder="Pilih metode pembayaran" />
                               </SelectTrigger>
                               <SelectContent>
@@ -982,6 +985,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                       <Button 
                           onClick={handleConfirmPayment}
                           disabled={!selectedAdminPaymentMethodId || loading}
+                          className="w-full h-9 text-sm"
                       >
                           {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Konfirmasi Pembayaran'}
                       </Button>
@@ -993,31 +997,31 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
       {/* Modal Edit Laporan Pengeluaran */}
       {selectedReport && (
           <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-              <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                      <DialogTitle>Edit Laporan Pengeluaran</DialogTitle>
-                      <DialogDescription>
+              <DialogContent className="sm:max-w-xl max-h-[95vh] overflow-y-auto p-4 sm:p-6"> {/* Mengubah max-w-4xl menjadi xl */}
+                  <DialogHeader className="border-b pb-3">
+                      <DialogTitle className="text-lg">Edit Laporan Pengeluaran</DialogTitle>
+                      <DialogDescription className="text-sm">
                           Perbarui item pengeluaran dan detail laporan.
                       </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleUpdateReport} className="space-y-6">
-                      <div className="space-y-4">
-                          <Label className="text-lg font-semibold text-[#10182b] flex items-center gap-2">
-                              <FileText className="h-5 w-5" />
+                  <form onSubmit={handleUpdateReport} className="space-y-4"> {/* Mengurangi space-y */}
+                      <div className="space-y-3"> {/* Mengurangi space-y */}
+                          <Label className="text-base font-semibold text-[#10182b] flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
                               Daftar Pengeluaran
                           </Label>
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                               {expenseItems.map((item, index) => (
                                   <Card key={index} className="border border-gray-200 bg-gray-50">
-                                      <CardContent className="p-4">
-                                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                                              <div className="space-y-2">
-                                                  <Label className="text-sm font-medium text-gray-700">Jenis Pengeluaran</Label>
+                                      <CardContent className="p-3">
+                                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                                              <div className="space-y-1">
+                                                  <Label className="text-xs font-medium text-gray-700">Jenis</Label>
                                                   <Select
                                                       value={item.type}
                                                       onValueChange={(value) => handleItemChange(index, 'type', value)}
                                                   >
-                                                      <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b]">
+                                                      <SelectTrigger className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm">
                                                           <SelectValue placeholder="Pilih jenis" />
                                                       </SelectTrigger>
                                                       <SelectContent>
@@ -1027,26 +1031,26 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                                                       </SelectContent>
                                                   </Select>
                                               </div>
-                                              <div className="md:col-span-1 xl:col-span-2 space-y-2">
-                                                  <Label className="text-sm font-medium text-gray-700">Deskripsi Keperluan</Label>
+                                              <div className="md:col-span-1 xl:col-span-2 space-y-1">
+                                                  <Label className="text-xs font-medium text-gray-700">Deskripsi</Label>
                                                   <Input
                                                       type="text"
-                                                      placeholder="Contoh: Pembelian bensin untuk pengiriman ke Jakarta"
+                                                      placeholder="Deskripsi..."
                                                       value={item.description}
                                                       onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                                      className="bg-white border-gray-300 focus:border-[#10182b]"
+                                                      className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm"
                                                       required
                                                   />
                                               </div>
-                                              <div className="space-y-2">
-                                                  <Label className="text-sm font-medium text-gray-700">Nominal (Rp)</Label>
+                                              <div className="space-y-1">
+                                                  <Label className="text-xs font-medium text-gray-700">Nominal (Rp)</Label>
                                                   <div className="flex gap-2">
                                                       <Input
                                                           type="number"
                                                           placeholder="0"
                                                           value={item.amount}
                                                           onChange={(e) => handleItemChange(index, 'amount', e.target.value)}
-                                                          className="bg-white border-gray-300 focus:border-[#10182b]"
+                                                          className="bg-white border-gray-300 focus:border-[#10182b] h-9 text-sm"
                                                           required
                                                       />
                                                       {expenseItems.length > 1 && (
@@ -1055,7 +1059,7 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                                                               variant="destructive" 
                                                               size="icon" 
                                                               onClick={() => handleRemoveItem(index)}
-                                                              className="shrink-0"
+                                                              className="shrink-0 h-9 w-9"
                                                           >
                                                               <Trash className="h-4 w-4" />
                                                           </Button>
@@ -1070,17 +1074,17 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                           <Button 
                               type="button" 
                               variant="outline" 
-                              className="w-full border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white transition-colors" 
+                              className="w-full border-[#10182b] text-[#10182b] hover:bg-[#10182b] hover:text-white transition-colors h-9 text-sm" 
                               onClick={handleAddItem}
                           >
-                              <Plus className="h-4 w-4 mr-2" /> Tambah Item Pengeluaran
+                              <Plus className="h-4 w-4 mr-2" /> Tambah Item
                           </Button>
                       </div>
                       <Card className="border-[#10182b] bg-gradient-to-r from-[#10182b] to-[#1a2542] text-white">
-                          <CardContent className="p-6">
+                          <CardContent className="p-4">
                               <div className="flex justify-between items-center">
-                                  <span className="text-xl font-semibold">Total Pengeluaran:</span>
-                                  <span className="text-2xl lg:text-3xl font-bold">
+                                  <span className="text-base font-semibold">Total Pengeluaran:</span>
+                                  <span className="text-xl font-bold">
                                       Rp{expenseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('id-ID')}
                                   </span>
                               </div>
@@ -1088,17 +1092,17 @@ Tolong diproses ya bang, dan konfirmasi kalau udah ditransfer. Makasih 🙏`;
                       </Card>
                       <Button 
                           type="submit" 
-                          className="w-full bg-[#10182b] text-white hover:bg-[#1a2542] h-12 text-lg font-semibold" 
+                          className="w-full bg-[#10182b] text-white hover:bg-[#1a2542] h-10 text-base font-semibold" 
                           disabled={isSubmitting}
                       >
                           {isSubmitting ? (
                               <>
-                                  <Loader2 className="h-5 w-5 animate-spin mr-2" /> 
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> 
                                   Memperbarui Laporan...
                               </>
                           ) : (
                               <>
-                                  <Pencil className="h-5 w-5 mr-2" />
+                                  <Pencil className="h-4 w-4 mr-2" />
                                   Perbarui Laporan
                               </>
                           )}

@@ -1,3 +1,4 @@
+// src/pages/OrderDetailsPage.jsx
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -9,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-hot-toast';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Tambahkan Label
 import {
   Select,
   SelectContent,
@@ -62,10 +64,6 @@ const OrderDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [opLoading, setOpLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // States untuk tambah pembayaran
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethodId, setPaymentMethodId] = useState('');
 
   // States untuk edit pembayaran
   const [isEditing, setIsEditing] = useState(false);
@@ -142,7 +140,7 @@ Pembayaran dilakukan ketika barang sudah diterima. Terimakasih
 Hormat kami,
 ${companyName}`;
 
-    const phone = (order.customers?.phone || '').replace(/[^\d]/g, '');
+    const phone = (order.customers?.phone || '').replace(/[^\d]/g, '',);
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -252,7 +250,7 @@ ${companyName}`;
       const [paymentsRes, methodsRes] = await Promise.all([
           supabase
             .from('payments')
-            .select(`*, received_by_name, received_by:profiles(full_name), payment_method:payment_methods(method_name, type, account_name, account_number)`)
+            .select(`*, received_by_name, received_by:profiles(full_name), payment_method:payment_methods(id, method_name, type, account_name, account_number)`)
             .eq('order_id', orderData.id) 
             .order('created_at', { ascending: false })
             .abortSignal(abortControllerRef.current.signal),
@@ -289,13 +287,6 @@ ${companyName}`;
         ...orderData,
         proof_public_url: proofPublicUrl || null,
       };
-
-      if (paymentsWithUrls.length > 0 && mountedRef.current) {
-        const firstPaymentMethodId = paymentsWithUrls[0].payment_method_id;
-        setPaymentMethodId(String(firstPaymentMethodId));
-      } else {
-        setPaymentMethodId('');
-      }
 
       if (mountedRef.current) {
         setOrder(nextOrder);
@@ -351,32 +342,6 @@ ${companyName}`;
     [paymentMethods]
   );
 
-  const paymentMethodsCash = useMemo(() =>
-    normalizedMethods.filter(m => m.type === 'cash'),
-    [normalizedMethods]
-  );
-
-  const paymentMethodsTransfer = useMemo(() =>
-    normalizedMethods.filter(m => m.type === 'transfer'),
-    [normalizedMethods]
-  );
-
-  const effectivePaymentMethodId = paymentMethodId || (normalizedMethods[0]?.id ?? '');
-  const selectedMethod = useMemo(
-    () => normalizedMethods.find(m => String(m.id) === String(effectivePaymentMethodId)),
-    [normalizedMethods, effectivePaymentMethodId]
-  );
-
-  const paymentFormIsValid = paymentAmount && parseFloat(paymentAmount) > 0 && effectivePaymentMethodId;
-  const isPaymentFormDisabled = isPaid || remainingDue <= 0;
-
-  useEffect(() => {
-    if (!isPaid) {
-      setPaymentAmount(remainingDue.toString());
-    } else {
-      setPaymentAmount('0');
-    }
-  }, [remainingDue, isPaid]);
 
   const handleDataUpdate = useCallback(() => {
     fetchData(false);
@@ -408,63 +373,12 @@ ${companyName}`;
     if (updErr) throw updErr;
   }, [order?.grand_total, statusFromTotals]);
 
-  const handleAddPayment = async (e) => {
-    e.preventDefault();
-    if (!paymentFormIsValid) {
-      toast.error('Form pembayaran belum valid.');
-      return;
-    }
-    if (!order) return;
-
-    // Logika validasi baru: cek apakah pembayaran melebihi sisa tagihan
-    const amountNum = parseFloat(paymentAmount);
-    if (amountNum > remainingDue) {
-      toast.error(`Jumlah pembayaran tidak bisa melebihi sisa tagihan: ${formatCurrency(remainingDue)}`);
-      return;
-    }
-
-    setOpLoading(true);
-    try {
-      const { error: insertError } = await supabase
-        .from('payments')
-        .insert({
-          order_id: order.id,
-          amount: amountNum,
-          payment_method_id: effectivePaymentMethodId,
-          paid_at: new Date().toISOString(),
-          company_id: order.company_id,
-          received_by: selectedMethod?.type === 'cash' ? userId : null,
-        });
-
-      if (insertError) throw insertError;
-
-      const newTotalPaid = totalPaid + amountNum;
-      const gt = Number(order?.grand_total) || 0;
-      const newStatus = statusFromTotals(newTotalPaid, gt);
-
-      const { error: updErr } = await supabase
-        .from('orders')
-        .update({ payment_status: newStatus })
-        .eq('id', order.id);
-
-      if (updErr) throw updErr;
-
-      toast.success('Pembayaran berhasil ditambahkan.');
-      setPaymentAmount('');
-      setPaymentMethodId('');
-      handleDataUpdate();
-    } catch (err) {
-      if (!isAbortErr(err)) {
-        console.error('add-payment error', err);
-        toast.error(err.message || 'Gagal menambahkan pembayaran.');
-      }
-    } finally {
-      setOpLoading(false);
-    }
-  };
 
   const handleDeletePayment = async (paymentId) => {
-    if (!paymentId) return;
+    if (!window.confirm('Apakah Anda yakin ingin menghapus pembayaran ini? Tindakan ini tidak dapat dibatalkan.')) {
+        return;
+    }
+    if (!paymentId || !order) return;
     setOpLoading(true);
     try {
       const { error: delErr } = await supabase
@@ -497,11 +411,18 @@ ${companyName}`;
 
     const newAmount = parseFloat(editAmount);
     const oldAmount = parseFloat(editingPayment.amount);
-    const amountDifference = newAmount - oldAmount;
-    const newRemainingDue = remainingDue - amountDifference;
+    
+    // Hitung ulang total yang dibayar jika pembayaran ini diupdate
+    const totalPaidWithoutCurrent = totalPaid - oldAmount;
+    const newTotalPaid = totalPaidWithoutCurrent + newAmount;
 
-    if (newRemainingDue < 0) {
-      toast.error('Jumlah pembayaran tidak bisa melebihi sisa tagihan.');
+    // Cek apakah total pembayaran baru melebihi grand total
+    if (newTotalPaid > calculatedGrandTotal) {
+      toast.error(`Jumlah pembayaran baru (${formatCurrency(newAmount)}) menyebabkan total terbayar melebihi total pesanan (${formatCurrency(calculatedGrandTotal)}).`);
+      return;
+    }
+    if (newAmount <= 0) {
+       toast.error('Jumlah pembayaran harus lebih dari nol.');
       return;
     }
 
@@ -532,7 +453,7 @@ ${companyName}`;
   };
   
   const handleSendInvoice = async () => {
-    if (!order) return;
+    if (!order || !session) return;
     setIsSendingInvoice(true);
     toast.loading('Membuat invoice PDF...', { id: 'invoice-toast' });
 
@@ -569,8 +490,9 @@ ${companyName}`;
       let whatsappMessage;
         
       // --- START: LOGIKA MODIFIKASI UNTUK PESAN WHATSAPP ---
-      // Ambil metode pembayaran yang dipilih (yang sekarang mungkin bernilai 0 atau metode pembayaran sebenarnya)
-      const paymentMethodData = payments.length > 0 ? payments[0].payment_method : null;
+      // Ambil metode pembayaran terakhir (atau metode yang paling sering digunakan, di sini diambil dari data payments yang sudah ada)
+      const lastPayment = payments[0];
+      const paymentMethodData = lastPayment ? lastPayment.payment_method : null;
       let paymentMethodDisplay = 'N/A'; // Fallback
 
       if (paymentMethodData) {
@@ -593,7 +515,7 @@ Invoice No. ${order.invoice_number} senilai ${formatCurrency(calculatedGrandTota
 Rincian Produk:
 ${productsList}
 
-Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)} melalui ${paymentMethodDisplay}.
+Kami telah menerima pembayaran sebesar ${formatCurrency(totalPaid)}.
 
 Tautan invoice: ${pdfUrl}.
  
@@ -610,6 +532,7 @@ Dengan hormat, kami sampaikan tagihan untuk pesanan Anda dengan rincian berikut:
 
 Invoice No. ${order.invoice_number} 
 senilai ${formatCurrency(calculatedGrandTotal)}.
+Sisa Tagihan: *${formatCurrency(remainingDue)}*
 
 Rincian Produk:
 ${productsList}
@@ -617,7 +540,7 @@ ${productsList}
 Invoice dapat diunduh pada link berikut: 
 ${pdfUrl}.
 
-Mohon segera selesaikan pembayaran. Metode pembayaran yang dipiliih adalah: *${paymentMethodDisplay}*.
+Mohon segera selesaikan pembayaran. Metode pembayaran yang disarankan adalah: *${paymentMethodDisplay}*.
  
 Wassalamualaikum warahmatullahi wabarakatuh.
 
@@ -750,6 +673,13 @@ ${companyName}`;
           Detail Pesanan
         </h1>
         <div className="flex flex-wrap items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate(`/orders/edit/${order.id}`)} 
+            className="text-[#10182b] hover:bg-gray-100"
+          >
+            <Pencil className="mr-2 h-4 w-4" /> Edit Pesanan
+          </Button>
           <Button variant="outline" onClick={() => fetchData(true)} className="text-[#10182b] hover:bg-gray-100">
             <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
           </Button>
@@ -771,6 +701,15 @@ ${companyName}`;
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-[#10182b]">
             Pesanan #{order.invoice_number || order.id.slice(0, 8)}
+            {/* <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenPaymentModal(order)}
+              disabled={isPaid}
+              className="ml-auto bg-green-500 hover:bg-green-600 text-white disabled:bg-gray-400"
+            >
+              <CreditCard className="mr-2 h-4 w-4" /> Tambah Pembayaran
+            </Button> */}
           </CardTitle>
           <CardDescription>Rincian lengkap pesanan dan statusnya.</CardDescription>
         </CardHeader>
@@ -785,7 +724,10 @@ ${companyName}`;
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-500">Status Pembayaran</p>
-            <Badge variant={currentPaymentStatus.variant} className="flex items-center gap-1 font-semibold bg-[#10182b] text-white">
+            <Badge 
+              variant={currentPaymentStatus.variant} 
+              className={`flex items-center gap-1 font-semibold ${derivedPaymentStatus === 'unpaid' ? 'bg-red-500 hover:bg-red-500' : derivedPaymentStatus === 'paid' ? 'bg-green-500 hover:bg-green-500' : 'bg-yellow-400 hover:bg-yellow-400 text-black'}`}
+            >
               {currentPaymentStatus.icon} {currentPaymentStatus.label}
             </Badge>
           </div>
@@ -809,7 +751,7 @@ ${companyName}`;
                   <div className="space-y-0.5">
                     <p className="font-medium text-[#10182b]">{it.products?.name || 'Produk'}</p>
                     <p className="text-xs text-gray-500">
-                      {it.item_type !== 'biaya' && it.item_type !== 'pembelian' && `${Number(it.qty)} × `}
+                      {it.item_type !== 'biaya' && it.item_type !== 'pembelian' && it.item_type !== 'pengembalian' && it.item_type !== 'pinjam' && `${Number(it.qty)} × `}
                       {formatCurrency(Number(it.price))} {it.item_type ? `• ${it.item_type}` : ''}
                     </p>
                   </div>
@@ -850,30 +792,31 @@ ${companyName}`;
               }
               
               const displayString = paymentDetails.filter(Boolean).join(' / ');
+              const receivedBy = p.payment_method?.type === 'cash' ? (p.received_by?.full_name || p.received_by_name) : 'Otomatis';
 
               return (
-                <div key={p.id} className="flex items-center justify-between border rounded-lg p-3 hover:bg-gray-50 transition-colors">
-                  <div className="space-y-0.5">
+                <div key={p.id} className="flex items-start justify-between border rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                  <div className="space-y-0.5 flex-1 pr-2">
                     <p className="font-medium text-[#10182b]">{formatCurrency(Number(p.amount))}</p>
                     <p className="text-xs text-gray-500">
-                      {new Date(p.paid_at || p.created_at).toLocaleString('id-ID')} • {displayString}
+                      {new Date(p.paid_at || p.created_at).toLocaleString('id-ID')}
                     </p>
-                    {(p.received_by_name) && (
-                      <p className="text-xs text-gray-500">Diterima oleh: {p.received_by_name}</p>
-                    )}
+                    <p className="text-xs text-gray-500 font-medium">Metode: {displayString}</p>
+                    <p className="text-xs text-gray-500">Diterima oleh: {receivedBy || 'N/A'}</p>
                     {p.proof_public_url && (
-                      <a href={p.proof_public_url} target="_blank" rel="noreferrer">
-                         <img src={p.proof_public_url} alt="Bukti Transfer" className="mt-2 w-24 h-auto rounded-md border" />
+                      <a href={p.proof_public_url} target="_blank" rel="noreferrer" className="block mt-2">
+                         <img src={p.proof_public_url} alt="Bukti Transfer" className="w-24 h-auto rounded-md border hover:opacity-75 transition-opacity" />
                       </a>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleOpenEditDialog(p)}
                       disabled={opLoading}
                       title="Edit pembayaran"
+                      className="h-8 w-8"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -883,7 +826,7 @@ ${companyName}`;
                       onClick={() => handleDeletePayment(p.id)}
                       disabled={opLoading}
                       title="Hapus pembayaran"
-                      className="bg-red-500 hover:bg-red-600"
+                      className="bg-red-500 hover:bg-red-600 h-8 w-8"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -908,7 +851,59 @@ ${companyName}`;
           </Card>
         )}
       </div>
-
+      
+      {/* --- Dialog Edit Pembayaran --- */}
+      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Pembayaran</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdatePayment} className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editAmount">Jumlah Pembayaran</Label>
+              <Input
+                id="editAmount"
+                type="number"
+                step="any"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                placeholder="0"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editMethodId">Metode Pembayaran</Label>
+              <Select value={editMethodId} onValueChange={setEditMethodId} required>
+                <SelectTrigger id="editMethodId" className="w-full">
+                  <SelectValue placeholder="Pilih Metode Pembayaran" />
+                </SelectTrigger>
+                <SelectContent>
+                  {normalizedMethods.map(method => (
+                    <SelectItem key={method.id} value={String(method.id)}>
+                      {method.method_name} {method.account_number ? `(${method.account_number})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Batal</Button>
+              </DialogClose>
+              <Button type="submit" disabled={opLoading}>
+                {opLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Simpan Perubahan'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+       <AddPaymentModal
+        isOpen={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        order={{ ...selectedOrderForPayment, grand_total: calculatedGrandTotal }} 
+        onPaymentAdded={handleDataUpdate} 
+      />
     </div>
   );
 };

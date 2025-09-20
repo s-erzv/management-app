@@ -330,49 +330,53 @@ const CompleteDeliveryPage = () => {
   
   const formatCurrency = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
-  return (
-    <div className="container mx-auto p-4 md:p-8 max-w-2xl space-y-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-[#10182b] hover:bg-gray-100">
-          <ArrowLeft className="h-6 w-6" />
+ return (
+    // Mengubah max-w-2xl menjadi p-4 md:p-6 dan max-w-lg untuk sedikit lebih kompak
+    <div className="container mx-auto p-4 md:p-6 max-w-lg space-y-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-[#10182b] hover:bg-gray-100 flex-shrink-0">
+          <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
-            <TruckIcon className="h-8 w-8" />
+        <div className="min-w-0"> {/* Wrapper untuk memastikan teks judul tidak didorong */}
+          {/* Mengurangi ukuran font judul di mobile */}
+          <h1 className="text-xl font-bold text-[#10182b] truncate">
             Selesaikan Pesanan
           </h1>
-          <p className="text-muted-foreground">Lengkapi informasi dan bukti pengiriman untuk pesanan #{order.id.slice(0, 8)}.</p>
+          <p className="text-xs text-muted-foreground truncate">Lengkapi info pesanan #{order.id.slice(0, 8)}.</p>
         </div>
       </div>
 
-      <form onSubmit={handleCompleteDelivery} className="grid gap-6">
+      <form onSubmit={handleCompleteDelivery} className="grid gap-4">
         <Card className="border-0 shadow-sm bg-white">
-          <CardHeader>
-            <CardTitle className="text-[#10182b]">Informasi Pesanan</CardTitle>
-            <CardDescription>Rincian pelanggan dan barang yang dikirim.</CardDescription>
+          <CardHeader className="p-4">
+            <CardTitle className="text-base text-[#10182b]">Informasi Pesanan</CardTitle>
+            <CardDescription className="text-sm">Rincian pelanggan dan barang yang dikirim.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-4 pt-0">
             <div>
-              <Label className="text-muted-foreground">Pelanggan</Label>
-              <p className="font-medium text-[#10182b]">{order.customers?.name}</p>
+              <Label className="text-xs text-muted-foreground">Pelanggan</Label>
+              <p className="font-medium text-sm text-[#10182b]">{order.customers?.name}</p>
             </div>
             <div>
-              <Label className="text-muted-foreground">Alamat</Label>
-              <p className="text-[#10182b]">{order.customers?.address}</p>
+              <Label className="text-xs text-muted-foreground">Alamat</Label>
+              <p className="text-sm text-[#10182b]">{order.customers?.address}</p>
             </div>
-            <div>
-              <Label className="text-muted-foreground">Total Tagihan Baru</Label>
-              <p className="font-bold text-lg text-green-600">{formatCurrency(newGrandTotal)}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Sisa Tagihan</Label>
-              <p className="font-bold text-red-600 text-lg">{formatCurrency(remainingDue)}</p>
+            <Separator />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Total Tagihan Baru</Label>
+                <p className="font-bold text-base text-green-600">{formatCurrency(newGrandTotal)}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Sisa Tagihan</Label>
+                <p className="font-bold text-base text-red-600">{formatCurrency(remainingDue)}</p>
+              </div>
             </div>
             <Separator />
             <div className="space-y-2">
-              <Label className="font-medium text-[#10182b]">Detail Barang</Label>
+              <Label className="font-medium text-sm text-[#10182b]">Detail Barang</Label>
               {order.order_items.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm">
+                <div key={idx} className="flex justify-between items-center text-xs">
                   <span className="text-muted-foreground">{item.products?.name}</span>
                   <span className="text-[#10182b]">{item.qty} x {formatCurrency(item.price)}</span>
                 </div>
@@ -382,27 +386,28 @@ const CompleteDeliveryPage = () => {
         </Card>
 
         <Card className="border-0 shadow-sm bg-white">
-          <CardHeader>
-            <CardTitle className="text-[#10182b]">Rincian Penyelesaian</CardTitle>
-            <CardDescription>Masukkan detail pembayaran, pengembalian, dan biaya.</CardDescription>
+          <CardHeader className="p-4">
+            <CardTitle className="text-base text-[#10182b]">Rincian Penyelesaian</CardTitle>
+            <CardDescription className="text-sm">Masukkan detail pembayaran, pengembalian, dan biaya.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid gap-4 p-4 pt-0">
 
             <div className="grid gap-2">
-              <Label htmlFor="transportCost">Biaya Transportasi</Label>
+              <Label htmlFor="transportCost" className="text-sm">Biaya Transportasi</Label>
               <Input
                 id="transportCost"
                 type="number"
                 placeholder="Biaya Transportasi"
-                alue={transportCost === '0' ? '' : transportCost}
+                value={transportCost === '0' ? '' : transportCost}
                 onChange={(e) => setTransportCost(e.target.value)}
+                className="text-sm"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="paymentStatus">Status Pembayaran</Label>
+              <Label htmlFor="paymentStatus" className="text-sm">Status Pembayaran</Label>
               <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Pilih Status Pembayaran" />
                 </SelectTrigger>
                 <SelectContent>
@@ -414,9 +419,9 @@ const CompleteDeliveryPage = () => {
             </div>
             
             <div className="grid gap-2">
-              <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
+              <Label htmlFor="paymentMethod" className="text-sm">Metode Pembayaran</Label>
               <Select value={paymentMethod} onValueChange={handlePaymentMethodChange}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder="Pilih metode pembayaran" />
                 </SelectTrigger>
                 <SelectContent>
@@ -434,9 +439,9 @@ const CompleteDeliveryPage = () => {
               <>
                 {paymentMethod === 'hybrid' && (
                   <div className="grid gap-2">
-                    <Label htmlFor="transferMethod">Pilih Metode Transfer</Label>
+                    <Label htmlFor="transferMethod" className="text-sm">Pilih Metode Transfer</Label>
                     <Select value={transferMethod} onValueChange={setTransferMethod}>
-                      <SelectTrigger>
+                      <SelectTrigger className="text-sm">
                         <SelectValue placeholder="Pilih rekening tujuan" />
                       </SelectTrigger>
                       <SelectContent>
@@ -457,9 +462,9 @@ const CompleteDeliveryPage = () => {
                 {showCashFields && (
                   <>
                     <div className="grid gap-2">
-                      <Label htmlFor="receivedByName">Nama Penerima</Label>
+                      <Label htmlFor="receivedByName" className="text-sm">Nama Penerima</Label>
                        <Select value={receivedByName} onValueChange={setReceivedByName}>
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                           <SelectValue placeholder="Pilih Petugas penerima" />
                         </SelectTrigger>
                         <SelectContent>
@@ -472,7 +477,7 @@ const CompleteDeliveryPage = () => {
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="cashAmount">Jumlah Pembayaran Tunai</Label>
+                      <Label htmlFor="cashAmount" className="text-sm">Jumlah Pembayaran Tunai</Label>
                       <Input
                         id="cashAmount"
                         type="number"
@@ -481,6 +486,7 @@ const CompleteDeliveryPage = () => {
                         onChange={(e) => setCashAmount(e.target.value)}
                         required
                         onWheel={handleInputWheel}
+                        className="text-sm"
                       />
                     </div>
                   </>
@@ -489,7 +495,7 @@ const CompleteDeliveryPage = () => {
                 {showTransferFields && (
                   <>
                     <div className="grid gap-2">
-                      <Label htmlFor="transferAmount">Jumlah Pembayaran Transfer</Label>
+                      <Label htmlFor="transferAmount" className="text-sm">Jumlah Pembayaran Transfer</Label>
                       <Input
                         id="transferAmount"
                         type="number"
@@ -497,18 +503,19 @@ const CompleteDeliveryPage = () => {
                         value={transferAmount}
                         onChange={(e) => setTransferAmount(e.target.value)}
                         readOnly={paymentMethod === 'hybrid'}
-                        className={paymentMethod === 'hybrid' ? "bg-gray-100 cursor-not-allowed" : ""}
+                        className={`text-sm ${paymentMethod === 'hybrid' ? "bg-gray-100 cursor-not-allowed" : ""}`}
                         required
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="transferProof">Unggah Bukti Transfer</Label>
+                      <Label htmlFor="transferProof" className="text-sm">Unggah Bukti Transfer</Label>
                       <Input
                         id="transferProof"
                         type="file"
                         onChange={(e) => setTransferProofFile(e.target.files[0])}
                         accept="image/*"
                         required
+                        className="text-sm"
                       />
                     </div>
                   </>
@@ -520,13 +527,15 @@ const CompleteDeliveryPage = () => {
               <>
                 <Separator />
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold">Product Returnable</h3>
+                  <h3 className="text-base font-bold text-[#10182b]">Rincian Product Returnable</h3>
                   {returnableItemsInOrder.map(item => (
-                    <div key={item.product_id} className="space-y-2 border-l-4 pl-4">
-                      <h4 className="font-semibold text-[#10182b]">{item.products.name}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div key={item.product_id} className="space-y-3 border-l-4 pl-3">
+                      <h4 className="font-semibold text-sm text-[#10182b]">{item.products.name}</h4>
+                      
+                      {/* Grid diubah menjadi 1 kolom di mobile (default) */}
+                      <div className="grid grid-cols-1 gap-4"> 
                         <div className="space-y-2">
-                          <Label htmlFor={`returnedQty-${item.product_id}`}>Product Returnable Kembali</Label>
+                          <Label htmlFor={`returnedQty-${item.product_id}`} className="text-sm">Product Returnable Kembali</Label>
                           <Input
                             id={`returnedQty-${item.product_id}`}
                             type="number"
@@ -536,10 +545,11 @@ const CompleteDeliveryPage = () => {
                               ...prev,
                               [item.product_id]: { ...prev[item.product_id], returnedQty: e.target.value }
                             }))}
+                            className="text-sm"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor={`purchasedEmptyQty-${item.product_id}`}>Beli Kemasan Returnable</Label>
+                          <Label htmlFor={`purchasedEmptyQty-${item.product_id}`} className="text-sm">Beli Kemasan Returnable</Label>
                           <Input
                             id={`purchasedEmptyQty-${item.product_id}`}
                             type="number"
@@ -549,11 +559,12 @@ const CompleteDeliveryPage = () => {
                               ...prev,
                               [item.product_id]: { ...prev[item.product_id], purchasedEmptyQty: e.target.value }
                             }))}
+                            className="text-sm"
                           />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`borrowedQty-${item.product_id}`}>Product Returnable Dipinjam</Label>
+                        <Label htmlFor={`borrowedQty-${item.product_id}`} className="text-sm">Product Returnable Dipinjam</Label>
                         <Input
                           id={`borrowedQty-${item.product_id}`}
                           type="number"
@@ -562,7 +573,7 @@ const CompleteDeliveryPage = () => {
                             Math.max(0, (item.qty || 0) - (parseInt(itemQuantities[item.product_id]?.returnedQty) || 0) - (parseInt(itemQuantities[item.product_id]?.purchasedEmptyQty) || 0))
                           }
                           readOnly
-                          className="bg-gray-100 cursor-not-allowed"
+                          className="bg-gray-100 cursor-not-allowed text-sm"
                         />
                       </div>
                     </div>
@@ -572,20 +583,21 @@ const CompleteDeliveryPage = () => {
             )}
             
             <div className="grid gap-2">
-              <Label htmlFor="proofFile">Unggah Bukti Pengiriman</Label>
+              <Label htmlFor="proofFile" className="text-sm">Unggah Bukti Pengiriman</Label>
               <Input
                 id="proofFile"
                 type="file"
                 onChange={(e) => setFile(e.target.files[0])}
                 accept="image/*"
                 required
+                className="text-sm"
               />
             </div>
           </CardContent>
         </Card>
         
-        <div className="mt-4">
-          <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b]" disabled={submitting || ((paymentMethod === 'transfer' || paymentMethod === 'hybrid') && (paymentStatus === 'paid' || paymentStatus === 'partial') && !transferProofFile)}>
+        <div className="mt-2">
+          <Button type="submit" className="w-full bg-[#10182b] text-white hover:bg-[#20283b] text-sm" disabled={submitting || ((paymentMethod === 'transfer' || paymentMethod === 'hybrid') && (paymentStatus === 'paid' || paymentStatus === 'partial') && !transferProofFile)}>
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (

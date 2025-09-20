@@ -211,52 +211,59 @@ const FinancialReportPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
-          <PiggyBank className="h-8 w-8" />
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6"> {/* Mengubah space-y-8 menjadi space-y-6 */}
+      
+      {/* Header Responsif */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3"> {/* Mengurangi mb-6 */}
+        <h1 className="text-2xl font-bold text-[#10182b] flex items-center gap-2"> {/* Mengurangi ukuran font */}
+          <PiggyBank className="h-6 w-6" />
           Laporan Keuangan
         </h1>
-        <div className="flex flex-wrap gap-2">
-            <Button onClick={fetchFinancialData} variant="outline" className="text-[#10182b] hover:bg-gray-100">
-                <RefreshCcw className="h-4 w-4 mr-2" /> Refresh Data
+        {/* Tombol Aksi - Flex wrap dan full width di mobile */}
+        <div className="flex flex-wrap w-full md:w-auto gap-2">
+            <Button onClick={fetchFinancialData} variant="outline" className="w-full sm:w-auto text-[#10182b] hover:bg-gray-100 text-sm">
+                <RefreshCcw className="h-4 w-4 mr-2" /> Refresh
             </Button>
-            <Button onClick={() => setIsTransferModalOpen(true)} className="bg-[#10182b] text-white hover:bg-[#1a2542]">
+            <Button onClick={() => setIsTransferModalOpen(true)} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#1a2542] text-sm">
                 <ArrowRightLeft className="h-4 w-4 mr-2" /> Transfer Dana
             </Button>
         </div>
       </div>
 
-      <Card className="mb-6 border-0 shadow-lg bg-[#10182b] text-white">
-        <CardHeader className="p-6">
+      {/* Card Total Saldo */}
+      <Card className="mb-4 border-0 shadow-lg bg-[#10182b] text-white"> {/* Mengurangi mb-6 */}
+        <CardHeader className="p-4"> {/* Mengurangi padding p-6 */}
           <CardTitle className="text-sm font-medium opacity-80">Total Saldo Perusahaan</CardTitle>
         </CardHeader>
-        <CardContent className="p-6 pt-0">
-          <p className="text-4xl font-bold">
+        <CardContent className="p-4 pt-0"> {/* Mengurangi padding p-6 */}
+          <p className="text-3xl sm:text-4xl font-bold"> {/* Menyesuaikan ukuran font */}
             {formatCurrency(reportData.totalBalance)}
           </p>
         </CardContent>
       </Card>
       
-      <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-[#10182b]">
+      <h2 className="text-lg font-bold mb-3 flex items-center gap-2 text-[#10182b]"> {/* Mengurangi ukuran font */}
         Rincian Saldo per Metode Pembayaran
       </h2>
+      
+      {/* Rincian Saldo - 1 kolom di mobile */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {reportData.balances.map(item => (
           <Card key={item.id} className="border border-gray-200 shadow-sm transition-all hover:shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold text-[#10182b]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
+              <CardTitle className="text-base font-semibold text-[#10182b]"> {/* Mengurangi ukuran font */}
                 {item.method_name}
               </CardTitle>
               <div className="p-2 rounded-full bg-[#10182b] text-white">
                 {item.type === 'cash' ? <Banknote className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 pt-0">
               <div className="text-2xl font-bold text-[#10182b]">
                 {formatCurrency(item.balance)}
               </div>
-              <div className="text-sm text-muted-foreground mt-2 flex justify-between items-center">
+              {/* Pemasukan/Pengeluaran - Menggunakan flex wrap di mobile jika perlu */}
+              <div className="text-xs text-muted-foreground mt-2 flex flex-wrap justify-between items-center gap-2">
                 <span>Pemasukan: <span className="font-semibold text-green-600">{formatCurrency(item.income)}</span></span>
                 <span>Pengeluaran: <span className="font-semibold text-red-600">{formatCurrency(item.expense)}</span></span>
               </div>
@@ -272,7 +279,7 @@ const FinancialReportPage = () => {
 
       {/* Transfer Dana Modal */}
       <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-md"> {/* Mengubah sm:max-w-[425px] menjadi sm:max-w-md */}
             <DialogHeader>
                 <DialogTitle>Transfer Dana</DialogTitle>
                 <DialogDescription>
@@ -281,13 +288,13 @@ const FinancialReportPage = () => {
             </DialogHeader>
             <form onSubmit={handleTransferSubmit} className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="from_method_id">Dari Metode</Label>
+                    <Label htmlFor="from_method_id" className="text-sm">Dari Metode</Label>
                     <Select
                         value={transferForm.from_method_id}
                         onValueChange={(value) => setTransferForm(prev => ({ ...prev, from_method_id: value }))}
                         required
                     >
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                             <SelectValue placeholder="Pilih metode sumber" />
                         </SelectTrigger>
                         <SelectContent>
@@ -300,13 +307,13 @@ const FinancialReportPage = () => {
                     </Select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="to_method_id">Ke Metode</Label>
+                    <Label htmlFor="to_method_id" className="text-sm">Ke Metode</Label>
                     <Select
                         value={transferForm.to_method_id}
                         onValueChange={(value) => setTransferForm(prev => ({ ...prev, to_method_id: value }))}
                         required
                     >
-                        <SelectTrigger>
+                        <SelectTrigger className="text-sm">
                             <SelectValue placeholder="Pilih metode tujuan" />
                         </SelectTrigger>
                         <SelectContent>
@@ -319,7 +326,7 @@ const FinancialReportPage = () => {
                     </Select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="amount">Nominal</Label>
+                    <Label htmlFor="amount" className="text-sm">Nominal</Label>
                     <Input
                         id="amount"
                         type="number"
@@ -327,19 +334,25 @@ const FinancialReportPage = () => {
                         value={transferForm.amount}
                         onChange={(e) => setTransferForm(prev => ({ ...prev, amount: e.target.value }))}
                         required
+                        className="text-sm"
                     />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="description">Deskripsi</Label>
+                    <Label htmlFor="description" className="text-sm">Deskripsi</Label>
                     <Input
                         id="description"
                         placeholder="Contoh: Setor uang tunai ke bank"
                         value={transferForm.description}
                         onChange={(e) => setTransferForm(prev => ({ ...prev, description: e.target.value }))}
+                        className="text-sm"
                     />
                 </div>
                 <DialogFooter className="mt-4">
-                    <Button type="submit" disabled={isSubmitting || !transferForm.amount || !transferForm.from_method_id || !transferForm.to_method_id}>
+                    <Button 
+                        type="submit" 
+                        disabled={isSubmitting || !transferForm.amount || !transferForm.from_method_id || !transferForm.to_method_id}
+                        className="w-full text-sm h-10"
+                    >
                         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : 'Catat Transfer'}
                     </Button>
                 </DialogFooter>

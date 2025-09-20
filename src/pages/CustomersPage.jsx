@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'react-hot-toast';
-import { Loader2, Plus, Users, MessageSquareText, Search } from 'lucide-react';
+import { Loader2, Plus, Users, MessageSquareText, Search, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Select,
@@ -212,16 +212,18 @@ Jazaakumullahu khayran wa baarakallahu fiikum.`;
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
-          <Users className="h-8 w-8" />
+    // Mengurangi padding untuk mobile (p-4)
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+        {/* Mengurangi ukuran font judul untuk mobile */}
+        <h1 className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
+          <Users className="h-6 w-6 md:h-8 md:w-8" />
           Manajemen Pelanggan
         </h1>
         <Button onClick={() => {
           resetForm();
           setIsModalOpen(true);
-        }} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#20283b]">
+        }} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#20283b] text-sm">
           <Plus className="h-4 w-4 mr-2" /> Tambah Pelanggan
         </Button>
       </div>
@@ -296,27 +298,29 @@ Jazaakumullahu khayran wa baarakallahu fiikum.`;
       </Dialog>
       
       <Card className="border-0 shadow-sm bg-white">
-        <CardHeader className="p-6">
+        <CardHeader className="p-4 md:p-6">
           <CardTitle className="text-lg font-semibold text-[#10182b]">
             Daftar Pelanggan
           </CardTitle>
         </CardHeader>
-        <div className="flex flex-col sm:flex-row gap-2 mb-4 items-center">
-          {/* Search */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Search className="h-5 w-5 text-gray-500" />
+        
+        {/* Kontrol Pencarian dan Filter yang Responsif */}
+        <div className="flex flex-col sm:flex-row gap-2 px-4 md:px-6 mb-4 items-center">
+          {/* Search - Full width di mobile */}
+          <div className="flex items-center gap-2 w-full">
+            <Search className="h-4 w-4 text-gray-500" />
             <Input
               type="text"
-              placeholder="Cari pelanggan..."
+              placeholder="Cari nama, telepon, alamat, atau status..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-sm"
+              className="w-full text-sm"
             />
           </div>
 
-          {/* Filter Status */}
+          {/* Filter Status - Full width di mobile */}
           <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val)}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px] text-sm">
               <SelectValue placeholder="Filter Status" />
             </SelectTrigger>
             <SelectContent>
@@ -332,42 +336,47 @@ Jazaakumullahu khayran wa baarakallahu fiikum.`;
 
         <CardContent className="p-0">
           <div className="rounded-md border-t overflow-x-auto">
-            <Table>
+            <Table className="min-w-max">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[150px] text-[#10182b]">Nama</TableHead>
-                  <TableHead className="min-w-[150px] text-[#10182b]">Telepon</TableHead>
-                  <TableHead className="min-w-[200px] text-[#10182b]">Alamat</TableHead>
-                  <TableHead className="min-w-[120px] text-[#10182b]">Status</TableHead>
+                <TableRow className="text-xs md:text-sm">
+                  <TableHead className="min-w-[120px] text-[#10182b]">Nama</TableHead>
+                  <TableHead className="min-w-[100px] text-[#10182b]">Telepon</TableHead>
+                  <TableHead className="min-w-[150px] text-[#10182b]">Alamat</TableHead>
+                  <TableHead className="min-w-[100px] text-[#10182b]">Status</TableHead>
                   <TableHead className="min-w-[200px] text-[#10182b]">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                  {filteredCustomers.map((customer) => (
-                  <TableRow key={customer.id}>
-                    <TableCell className="font-medium text-[#10182b]">{customer.name}</TableCell>
-                    <TableCell>{customer.phone}</TableCell>
-                    <TableCell>{customer.address}</TableCell>
-                    <TableCell>{customer.customer_statuses?.status_name ?? 'N/A'}</TableCell>
-                    <TableCell className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleEditClick(customer)} className="text-[#10182b] hover:bg-gray-100">Edit</Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(customer.id)} className="bg-red-500 hover:bg-red-600">Hapus</Button>
+                  <TableRow key={customer.id} className="text-xs md:text-sm">
+                    <TableCell className="font-medium text-[#10182b] whitespace-nowrap">{customer.name}</TableCell>
+                    <TableCell className="whitespace-nowrap">{customer.phone}</TableCell>
+                    <TableCell className="text-xs max-w-[200px] truncate">{customer.address}</TableCell>
+                    <TableCell className="whitespace-nowrap">{customer.customer_statuses?.status_name ?? 'N/A'}</TableCell>
+                    <TableCell className="flex flex-wrap gap-1">
+                      <Button variant="outline" size="xs" onClick={() => handleEditClick(customer)} className="text-[#10182b] hover:bg-gray-100 text-xs">
+                        <Pencil className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Edit</span>
+                      </Button>
+                      <Button variant="destructive" size="xs" onClick={() => handleDeleteClick(customer.id)} className="bg-red-500 p-1 text-white hover:bg-red-600 text-xs">
+                        <Trash2 className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">Hapus</span>
+                      </Button>
                       <Button 
                         variant="default"
-                        size="sm"
+                        size="xs"
                         onClick={() => handleContactCustomer(customer.name, customer.phone)}
-                        className="bg-green-500 hover:bg-green-600 text-white"
+                        className="bg-green-500 hover:bg-green-600 text-white text-xs p-1"
+                        title="Hubungi via WhatsApp"
                       >
-                        <MessageSquareText className="h-4 w-4 mr-2" />
-                        Hubungi
+                        <MessageSquareText className="h-3 w-3 sm:mr-1" />
+                        <span className="hidden sm:inline">WA</span>
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {customers.length === 0 && (
+                {filteredCustomers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      Tidak ada data pelanggan.
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">
+                      Tidak ada data pelanggan yang cocok.
                     </TableCell>
                   </TableRow>
                 )}

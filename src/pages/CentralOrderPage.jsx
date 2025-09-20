@@ -119,80 +119,89 @@ const CentralOrderPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl font-bold">Daftar Pesanan dari Pusat</h1>
-        <Button onClick={() => navigate('/central-order/new')} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90">
-          <PlusCircle className="h-4 w-4 mr-2" /> Buat Pesanan Baru
-        </Button>
-      </div>
+      <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <h1 className="text-xl font-bold text-[#10182b]">
+            Daftar Pesanan dari Pusat
+          </h1>
+          <Button onClick={() => navigate('/central-order/new')} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90 text-sm">
+            <PlusCircle className="h-4 w-4 mr-2" /> Buat Pesanan Baru
+          </Button>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Riwayat Pesanan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[150px]">Nomor Pesanan</TableHead>
-                  <TableHead className="min-w-[150px]">Tanggal Pesan</TableHead>
-                  <TableHead className="min-w-[120px]">Status</TableHead>
-                  <TableHead className="min-w-[150px]">Total Transaksi</TableHead>
-                  <TableHead className="min-w-[150px]">Dibuat Oleh</TableHead>
-                  <TableHead className="min-w-[100px]">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Tidak ada pesanan dari pusat.
-                    </TableCell>
+        <Card className="border-0 shadow-sm bg-white">
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-lg font-semibold text-[#10182b]">Riwayat Pesanan</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="rounded-md border-t overflow-x-auto">
+              <Table className="min-w-max">
+                <TableHeader>
+                  <TableRow className="text-xs md:text-sm">
+                    <TableHead className="min-w-[100px] text-[#10182b]">No. Pesanan</TableHead>
+                    <TableHead className="min-w-[120px] text-[#10182b]">Tanggal</TableHead>
+                    <TableHead className="min-w-[100px] text-[#10182b]">Status</TableHead>
+                    <TableHead className="min-w-[120px] text-[#10182b]">Total</TableHead>
+                    <TableHead className="min-w-[120px] text-[#10182b]">Dibuat Oleh</TableHead>
+                    <TableHead className="min-w-[120px] text-[#10182b]">Aksi</TableHead>
                   </TableRow>
-                ) : (
-                  orders.map(order => (
-                    <TableRow key={order.id}>
-                      <TableCell>{order.id.slice(0, 8)}</TableCell>
-                      <TableCell>{order.order_date}</TableCell>
-                      <TableCell>
-                        {getStatusBadge(order.status)}
-                      </TableCell>
-                      <TableCell>{formatCurrency(order.calculated_total)}</TableCell>
-                      <TableCell>{order.user?.full_name ?? 'N/A'}</TableCell>
-                      <TableCell className="flex flex-wrap gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => navigate(`/central-order/${order.id}`)}
-                        >
-                          Detail
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => navigate(`/central-order/${order.id}`)}
-                        >
-                          <Pencil className="h-4 w-4 text-blue-500" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleDelete(order.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {orders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground text-sm py-8">
+                        Tidak ada pesanan dari pusat.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+                  ) : (
+                    orders.map(order => (
+                      <TableRow key={order.id} className="text-xs md:text-sm">
+                        <TableCell className="font-medium whitespace-nowrap">{order.id.slice(0, 8)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{order.order_date}</TableCell>
+                        <TableCell>
+                          {/* Asumsi getStatusBadge sudah menangani responsivitas Badge */}
+                          {getStatusBadge(order.status)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">{formatCurrency(order.calculated_total)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{order.user?.full_name ?? 'N/A'}</TableCell>
+                        {/* Kolom Aksi: Menggunakan gap kecil dan tombol ikon di mobile */}
+                        <TableCell className="flex items-center gap-1">
+                          <Button 
+                            variant="outline" 
+                            size="xs" // Menggunakan ukuran ekstra kecil
+                            onClick={() => navigate(`/central-order/${order.id}`)}
+                            className="text-xs hidden sm:inline-flex" // Sembunyikan tombol "Detail" di mobile
+                          >
+                            Detail
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => navigate(`/central-order/${order.id}`)}
+                            title="Detail/Edit"
+                            className="h-8 w-8"
+                          >
+                            <Pencil className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDelete(order.id)}
+                            title="Hapus"
+                            className="h-8 w-8"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
   );
 };
 

@@ -295,10 +295,10 @@ const OrdersPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-[#10182b] flex items-center gap-3">
-          <ListOrdered className="h-8 w-8" />
+     <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
+        <h1 className="text-2xl font-bold text-[#10182b] flex items-center gap-2">
+          <ListOrdered className="h-6 w-6 md:h-8 md:w-8" />
           Manajemen Pesanan
         </h1>
         <div className="flex flex-wrap gap-2">

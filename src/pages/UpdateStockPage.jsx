@@ -1,4 +1,3 @@
-// src/pages/UpdateStockPage.jsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,7 +21,7 @@ import {
 } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { Loader2, Box, Save, History, Filter } from 'lucide-react';
+import { Loader2, Box, Save, History, Filter, Package } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -211,30 +210,36 @@ const UpdateStockPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <h1 className="text-2xl font-bold mb-6">Update Stok</h1>
-      <p className="text-muted-foreground mb-4">
+    // Mengurangi padding horizontal di mobile (p-4)
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6">
+      <h1 className="text-xl font-bold mb-3 text-[#10182b]">
+        <Package className="h-5 w-5 mr-2 inline-block" />
+        Update Stok Fisik
+      </h1>
+      <p className="text-sm text-muted-foreground mb-4">
         Periksa dan input jumlah stok fisik di gudang, lalu bandingkan dengan data di sistem.
       </p>
 
       <form onSubmit={handleReconcile}>
-        <Card className="overflow-x-auto mb-6">
-          <CardHeader>
-            <CardTitle>Input Stok Fisik</CardTitle>
-            <CardDescription>
+        <Card className="shadow-sm bg-white">
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-base text-[#10182b]">Input Stok Fisik</CardTitle>
+            <CardDescription className="text-sm">
               Masukkan jumlah stok yang ada di gudang untuk setiap produk.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-              {/* Filter Kategori */}
-              <div className="flex items-center gap-2">
+          <CardContent className="p-4 md:p-6 pt-0">
+            {/* Filter & Kontrol: Dibuat Flex Col di Mobile */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+              
+              {/* Filter Kategori - Full width di mobile */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
                 <Label className="text-sm font-medium text-gray-700">Filter Kategori:</Label>
                 <Select
                   value={selectedCategory}
                   onValueChange={setSelectedCategory}
                 >
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full sm:w-[200px] text-sm">
                     <SelectValue placeholder="Semua Kategori" />
                   </SelectTrigger>
                   <SelectContent>
@@ -248,14 +253,14 @@ const UpdateStockPage = () => {
                 </Select>
               </div>
 
-              {/* Pemilihan Tipe Stok */}
-              <div className="flex items-center gap-2">
+              {/* Pemilihan Tipe Stok - Full width di mobile */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
                   <Label className="text-sm font-medium text-gray-700">Tipe Stok:</Label>
                   <Select
                       value={stockTypeToReconcile}
                       onValueChange={setStockTypeToReconcile}
                   >
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-full sm:w-[200px] text-sm">
                           <SelectValue placeholder="Stok Produk" />
                       </SelectTrigger>
                       <SelectContent>
@@ -267,46 +272,51 @@ const UpdateStockPage = () => {
             </div>
 
             {/* TABEL INPUT DAN STOK */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border">
               <Table className="table-auto min-w-max">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[150px]">Metrik</TableHead>
+                  <TableRow className="text-xs md:text-sm bg-gray-50">
+                    <TableHead className="min-w-[100px] text-[#10182b] font-semibold sticky left-0 bg-gray-50 z-10">Metrik</TableHead>
                     {displayProducts.map(product => (
-                      <TableHead className="min-w-[150px]" key={product.id}>{product.name}</TableHead>
+                      // Lebar kolom dibuat lebih kecil
+                      <TableHead className="min-w-[80px] text-center" key={product.id}>
+                          <span className="truncate block max-w-[80px]">{product.name}</span>
+                      </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">Stok Sistem</TableCell>
+                  <TableRow className="text-xs md:text-sm">
+                    <TableCell className="font-medium sticky left-0 bg-white z-10">Stok Sistem</TableCell>
                     {displayProducts.map(product => (
-                      <TableCell key={product.id}>
+                      <TableCell key={product.id} className="text-center font-medium">
                         {/* Tampilkan Stok Sistem yang benar */}
                         {stockTypeToReconcile === 'product_stock' ? product.stock : product.empty_bottle_stock}
                       </TableCell>
                     ))}
                   </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">Stok Fisik</TableCell>
+                  <TableRow className="text-xs md:text-sm">
+                    <TableCell className="font-medium sticky left-0 bg-white z-10">Stok Fisik</TableCell>
                     {displayProducts.map(product => (
-                      <TableCell key={product.id}>
+                      <TableCell key={product.id} className="p-1">
                         <Input
                           type="number"
-                          placeholder="Jumlah"
+                          placeholder="Jml"
                           value={manualCounts[product.id]}
                           onChange={(e) => handleManualCountChange(product.id, e.target.value)}
-                          
-                          className="max-w-[100px]"
+                          className="w-full max-w-[70px] text-center text-xs h-8"
                         />
                       </TableCell>
                     ))}
                   </TableRow>
                   {stockDifferences.length > 0 && (
-                    <TableRow>
-                      <TableCell className="font-medium">Perbedaan</TableCell>
+                    <TableRow className="text-xs md:text-sm">
+                      <TableCell className="font-bold sticky left-0 bg-white z-10">Perbedaan</TableCell>
                       {stockDifferences.map(diff => (
-                        <TableCell key={diff.product_id} className={diff.difference > 0 ? 'text-green-600 font-semibold' : diff.difference < 0 ? 'text-red-600 font-semibold' : ''}>
+                        <TableCell 
+                          key={diff.product_id} 
+                          className={`text-center font-bold ${diff.difference > 0 ? 'text-green-600' : diff.difference < 0 ? 'text-red-600' : ''}`}
+                        >
                           {diff.difference > 0 ? `+${diff.difference}` : diff.difference}
                         </TableCell>
                       ))}
@@ -315,12 +325,14 @@ const UpdateStockPage = () => {
                 </TableBody>
               </Table>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 mt-4">
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90">
+            
+            {/* Tombol Aksi - Full width di mobile */}
+            <div className="flex flex-col sm:flex-row gap-2 mt-6">
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-[#10182b] text-white hover:bg-[#10182b]/90 text-sm">
                 <Box className="h-4 w-4 mr-2" /> Bandingkan Stok
               </Button>
               {stockDifferences.length > 0 && canAdjustStock && (
-                <Button onClick={handleAutomaticAdjustment} disabled={isSubmitting} variant="secondary" className="w-full sm:w-auto">
+                <Button onClick={handleAutomaticAdjustment} disabled={isSubmitting} variant="secondary" className="w-full sm:w-auto text-sm">
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Sesuaikan Stok Otomatis
                 </Button>
               )}
@@ -329,42 +341,47 @@ const UpdateStockPage = () => {
         </Card>
       </form>
       
+      {/* Riwayat Update Stok */}
       <div className="mt-8">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><History className="h-5 w-5" /> Riwayat Update Stok</h2>
-        <Card className="overflow-x-auto">
-          <CardHeader>
-            <CardTitle>Riwayat Update Stok</CardTitle>
+        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-[#10182b]"><History className="h-4 w-4" /> Riwayat Update Stok</h2>
+        <Card className="shadow-sm bg-white">
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-base">Riwayat Update Stok</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto rounded-md border-t">
               <Table className="table-auto min-w-max">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[150px]">Tanggal</TableHead>
-                    <TableHead className="min-w-[150px]">Dibuat Oleh</TableHead>
+                  <TableRow className="text-xs md:text-sm bg-gray-50">
+                    <TableHead className="min-w-[100px] sticky left-0 bg-gray-50 z-10">Tanggal</TableHead>
+                    <TableHead className="min-w-[120px]">Dibuat Oleh</TableHead>
                     {products.map(product => (
-                      <TableHead className="min-w-[150px]" key={product.id}>{product.name}</TableHead>
+                      <TableHead className="min-w-[80px] text-center" key={product.id}>
+                        <span className="truncate block max-w-[80px]">{product.name}</span>
+                      </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reconciliations.length > 0 ? (
                     reconciliations.map(rec => (
-                      <TableRow key={rec.id}>
-                        <TableCell>{new Date(rec.reconciliation_date).toLocaleDateString()}</TableCell>
-                        <TableCell>{rec.user?.full_name ?? 'N/A'}</TableCell>
+                      <TableRow key={rec.id} className="text-xs md:text-sm">
+                        <TableCell className="whitespace-nowrap sticky left-0 bg-white z-10">{new Date(rec.reconciliation_date).toLocaleDateString('id-ID')}</TableCell>
+                        <TableCell className="whitespace-nowrap">{rec.user?.full_name ?? 'N/A'}</TableCell>
                         {products.map(product => {
                           const item = rec.items.find(i => i.product_id === product.id);
                           if (!item) return <TableCell key={product.id}>-</TableCell>;
                           const cellClass = item.difference > 0 ? 'text-green-600 font-semibold' : item.difference < 0 ? 'text-red-600 font-semibold' : 'text-gray-500';
-                          const displayValue = `${item.physical_count} (${item.difference > 0 ? `+${item.difference}` : item.difference})`;
-                          return <TableCell key={product.id} className={cellClass}>{displayValue}</TableCell>;
+                          // Tampilkan (diff) hanya jika ada perbedaan
+                          const diffDisplay = item.difference !== 0 ? ` (${item.difference > 0 ? `+${item.difference}` : item.difference})` : '';
+                          const displayValue = `${item.physical_count}${diffDisplay}`;
+                          return <TableCell key={product.id} className={cellClass + ' text-center'}>{displayValue}</TableCell>;
                         })}
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={products.length + 2} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={products.length + 2} className="text-center text-muted-foreground py-8 text-sm">
                         Belum ada riwayat update stok.
                       </TableCell>
                     </TableRow>
